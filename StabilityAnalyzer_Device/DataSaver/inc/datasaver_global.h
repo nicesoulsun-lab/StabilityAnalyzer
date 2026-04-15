@@ -1,0 +1,9 @@
+#ifndef DATASAVER_GLOBAL_H
+#define DATASAVER_GLOBAL_H
+#include <QtCore/qglobal.h>
+#ifdef DATASAVER_LIBRARY
+#define DATASAVER_EXPORT Q_DECL_EXPORT
+#else
+#define DATASAVER_EXPORT Q_DECL_IMPORT
+#endif
+#endif // DATASAVER_GLOBAL_H

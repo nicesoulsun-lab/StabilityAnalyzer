@@ -1,0 +1,39 @@
+<RCC>
+    <qresource prefix="/">
+        <file>qml/MainWindow.qml</file>
+        <file>qml/Keyboard.qml</file>
+        <file>qml/component/UiText.qml</file>
+        <file>qml/LoginPage.qml</file>
+        <file>qml/component/IconButton.qml</file>
+        <file>qml/component/LineEdit.qml</file>
+        <file>qml/InfoPop.qml</file>
+        <file>qml/HomePage.qml</file>
+        <file>qml/component/HP_comp.qml</file>
+        <file>qml/system_page.qml</file>
+        <file>qml/component/SettingBlock.qml</file>
+        <file>qml/component/UiComboBox.qml</file>
+        <file>qml/component/UiSlider.qml</file>
+        <file>qml/component/IconCardButton.qml</file>
+        <file>qml/component/Logding.qml</file>
+        <file>qml/component/LoginPopup.qml</file>
+        <file>qml/component/CustomProgressBar.qml</file>
+        <file>qml/ManualViewerPage.qml</file>
+        <file>qml/UserManagementPage.qml</file>
+        <file>qml/component/Popup_button.qml</file>
+        <file>qml/SelectChannelsPop.qml</file>
+        <file>qml/CustomPop.qml</file>
+        <file>qml/InstrumentCheckPop.qml</file>
+        <file>qml/NewExperimentPop.qml</file>
+        <file>qml/component/TimeSetting.qml</file>
+        <file>qml/component/LineEdit_wrap.qml</file>
+        <file>qml/data_page.qml</file>
+        <file>qml/component/CustomListView_data.qml</file>
+        <file>qml/component/ChannelPanel.qml</file>
+        <file>qml/component/SectionBox.qml</file>
+        <file>qml/NewProjectPop.qml</file>
+        <file>qml/CaptionButton.qml</file>
+        <file>qml/TitleBar.qml</file>
+        <file>qml/FramelessBorder.qml</file>
+        <file>qml/OptionsBar.qml</file>
+    </qresource>
+</RCC>

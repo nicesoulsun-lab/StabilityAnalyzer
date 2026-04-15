@@ -1,0 +1,21 @@
+<RCC>
+    <qresource prefix="/">
+        <file>qml/Application.qml</file>
+        <file alias="FramelessBorder.qml">../SubApplication/ANALYZER/MainWindow/qml/FramelessBorder.qml</file>
+        <file alias="TitleBar.qml">../SubApplication/ANALYZER/MainWindow/qml/TitleBar.qml</file>
+        <file alias="CaptionButton.qml">../SubApplication/ANALYZER/MainWindow/qml/CaptionButton.qml</file>
+        <file alias="MainWindow.qml">../SubApplication/ANALYZER/MainWindow/qml/MainWindow.qml</file>
+        <file alias="Keyboard.qml">../SubApplication/ANALYZER/MainWindow/qml/Keyboard.qml</file>
+        <file alias="InfoPop.qml">../SubApplication/ANALYZER/MainWindow/qml/InfoPop.qml</file>
+        <file alias="NewProjectPop.qml">../SubApplication/ANALYZER/MainWindow/qml/NewProjectPop.qml</file>
+        <file alias="SelectChannelsPop.qml">../SubApplication/ANALYZER/MainWindow/qml/SelectChannelsPop.qml</file>
+        <file alias="CustomPop.qml">../SubApplication/ANALYZER/MainWindow/qml/CustomPop.qml</file>
+        <file alias="InstrumentCheckPop.qml">../SubApplication/ANALYZER/MainWindow/qml/InstrumentCheckPop.qml</file>
+        <file alias="NewExperimentPop.qml">../SubApplication/ANALYZER/MainWindow/qml/NewExperimentPop.qml</file>
+        <file alias="LoginPage.qml">../SubApplication/ANALYZER/MainWindow/qml/LoginPage.qml</file>
+        <file alias="HomePage.qml">../SubApplication/ANALYZER/MainWindow/qml/HomePage.qml</file>
+        <file alias="system_page.qml">../SubApplication/ANALYZER/MainWindow/qml/system_page.qml</file>
+        <file alias="ChannelPanel.qml">../SubApplication/ANALYZER/MainWindow/qml/component/ChannelPanel.qml</file>
+        <file alias="SectionBox.qml">../SubApplication/ANALYZER/MainWindow/qml/component/SectionBox.qml</file>
+    </qresource>
+</RCC>

@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/font">
+        <file>qml/font/fa-solid-900.ttf</file>
+        <file>qml/font/NotoSansSC-Regular.ttf</file>
+    </qresource>
+</RCC>

@@ -1,0 +1,25 @@
+<RCC>
+    <qresource prefix="/icon">
+        <file>qml/icon/background.png</file>
+        <file>qml/icon/back.png</file>
+        <file>qml/icon/bg_hp_channel.png</file>
+        <file>qml/icon/build_project_btn.png</file>
+        <file>qml/icon/close.png</file>
+        <file>qml/icon/data_mng.png</file>
+        <file>qml/icon/idle.png</file>
+        <file>qml/icon/login_button.png</file>
+        <file>qml/icon/logo.png</file>
+        <file>qml/icon/no_sample.png</file>
+        <file>qml/icon/open.png</file>
+        <file>qml/icon/sample.png</file>
+        <file>qml/icon/start_test_btn.png</file>
+        <file>qml/icon/sys_set_btn.png</file>
+        <file>qml/icon/usr_mng.png</file>
+        <file>qml/icon/wifi_1.png</file>
+        <file>qml/icon/wifi_2.png</file>
+        <file>qml/icon/wifi_3.png</file>
+        <file>qml/icon/wifi_4.png</file>
+        <file>qml/icon/running.png</file>
+        <file>qml/icon/ensure.png</file>
+    </qresource>
+</RCC>

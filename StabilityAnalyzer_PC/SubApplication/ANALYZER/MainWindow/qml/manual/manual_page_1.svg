@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1680" viewBox="0 0 1200 1680">
+  <rect width="1200" height="1680" fill="#f4f8fc"/>
+  <rect x="64" y="54" width="1072" height="1572" rx="28" fill="#ffffff" stroke="#d6e3f0" stroke-width="4"/>
+  <rect x="64" y="54" width="1072" height="120" rx="28" fill="#0d6efd"/>
+  <text x="120" y="130" font-size="44" font-family="Microsoft YaHei, Arial" fill="#ffffff">Operation Manual</text>
+  <text x="120" y="235" font-size="28" font-family="Microsoft YaHei, Arial" fill="#2b3e55">Page 1 / Quick Start</text>
+
+  <rect x="120" y="300" width="960" height="220" rx="18" fill="#eef5ff" stroke="#bfd6f5" stroke-width="3"/>
+  <text x="160" y="362" font-size="30" font-family="Microsoft YaHei, Arial" fill="#1e4f8a">1. Login</text>
+  <text x="160" y="416" font-size="24" font-family="Microsoft YaHei, Arial" fill="#4a5d75">Enter your account and password, then click the login button.</text>
+  <rect x="760" y="338" width="250" height="120" rx="14" fill="#ffffff" stroke="#a9ccf5" stroke-width="3"/>
+  <rect x="790" y="372" width="190" height="54" rx="10" fill="#2b7dd6"/>
+  <text x="852" y="408" font-size="24" font-family="Microsoft YaHei, Arial" fill="#ffffff">LOGIN</text>
+
+  <rect x="120" y="560" width="960" height="320" rx="18" fill="#ffffff" stroke="#d7e6f5" stroke-width="3"/>
+  <text x="160" y="628" font-size="30" font-family="Microsoft YaHei, Arial" fill="#1e4f8a">2. Top Navigation</text>
+  <rect x="160" y="672" width="880" height="72" rx="12" fill="#f6f9fd" stroke="#d7e6f5" stroke-width="2"/>
+  <text x="190" y="718" font-size="24" font-family="Microsoft YaHei, Arial" fill="#394b62">Experiment</text>
+  <text x="360" y="718" font-size="24" font-family="Microsoft YaHei, Arial" fill="#394b62">Instrument</text>
+  <text x="560" y="718" font-size="24" font-family="Microsoft YaHei, Arial" fill="#0d6efd">User</text>
+  <text x="700" y="718" font-size="24" font-family="Microsoft YaHei, Arial" fill="#394b62">Help</text>
+  <text x="160" y="798" font-size="24" font-family="Microsoft YaHei, Arial" fill="#4a5d75">Use the top menu to switch pages and open tools such as user management or the manual viewer.</text>
+
+  <rect x="120" y="920" width="960" height="280" rx="18" fill="#eef5ff" stroke="#bfd6f5" stroke-width="3"/>
+  <text x="160" y="988" font-size="30" font-family="Microsoft YaHei, Arial" fill="#1e4f8a">3. Channel Status</text>
+  <rect x="160" y="1038" width="190" height="108" rx="16" fill="#ffffff" stroke="#cfe0f4" stroke-width="2"/>
+  <rect x="385" y="1038" width="190" height="108" rx="16" fill="#ffffff" stroke="#cfe0f4" stroke-width="2"/>
+  <rect x="610" y="1038" width="190" height="108" rx="16" fill="#ffffff" stroke="#cfe0f4" stroke-width="2"/>
+  <rect x="835" y="1038" width="190" height="108" rx="16" fill="#ffffff" stroke="#cfe0f4" stroke-width="2"/>
+  <text x="214" y="1100" font-size="28" font-family="Microsoft YaHei, Arial" fill="#3f556f">A</text>
+  <text x="439" y="1100" font-size="28" font-family="Microsoft YaHei, Arial" fill="#3f556f">B</text>
+  <text x="664" y="1100" font-size="28" font-family="Microsoft YaHei, Arial" fill="#3f556f">C</text>
+  <text x="889" y="1100" font-size="28" font-family="Microsoft YaHei, Arial" fill="#3f556f">D</text>
+  <text x="160" y="1180" font-size="24" font-family="Microsoft YaHei, Arial" fill="#4a5d75">The left side channel cards show current status, sample presence and cover state.</text>
+
+  <text x="120" y="1540" font-size="22" font-family="Microsoft YaHei, Arial" fill="#7a8ca5">Scroll down for the next manual page.</text>
+</svg>

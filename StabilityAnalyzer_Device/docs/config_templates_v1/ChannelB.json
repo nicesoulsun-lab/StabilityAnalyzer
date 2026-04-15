@@ -1,0 +1,197 @@
+﻿{
+    "device":  {
+                   "slaveId":  2,
+                   "name":  "ChannelB",
+                   "description":  "ChannelB modbus device",
+                   "manufacturer":  "TBD",
+                   "model":  "TBD",
+                   "serialConfig":  {
+                                        "portName":  "/tmp/ttySA_B_HOST",
+                                        "baudRate":  9600,
+                                        "dataBits":  8,
+                                        "parity":  "NoParity",
+                                        "stopBits":  1,
+                                        "flowControl":  "NoFlowControl",
+                                        "interFrameDelay":  5,
+                                        "responseTimeout":  1000,
+                                        "maxRetries":  3
+                                    },
+                   "taskList":  [
+                                    {
+                                        "operate":  1,
+                                        "count":  1,
+                                        "name":  "read_start_flag",
+                                        "type":  "READ_HOLDING_REGISTERS",
+                                        "address":  0
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  24,
+                                        "name":  "read_status_block_0_23",
+                                        "type":  "READ_HOLDING_REGISTERS",
+                                        "address":  0
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  1,
+                                        "name":  "read_run_status",
+                                        "type":  "READ_HOLDING_REGISTERS",
+                                        "address":  1
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  1,
+                                        "name":  "read_cover_status",
+                                        "type":  "READ_HOLDING_REGISTERS",
+                                        "address":  10
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  1,
+                                        "name":  "read_sample_status",
+                                        "type":  "READ_HOLDING_REGISTERS",
+                                        "address":  11
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  2,
+                                        "name":  "read_realtime_values",
+                                        "type":  "READ_HOLDING_REGISTERS",
+                                        "address":  12
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  1,
+                                        "name":  "read_current_temperature",
+                                        "type":  "READ_HOLDING_REGISTERS",
+                                        "address":  16
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  4,
+                                        "name":  "read_storage_status",
+                                        "type":  "READ_HOLDING_REGISTERS",
+                                        "address":  20
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  100,
+                                        "name":  "read_scan_data_a_0",
+                                        "type":  "READ_INPUT_REGISTERS",
+                                        "address":  0
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  100,
+                                        "name":  "read_scan_data_a_100",
+                                        "type":  "READ_INPUT_REGISTERS",
+                                        "address":  100
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  100,
+                                        "name":  "read_scan_data_a_200",
+                                        "type":  "READ_INPUT_REGISTERS",
+                                        "address":  200
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  100,
+                                        "name":  "read_scan_data_a_300",
+                                        "type":  "READ_INPUT_REGISTERS",
+                                        "address":  300
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  100,
+                                        "name":  "read_scan_data_a_400",
+                                        "type":  "READ_INPUT_REGISTERS",
+                                        "address":  400
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  100,
+                                        "name":  "read_scan_data_b_500",
+                                        "type":  "READ_INPUT_REGISTERS",
+                                        "address":  500
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  100,
+                                        "name":  "read_scan_data_b_600",
+                                        "type":  "READ_INPUT_REGISTERS",
+                                        "address":  600
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  100,
+                                        "name":  "read_scan_data_b_700",
+                                        "type":  "READ_INPUT_REGISTERS",
+                                        "address":  700
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  100,
+                                        "name":  "read_scan_data_b_800",
+                                        "type":  "READ_INPUT_REGISTERS",
+                                        "address":  800
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  100,
+                                        "name":  "read_scan_data_b_900",
+                                        "type":  "READ_INPUT_REGISTERS",
+                                        "address":  900
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  1,
+                                        "name":  "write_start_flag",
+                                        "type":  "WRITE_MULTIPLE_REGISTERS",
+                                        "address":  0
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  1,
+                                        "name":  "write_storage_a_state",
+                                        "type":  "WRITE_MULTIPLE_REGISTERS",
+                                        "address":  22
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  1,
+                                        "name":  "write_storage_b_state",
+                                        "type":  "WRITE_MULTIPLE_REGISTERS",
+                                        "address":  23
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  1,
+                                        "name":  "set_temperature_control",
+                                        "type":  "WRITE_MULTIPLE_REGISTERS",
+                                        "address":  14
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  1,
+                                        "name":  "set_temperature",
+                                        "type":  "WRITE_MULTIPLE_REGISTERS",
+                                        "address":  15
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  4,
+                                        "name":  "set_scan_range",
+                                        "type":  "WRITE_MULTIPLE_REGISTERS",
+                                        "address":  2
+                                    },
+                                    {
+                                        "operate":  1,
+                                        "count":  1,
+                                        "name":  "set_step",
+                                        "type":  "WRITE_MULTIPLE_REGISTERS",
+                                        "address":  8
+                                    }
+                                ]
+               }
+}

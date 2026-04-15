@@ -1,0 +1,10 @@
+﻿#ifndef COMMONDATA_GLOBAL_H
+#define COMMONDATA_GLOBAL_H
+#include <QtCore/qglobal.h>
+#ifdef COMMONDATA_LIBRARY
+#define COMMONDATA_EXPORT Q_DECL_EXPORT
+#else
+#define COMMONDATA_EXPORT Q_DECL_IMPORT
+#endif
+
+#endif // COMMONDATA_GLOBAL_H

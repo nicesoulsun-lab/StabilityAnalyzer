@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/manual">
+        <file alias="manual_page_1.svg">qml/manual/manual_page_1.svg</file>
+        <file alias="manual_page_2.svg">qml/manual/manual_page_2.svg</file>
+    </qresource>
+</RCC>

@@ -1,0 +1,30 @@
+﻿# Build artifacts
+Makefile
+**/Makefile
+Makefile.*
+**/Makefile.*
+build_*/
+**/build_*/
+debug/
+**/debug/
+release/
+**/release/
+# Local/generated orm copy
+sql_orm/
+**/sql_orm/
+# Qt/user/generated files
+*.pro.user
+**/*.pro.user
+.qmake.stash
+**/.qmake.stash
+object_script.*
+**/object_script.*
+# Logs
+log/
+**/log/
+*.log
+**/*.log
+# bin-mingw: keep only config
+**/bin-mingw/*
+!**/bin-mingw/config/
+!**/bin-mingw/config/**
