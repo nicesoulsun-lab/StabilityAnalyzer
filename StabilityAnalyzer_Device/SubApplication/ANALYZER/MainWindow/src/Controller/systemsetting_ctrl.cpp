@@ -23,7 +23,7 @@ systemSettingCtrl::systemSettingCtrl(QObject *parent)
 
     // 2. 拼接配置文件完整路径: /opt/ANALYZER/bin-mingw/sys_config/config.ini
     // QDir::separator() 会自动处理 Linux(/) 和 Windows(\) 的差异
-    QString configFilePath = appDir + QDir::separator() + "sys_config" + QDir::separator() + "config.ini";
+    QString configFilePath = appDir + QDir::separator() + "config" + QDir::separator() + "sys_config" + QDir::separator() + "config.ini";
 
     // 3. 获取单例实例并加载配置
     m_systemdata = SystemData::globalSystemData();
@@ -575,4 +575,3 @@ void systemSettingCtrl::update_system()
 
     update_apk::getInstance()->get_file_list();
 }
-

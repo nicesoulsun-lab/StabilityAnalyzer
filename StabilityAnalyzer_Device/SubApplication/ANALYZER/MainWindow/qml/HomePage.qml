@@ -34,7 +34,11 @@ Item {
         // 剩余时间由秒转小时并保留一位小数，便于首页快速查看。
         var remainingSeconds = Number(status.remainingSeconds)
         if (isNaN(remainingSeconds) || remainingSeconds < 0) remainingSeconds = 0
-        card.remainingHours = (remainingSeconds / 3600.0).toFixed(2)
+
+        var remainingHours = (remainingSeconds / 3600.0).toFixed(2)
+
+        if(remainingHours > 0 && remainingHours <= 0.01) remainingHours = 0.01
+        card.remainingHours = remainingHours
     }
 
     // 页面初始化时主动拉取一次四通道快照，避免等待首个轮询信号。

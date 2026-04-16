@@ -24,5 +24,6 @@
         <file>qml/icon/huoerde-log.png</file>
         <file>qml/icon/bar-background.png</file>
         <file>qml/icon/option_bar_bg.png</file>
+        <file>qml/icon/options_bar_bg_1.png</file>
     </qresource>
 </RCC>

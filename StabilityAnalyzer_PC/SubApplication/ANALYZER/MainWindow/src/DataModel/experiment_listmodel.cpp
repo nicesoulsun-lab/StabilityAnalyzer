@@ -2,6 +2,20 @@
 #include "SqlOrmManager.h"
 #include <QDebug>
 
+namespace {
+QString statusTextForValue(const QVariant &statusValue)
+{
+    return statusValue.toInt() == 1 ? QStringLiteral("已导入")
+                                    : QStringLiteral("未导入");
+}
+
+QString statusColorForValue(const QVariant &statusValue)
+{
+    return statusValue.toInt() == 1 ? QStringLiteral("#333333")
+                                    : QStringLiteral("#FF4D4F");
+}
+}
+
 experiment_listmodel::experiment_listmodel(QObject* parent)
     : QAbstractTableModel(parent)
 {
@@ -28,17 +42,20 @@ QVariant experiment_listmodel::data(const QModelIndex &index, int role) const
     const QVariantMap &experiment = m_experiments[index.row()];
 
     if (role == CheckedRole) return m_checkedStates[index.row()];
+    if (role == SequenceRole) return index.row() + 1;
     if (role == ProjectNameRole) return experiment["project_name"];
     if (role == ExpNameRole) return experiment["sample_name"];
     if (role == StatusRole) return experiment["status"];
+    if (role == StatusTextRole) return statusTextForValue(experiment["status"]);
+    if (role == StatusColorRole) return statusColorForValue(experiment["status"]);
     if (role == ExpIdRole) return experiment["id"];
 
     if (role == Qt::DisplayRole || role == Qt::EditRole) {
         switch (index.column()) {
         case 0: return m_checkedStates[index.row()];
-        case 1: return experiment["project_name"];
-        case 2: return experiment["sample_name"];
-        case 3: return experiment["status"];
+        case 1: return index.row() + 1;
+        case 2: return experiment["project_name"];
+        case 3: return experiment["sample_name"];
         default: return QVariant();
         }
     }
@@ -63,9 +80,12 @@ QHash<int, QByteArray> experiment_listmodel::roleNames() const
 {
     QHash<int, QByteArray> roles;
     roles[CheckedRole] = "checked";
+    roles[SequenceRole] = "sequence";
     roles[ProjectNameRole] = "projectName";
     roles[ExpNameRole] = "expName";
     roles[StatusRole] = "status";
+    roles[StatusTextRole] = "statusText";
+    roles[StatusColorRole] = "statusColor";
     roles[ExpIdRole] = "expId";
     return roles;
 }
@@ -83,11 +103,26 @@ QVariant experiment_listmodel::get(int row, const QString &roleName) const
     if (row < 0 || row >= m_experiments.size()) return QVariant();
     const QVariantMap &experiment = m_experiments[row];
     if (roleName == "checked") return m_checkedStates[row];
+    if (roleName == "sequence") return row + 1;
     if (roleName == "projectName") return experiment["project_name"];
     if (roleName == "expName") return experiment["sample_name"];
     if (roleName == "status") return experiment["status"];
+    if (roleName == "statusText") return statusTextForValue(experiment["status"]);
+    if (roleName == "statusColor") return statusColorForValue(experiment["status"]);
     if (roleName == "expId") return experiment["id"];
-    return QVariant();
+    return experiment.value(roleName);
+}
+
+QVariantMap experiment_listmodel::getRow(int row) const
+{
+    if (row < 0 || row >= m_experiments.size()) return QVariantMap();
+
+    QVariantMap experiment = m_experiments[row];
+    experiment["checked"] = m_checkedStates.value(row, false);
+    experiment["sequence"] = row + 1;
+    experiment["statusText"] = statusTextForValue(experiment["status"]);
+    experiment["statusColor"] = statusColorForValue(experiment["status"]);
+    return experiment;
 }
 
 void experiment_listmodel::setChecked(int row, bool checked)

@@ -97,9 +97,10 @@ Item {
         var params = experiment_ctrl.loadParams(channel)
         console.log("加载通道C参数:", params)
 
-        if (params.projectId > 0) {
-            project_combo.currentIndex = params.projectId - 1
-        }
+        //        if (params.projectId > 0) {
+        //            project_combo.currentIndex = params.projectId - 1
+        //        }
+        project_combo.currentIndex = -1
         sample_name_edit.text = params.sampleName || ""
         sampler_edit.text = params.operatorName || ""
         note_edit.text = params.description || ""
@@ -115,9 +116,12 @@ Item {
 
         _count_edit.text = params.scanCount || 0
 
-        // 控温默认为否
-        temp_yes.checked = params.temperatureControl || false
-        temp_no.checked = !(params.temperatureControl || false)
+        // 控温值可能来自 QSettings/Variant，显式归一化为布尔值，避免 "false" 被当成真。
+        var temperatureControlEnabled = (params.temperatureControl === true
+                                         || params.temperatureControl === 1
+                                         || params.temperatureControl === "true")
+        temp_yes.checked = temperatureControlEnabled
+        temp_no.checked = !temperatureControlEnabled
         // 控温为否时，目标温度输入框不可用
         target_temp_edit.enabled = temp_yes.checked
         target_temp_edit.text = params.targetTemperature || 0
@@ -872,6 +876,10 @@ Item {
                 console.log("应用通道C参数设置")
 
                 // 验证：样品名称必须填写
+                if (project_combo.currentIndex < 0) {
+                    info_pop.openDialog("请选择工程，若暂无工程请先添加工程")
+                    return
+                }
                 if (sample_name_edit.text === "") {
                     info_pop.openDialog("请填写样品名称")
                     return

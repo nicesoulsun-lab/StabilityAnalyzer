@@ -1,8 +1,12 @@
 #include "inc/Common/experiment_state_store.h"
 
+#include <QCoreApplication>
+#include <QDir>
+#include <QFileInfo>
 #include <QSettings>
 
 namespace {
+
 ExperimentParams paramsFromVariantMap(const QVariantMap& params)
 {
     ExperimentParams expParams;
@@ -55,7 +59,88 @@ QVariantMap paramsToVariantMap(const ExperimentParams& params)
     data["scanStep"] = params.scanStep;
     return data;
 }
+
+QVariantMap defaultParamsVariantMap()
+{
+    QVariantMap params;
+    params["projectId"] = 0;
+    params["sampleName"] = "";
+    params["operatorName"] = "";
+    params["description"] = "";
+    params["durationDays"] = 0;
+    params["durationHours"] = 0;
+    params["durationMinutes"] = 0;
+    params["durationSeconds"] = 0;
+    params["intervalHours"] = 0;
+    params["intervalMinutes"] = 0;
+    params["intervalSeconds"] = 0;
+    params["scanCount"] = 0;
+    params["temperatureControl"] = false;
+    params["targetTemperature"] = 0.0;
+    params["scanRangeStart"] = 0;
+    params["scanRangeEnd"] = 0;
+    params["scanStep"] = 20;
+    return params;
 }
+
+QString experimentStateIniFilePath()
+{
+    return QCoreApplication::applicationDirPath() + "/config/experiment_paras/experiment_state.ini";
+}
+
+void ensureExperimentStateIniPathReady()
+{
+    const QFileInfo info(experimentStateIniFilePath());
+    QDir dir = info.absoluteDir();
+    if (!dir.exists()) {
+        dir.mkpath(".");
+    }
+}
+
+QString settingsGroupPath(const QString& rootGroup, const QString& channelKey)
+{
+    return rootGroup + "/" + channelKey;
+}
+
+bool settingsGroupExists(QSettings& settings, const QString& groupPath)
+{
+    settings.beginGroup(groupPath);
+    const bool exists = !settings.allKeys().isEmpty() || !settings.childGroups().isEmpty();
+    settings.endGroup();
+    return exists;
+}
+
+QVariantMap readParamsFromCurrentGroup(QSettings& settings)
+{
+    QVariantMap params = defaultParamsVariantMap();
+    params["projectId"] = settings.value("projectId", params.value("projectId"));
+    params["sampleName"] = settings.value("sampleName", params.value("sampleName"));
+    params["operatorName"] = settings.value("operatorName", params.value("operatorName"));
+    params["description"] = settings.value("description", params.value("description"));
+    params["durationDays"] = settings.value("durationDays", params.value("durationDays"));
+    params["durationHours"] = settings.value("durationHours", params.value("durationHours"));
+    params["durationMinutes"] = settings.value("durationMinutes", params.value("durationMinutes"));
+    params["durationSeconds"] = settings.value("durationSeconds", params.value("durationSeconds"));
+    params["intervalHours"] = settings.value("intervalHours", params.value("intervalHours"));
+    params["intervalMinutes"] = settings.value("intervalMinutes", params.value("intervalMinutes"));
+    params["intervalSeconds"] = settings.value("intervalSeconds", params.value("intervalSeconds"));
+    params["scanCount"] = settings.value("scanCount", params.value("scanCount"));
+    params["temperatureControl"] = settings.value("temperatureControl", params.value("temperatureControl"));
+    params["targetTemperature"] = settings.value("targetTemperature", params.value("targetTemperature"));
+    params["scanRangeStart"] = settings.value("scanRangeStart", params.value("scanRangeStart"));
+    params["scanRangeEnd"] = settings.value("scanRangeEnd", params.value("scanRangeEnd"));
+    params["scanStep"] = settings.value("scanStep", params.value("scanStep"));
+    return params;
+}
+
+void writeParamsToCurrentGroup(QSettings& settings, const QVariantMap& params)
+{
+    for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
+        settings.setValue(it.key(), it.value());
+    }
+}
+
+} // namespace
 
 ExperimentStateStore::ExperimentStateStore()
 {
@@ -76,13 +161,12 @@ void ExperimentStateStore::setParams(int channel, const ExperimentParams& params
 {
     m_params[channel] = params;
 
-    QSettings settings("StabilityAnalyzer", "ExperimentParams");
-    settings.beginGroup(channelKey(channel));
-    const QVariantMap data = paramsToVariantMap(params);
-    for (auto it = data.constBegin(); it != data.constEnd(); ++it) {
-        settings.setValue(it.key(), it.value());
-    }
+    ensureExperimentStateIniPathReady();
+    QSettings settings(experimentStateIniFilePath(), QSettings::IniFormat);
+    settings.beginGroup(settingsGroupPath("ExperimentParams", channelKey(channel)));
+    writeParamsToCurrentGroup(settings, paramsToVariantMap(params));
     settings.endGroup();
+    settings.sync();
 }
 
 bool ExperimentStateStore::hasParams(int channel) const
@@ -97,32 +181,30 @@ ExperimentParams ExperimentStateStore::params(int channel) const
 
 QVariantMap ExperimentStateStore::loadParams(int channel)
 {
-    QSettings settings("StabilityAnalyzer", "ExperimentParams");
-    settings.beginGroup(channelKey(channel));
+    ensureExperimentStateIniPathReady();
+    const QString groupPath = settingsGroupPath("ExperimentParams", channelKey(channel));
 
     QVariantMap params;
-    params["projectId"] = settings.value("projectId", 0);
-    params["sampleName"] = settings.value("sampleName", "");
-    params["operatorName"] = settings.value("operatorName", "");
-    params["description"] = settings.value("description", "");
+    QSettings fileSettings(experimentStateIniFilePath(), QSettings::IniFormat);
+    if (settingsGroupExists(fileSettings, groupPath)) {
+        fileSettings.beginGroup(groupPath);
+        params = readParamsFromCurrentGroup(fileSettings);
+        fileSettings.endGroup();
+    } else {
+        QSettings legacySettings("StabilityAnalyzer", "ExperimentParams");
+        if (settingsGroupExists(legacySettings, channelKey(channel))) {
+            legacySettings.beginGroup(channelKey(channel));
+            params = readParamsFromCurrentGroup(legacySettings);
+            legacySettings.endGroup();
 
-    params["durationDays"] = settings.value("durationDays", 0);
-    params["durationHours"] = settings.value("durationHours", 0);
-    params["durationMinutes"] = settings.value("durationMinutes", 0);
-    params["durationSeconds"] = settings.value("durationSeconds", 0);
-
-    params["intervalHours"] = settings.value("intervalHours", 0);
-    params["intervalMinutes"] = settings.value("intervalMinutes", 0);
-    params["intervalSeconds"] = settings.value("intervalSeconds", 0);
-
-    params["scanCount"] = settings.value("scanCount", 0);
-    params["temperatureControl"] = settings.value("temperatureControl", false);
-    params["targetTemperature"] = settings.value("targetTemperature", 0.0);
-
-    params["scanRangeStart"] = settings.value("scanRangeStart", 0);
-    params["scanRangeEnd"] = settings.value("scanRangeEnd", 0);
-    params["scanStep"] = settings.value("scanStep", 20);
-    settings.endGroup();
+            fileSettings.beginGroup(groupPath);
+            writeParamsToCurrentGroup(fileSettings, params);
+            fileSettings.endGroup();
+            fileSettings.sync();
+        } else {
+            params = defaultParamsVariantMap();
+        }
+    }
 
     if (!m_params.contains(channel)) {
         m_params[channel] = paramsFromVariantMap(params);
@@ -157,35 +239,14 @@ int ExperimentStateStore::slaveId(int channel, int fallback) const
 
 void ExperimentStateStore::saveSerialConfig(int channel) const
 {
-    QSettings settings("StabilityAnalyzer", "ModbusConfig");
-    settings.beginGroup(channelKey(channel));
-
-    const SerialConfig cfg = m_serialConfigs.value(channel);
-    settings.setValue("portName", cfg.portName);
-    settings.setValue("baudRate", cfg.baudRate);
-    settings.setValue("dataBits", cfg.dataBits);
-    settings.setValue("parity", cfg.parity);
-    settings.setValue("stopBits", cfg.stopBits);
-    settings.setValue("slaveId", m_slaveIds.value(channel, channel + 1));
-
-    settings.endGroup();
+    Q_UNUSED(channel);
+    // Runtime Modbus settings are managed by JSON files under config/experiment_devices.
 }
 
 void ExperimentStateStore::loadSerialConfig(int channel)
 {
-    QSettings settings("StabilityAnalyzer", "ModbusConfig");
-    settings.beginGroup(channelKey(channel));
-
-    SerialConfig cfg = m_serialConfigs.value(channel);
-    cfg.portName = settings.value("portName", cfg.portName).toString();
-    cfg.baudRate = settings.value("baudRate", cfg.baudRate).toInt();
-    cfg.dataBits = settings.value("dataBits", cfg.dataBits).toInt();
-    cfg.parity = settings.value("parity", cfg.parity).toString();
-    cfg.stopBits = settings.value("stopBits", cfg.stopBits).toInt();
-    m_serialConfigs[channel] = cfg;
-    m_slaveIds[channel] = settings.value("slaveId", m_slaveIds.value(channel, channel + 1)).toInt();
-
-    settings.endGroup();
+    Q_UNUSED(channel);
+    // Keep in-memory defaults here; runtime comm settings come from experiment_devices JSON.
 }
 
 void ExperimentStateStore::initializeChannelStatus(int channel, const QVariantMap& initialStatus)

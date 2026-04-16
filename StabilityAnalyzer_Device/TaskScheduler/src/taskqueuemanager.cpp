@@ -1,5 +1,4 @@
 #include "taskqueuemanager.h"
-//#include "task.h"
 #include <QDebug>
 #include <QMutexLocker>
 
@@ -15,13 +14,16 @@ TaskQueueManager::TaskQueueManager(QObject *parent)
     , m_executionThread(new QThread(this))
     , m_executionWorker(nullptr)
     , m_workerBusy(false)
+    , m_dispatchPending(false)
 {
     qRegisterMetaType<TaskResult>("TaskResult");
     qRegisterMetaType<QVector<quint16>>("QVector<quint16>");
 
-    // 设置调度定时器，暂时先设置500ms吧
-    m_schedulerTimer->setInterval(100); // 每2秒检查一次队列
-    connect(m_schedulerTimer, &QTimer::timeout, this, &TaskQueueManager::processNextTask);
+    // 保留调度定时器作为兜底，主调度由入队/完成事件驱动触发
+    m_schedulerTimer->setInterval(100);
+    connect(m_schedulerTimer, &QTimer::timeout, this, [this]() {
+        requestDispatch();
+    });
     
     // 初始化执行线程
     setupExecutionThread();
@@ -92,6 +94,7 @@ void TaskQueueManager::startScheduler()
     
     qDebug() << "启动任务调度器";
     emit runningStatusChanged(true);
+    requestDispatch();
 }
 
 /**
@@ -105,6 +108,7 @@ void TaskQueueManager::stopScheduler()
     
     m_isRunning = false;
     m_isPaused = false;
+    m_dispatchPending = false;
     
     // 停止调度定时器
     m_schedulerTimer->stop();
@@ -156,6 +160,7 @@ void TaskQueueManager::resumeScheduler()
     m_isPaused = false;
     
     qDebug() << "恢复任务调度器";
+    requestDispatch();
 }
 
 /**
@@ -168,15 +173,17 @@ void TaskQueueManager::addHighPriorityTask(const QString &deviceId, Task *task)
     if (!task || !m_isRunning) {
         return;
     }
-    
-    QMutexLocker locker(&m_queueMutex);
 
-    QString taskMapKey = deviceId + "_" + task->taskName();
-    QueuedTask queuedTask(deviceId, task);
-    m_highPriorityQueue.enqueue(queuedTask);
-    m_taskMap.insert(taskMapKey, queuedTask);
-    
+    {
+        QMutexLocker locker(&m_queueMutex);
+        QString taskMapKey = deviceId + "_" + task->taskName();
+        QueuedTask queuedTask(deviceId, task);
+        m_highPriorityQueue.enqueue(queuedTask);
+        m_taskMap.insert(taskMapKey, queuedTask);
+    }
+
     updateQueueStatus();
+    requestDispatch();
 }
 
 /**
@@ -189,28 +196,31 @@ void TaskQueueManager::addPollingTask(const QString &deviceId, Task *task)
     if (!task || !m_isRunning) {
         return;
     }
-    
-    QMutexLocker locker(&m_queueMutex);
 
-    // 去重,如果队列中已存在相同设备+任务名的任务，则不再重复入队
-    for (const QueuedTask &qt : m_pollingQueue) {
-        if (qt.deviceId == deviceId && qt.task && qt.task->taskName() == task->taskName()) {
-            qDebug() << "轮询任务已在队列中，跳过入队 - Device:" << deviceId
-                     << "任务名:" << task->taskName();
-            return;
+    {
+        QMutexLocker locker(&m_queueMutex);
+
+        // 去重,如果队列中已存在相同设备+任务名的任务，则不再重复入队
+        for (const QueuedTask &qt : m_pollingQueue) {
+            if (qt.deviceId == deviceId && qt.task && qt.task->taskName() == task->taskName()) {
+                qDebug() << "轮询任务已在队列中，跳过入队 - Device:" << deviceId
+                         << "任务名:" << task->taskName();
+                return;
+            }
         }
+
+        QString taskMapKey = deviceId + "_" + task->taskName();
+        QueuedTask queuedTask(deviceId, task);
+        m_pollingQueue.enqueue(queuedTask);
+        m_taskMap.insert(taskMapKey, queuedTask);
+
+        qDebug() << "添加轮询任务 - Device:" << deviceId
+                 << "任务名:" << task->taskName()
+                 << "队列size:" << m_pollingQueue.size();
     }
 
-    QString taskMapKey = deviceId + "_" + task->taskName();
-    QueuedTask queuedTask(deviceId, task);
-    m_pollingQueue.enqueue(queuedTask);
-    m_taskMap.insert(taskMapKey, queuedTask);
-    
-    qDebug() << "添加轮询任务 - Device:" << deviceId
-             << "任务名:" << task->taskName()
-             << "队列size:" << m_pollingQueue.size();
-    
     updateQueueStatus();
+    requestDispatch();
 }
 
 /**
@@ -223,37 +233,40 @@ void TaskQueueManager::initializeDeviceTasks(const QString &deviceId, const QLis
     if (!m_isRunning) {
         return;
     }
-    
-    QMutexLocker locker(&m_queueMutex);
-    
-    for (Task *task : tasks) {
-        if (task) {
-            // 检查任务类型，INIT_TASK配置的任务被添加到轮询队列
-            if (task->taskType() == TaskType::INIT_TASK) {
 
-                QString taskMapKey = deviceId + "_" + task->taskName();
-                QueuedTask queuedTask(deviceId, task);
-                m_pollingQueue.enqueue(queuedTask);
-                m_taskMap.insert(taskMapKey, queuedTask);
-                
-                qDebug() << "设备初始化任务- Device:" << deviceId
-                         << "任务名称:" << task->taskName()
-                         << "任务指针:" << task
-                         << "设备指针:" << task->device()
-                         << "任务类型:" << (task->taskType() == TaskType::INIT_TASK ? "INIT_TASK" : "USER_TASK")
-                         << "轮询间隔:" << task->interval();
-            } else {
-                // 用户任务（USER_TASK），不被添加到初始化队列
-                qWarning() << "设备初始化跳过用户任务- Device:" << deviceId
-                           << "任务名称:" << task->taskName()
-                           << "任务类型:" << "USER_TASK"
-                           << "轮询间隔:" << task->interval()
-                           << "- 此任务只能在用户触发时执行";
+    {
+        QMutexLocker locker(&m_queueMutex);
+
+        for (Task *task : tasks) {
+            if (task) {
+                // 检查任务类型，INIT_TASK配置的任务被添加到轮询队列
+                if (task->taskType() == TaskType::INIT_TASK) {
+
+                    QString taskMapKey = deviceId + "_" + task->taskName();
+                    QueuedTask queuedTask(deviceId, task);
+                    m_pollingQueue.enqueue(queuedTask);
+                    m_taskMap.insert(taskMapKey, queuedTask);
+
+                    qDebug() << "设备初始化任务- Device:" << deviceId
+                             << "任务名称:" << task->taskName()
+                             << "任务指针:" << task
+                             << "设备指针:" << task->device()
+                             << "任务类型:" << (task->taskType() == TaskType::INIT_TASK ? "INIT_TASK" : "USER_TASK")
+                             << "轮询间隔:" << task->interval();
+                } else {
+                    // 用户任务（USER_TASK），不被添加到初始化队列
+                    qWarning() << "设备初始化跳过用户任务- Device:" << deviceId
+                               << "任务名称:" << task->taskName()
+                               << "任务类型:" << "USER_TASK"
+                               << "轮询间隔:" << task->interval()
+                               << "- 此任务只能在用户触发时执行";
+                }
             }
         }
     }
-    
+
     updateQueueStatus();
+    requestDispatch();
 }
 
 /**
@@ -294,6 +307,7 @@ void TaskQueueManager::clearAllTasks()
     m_pollingQueue.clear();
     m_taskMap.clear();
     m_workerBusy = false;
+    m_dispatchPending = false;
     
     updateQueueStatus();
 }
@@ -339,35 +353,41 @@ QList<QString> TaskQueueManager::getPollingTaskList() const
  */
 void TaskQueueManager::processNextTask()
 {
-    if (m_isPaused) {
-        return;
-    }
-
-    if(m_highPriorityQueue.size()<=0 && m_pollingQueue.size()<=0){
-        return;
-    }
-    
-    QMutexLocker locker(&m_queueMutex);
     QueuedTask nextTask("", nullptr);
-    
-    // 优先处理高优先级队列
-    if (!m_highPriorityQueue.isEmpty()) {
-        nextTask = m_highPriorityQueue.dequeue();
-    } 
-    // 然后处理轮询队列
-    else if (!m_pollingQueue.isEmpty()) {
-        nextTask = m_pollingQueue.dequeue();
-    }
-    
-    locker.unlock();
-    
-    if (nextTask.task) {
-        // 同步/异步任务统一直接投递执行，等待逻辑由调用方 waitForTaskCompletion 负责
-        // 避免在定时器回调（主线程）中嵌套 QEventLoop 导致事件循环重入问题
-        executeTask(nextTask);
+
+    {
+        QMutexLocker locker(&m_queueMutex);
+        m_dispatchPending = false;
+
+        if (!m_isRunning || m_isPaused || m_workerBusy) {
+            return;
+        }
+
+        // 优先处理高优先级队列
+        if (!m_highPriorityQueue.isEmpty()) {
+            nextTask = m_highPriorityQueue.dequeue();
+        }
+        // 然后处理轮询队列
+        else if (!m_pollingQueue.isEmpty()) {
+            nextTask = m_pollingQueue.dequeue();
+        } else {
+            return;
+        }
+
+        m_workerBusy = true;
     }
 
-    qDebug()<<"执行下一条指令";
+    // 同步/异步任务统一直接投递执行，等待逻辑由调用方 waitForTaskCompletion 负责
+    // 避免在主线程中嵌套 QEventLoop 导致事件循环重入问题
+    if (!executeTask(nextTask)) {
+        QMutexLocker locker(&m_queueMutex);
+        m_workerBusy = false;
+        locker.unlock();
+        updateQueueStatus();
+        requestDispatch();
+        return;
+    }
+
     updateQueueStatus();
 }
 
@@ -375,10 +395,32 @@ void TaskQueueManager::processNextTask()
  * @brief 执行任务
  * @param queuedTask 队列任务
  */
-void TaskQueueManager::executeTask(const QueuedTask &queuedTask)
+void TaskQueueManager::requestDispatch()
+{
+    bool shouldQueueDispatch = false;
+    {
+        QMutexLocker locker(&m_queueMutex);
+        if (!m_isRunning || m_isPaused || m_workerBusy || m_dispatchPending) {
+            return;
+        }
+
+        if (m_highPriorityQueue.isEmpty() && m_pollingQueue.isEmpty()) {
+            return;
+        }
+
+        m_dispatchPending = true;
+        shouldQueueDispatch = true;
+    }
+
+    if (shouldQueueDispatch) {
+        QMetaObject::invokeMethod(this, "processNextTask", Qt::QueuedConnection);
+    }
+}
+
+bool TaskQueueManager::executeTask(const QueuedTask &queuedTask)
 {
     if (!queuedTask.task) {
-        return;
+        return false;
     }
     
     QString deviceId = queuedTask.deviceId;
@@ -394,16 +436,24 @@ void TaskQueueManager::executeTask(const QueuedTask &queuedTask)
         qWarning() << "Task has no valid device object - Device:" << deviceId 
                    << "Task:" << taskId 
                    << "Task ID:" << uniqueTaskId;
-        return;
+        return false;
     }
     
     // 发出任务开始信号
     emit taskStarted(deviceId, taskId);
     
     // 在工作线程中执行任务
-    QMetaObject::invokeMethod(m_executionWorker, "executeTask", 
-                              Qt::QueuedConnection,
-                              Q_ARG(Task*, queuedTask.task));
+    const bool invokeOk = QMetaObject::invokeMethod(m_executionWorker, "executeTask",
+                                                    Qt::QueuedConnection,
+                                                    Q_ARG(Task*, queuedTask.task));
+    if (!invokeOk) {
+        qWarning() << "Failed to dispatch task to execution worker - Device:" << deviceId
+                   << "Task:" << taskId
+                   << "Task ID:" << uniqueTaskId;
+        return false;
+    }
+
+    return true;
 }
 
 /**
@@ -417,11 +467,17 @@ void TaskQueueManager::onWorkerTaskCompleted(TaskResult res, QVector<quint16> da
 //             << "Success:" << !res.isException
 //             << "Data size:" << data.size();
     
+    {
+        QMutexLocker locker(&m_queueMutex);
+        m_workerBusy = false;
+    }
+
     // 发出任务完成信号
     emit taskCompleted(res, data);
     
     // 更新队列状态
     updateQueueStatus();
+    requestDispatch();
 }
 
 /**
@@ -432,11 +488,17 @@ void TaskQueueManager::onWorkerTaskCompleted(TaskResult res, QVector<quint16> da
  */
 void TaskQueueManager::onTaskCompleted(TaskResult res, QVector<quint16>data)
 {
+    {
+        QMutexLocker locker(&m_queueMutex);
+        m_workerBusy = false;
+    }
+
     // 发出任务完成信号
     emit taskCompleted(res, data);
     
     // 更新队列状态
     updateQueueStatus();
+    requestDispatch();
 }
 
 /**

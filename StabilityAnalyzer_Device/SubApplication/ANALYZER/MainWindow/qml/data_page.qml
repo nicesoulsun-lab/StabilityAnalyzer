@@ -12,11 +12,30 @@ Item {
     property bool hasSelection: false
     property int selectedRow: -1
 
-    // 辅助函数：重置输入状态 [cite: 218, 226, 230]
+    function refreshExperimentList() {
+        resetInputs()
+        if (typeof experiment_list_model !== "undefined" && experiment_list_model) {
+            experiment_list_model.reloadFromDb()
+        }
+    }
+
     function resetInputs() {
-        hasSelection = false;
-        selectedRow = -1;
-        // 如果 ListView 有取消选中的方法，可以在此调用
+        hasSelection = false
+        selectedRow = -1
+    }
+
+    Component.onCompleted: refreshExperimentList()
+
+    onVisibleChanged: {
+        if (visible) {
+            refreshExperimentList()
+        }
+    }
+
+    Connections {
+        target: experiment_ctrl
+        onExperimentStarted: refreshExperimentList()
+        onExperimentStopped: refreshExperimentList()
     }
 
     Rectangle {
@@ -24,7 +43,6 @@ Item {
         anchors.margins: 10
         color: "transparent"
 
-        // 使用 ColumnLayout 撑起整个页面布局 [cite: 33, 234]
         ColumnLayout {
             anchors.fill: parent
             spacing: 15
@@ -35,19 +53,18 @@ Item {
                 Layout.fillHeight: true
 
                 onRowSelected: {
-                    hasSelection = true;
-                    selectedRow = row;
-
+                    hasSelection = true
+                    selectedRow = row
                     console.log(row + " " + col1 + " " + col2 + " " + col3 + " " + hiddenId)
                 }
+
                 onRowDeselected: {
-                    resetInputs();
+                    resetInputs()
                 }
             }
 
-            // 删除
             IconButton {
-                button_text: qsTr("删   除")
+                button_text: qsTr("删  除")
                 Layout.preferredWidth: 160
                 Layout.preferredHeight: 45
                 Layout.alignment: Qt.AlignHCenter

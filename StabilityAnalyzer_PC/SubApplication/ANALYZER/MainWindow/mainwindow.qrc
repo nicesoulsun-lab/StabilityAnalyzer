@@ -19,6 +19,8 @@
         <file>qml/component/CustomProgressBar.qml</file>
         <file>qml/ManualViewerPage.qml</file>
         <file>qml/UserManagementPage.qml</file>
+        <file>qml/ExperimentRecordPage.qml</file>
+        <file>qml/ExperimentDetailPage.qml</file>
         <file>qml/component/Popup_button.qml</file>
         <file>qml/SelectChannelsPop.qml</file>
         <file>qml/CustomPop.qml</file>
@@ -26,8 +28,8 @@
         <file>qml/NewExperimentPop.qml</file>
         <file>qml/component/TimeSetting.qml</file>
         <file>qml/component/LineEdit_wrap.qml</file>
-        <file>qml/data_page.qml</file>
-        <file>qml/component/CustomListView_data.qml</file>
+        <file>qml/component/ExperimentRecordTable.qml</file>
+        <file>qml/component/ExperimentRecordListContent.qml</file>
         <file>qml/component/ChannelPanel.qml</file>
         <file>qml/component/SectionBox.qml</file>
         <file>qml/NewProjectPop.qml</file>

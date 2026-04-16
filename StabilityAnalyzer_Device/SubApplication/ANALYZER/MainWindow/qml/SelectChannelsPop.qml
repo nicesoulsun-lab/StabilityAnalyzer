@@ -172,14 +172,16 @@ Popup {
                         }
                     }
 
+                    if (channel_A_check.checked || channel_B_check.checked || channel_C_check.checked || channel_D_check.checked) {
+                        close()
+                    }else{
+                        info_pop.openDialog(qsTr("请选择通道"))
+                    }
+
                     if (channel_A_check.checked) startSelectedChannel(0, "A")
                     if (channel_B_check.checked) startSelectedChannel(1, "B")
                     if (channel_C_check.checked) startSelectedChannel(2, "C")
                     if (channel_D_check.checked) startSelectedChannel(3, "D")
-
-                    if (started) {
-                        close()
-                    }
                 }
             }
         }

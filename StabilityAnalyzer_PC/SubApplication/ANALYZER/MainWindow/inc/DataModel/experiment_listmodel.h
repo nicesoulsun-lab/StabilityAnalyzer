@@ -35,9 +35,12 @@ class MAINWINDOW_EXPORT experiment_listmodel : public QAbstractTableModel {
 public:
     enum ExperimentRoles {
         CheckedRole = Qt::UserRole + 1,
+        SequenceRole,
         ProjectNameRole,
         ExpNameRole,
         StatusRole,
+        StatusTextRole,
+        StatusColorRole,
         ExpIdRole
     };
 
@@ -58,6 +61,7 @@ public:
      * @return 数据值
      */
     Q_INVOKABLE QVariant get(int row, const QString &roleName) const;
+    Q_INVOKABLE QVariantMap getRow(int row) const;
 
     /**
      * @brief 设置复选框状态

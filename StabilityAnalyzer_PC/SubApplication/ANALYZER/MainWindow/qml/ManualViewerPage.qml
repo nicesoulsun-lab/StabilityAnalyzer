@@ -14,6 +14,7 @@ Item {
         "qrc:/manual/manual_page_1.svg",
         "qrc:/manual/manual_page_2.svg"
     ]
+    property int manualRasterWidth: 960
 
     Rectangle {
         anchors.fill: parent
@@ -84,7 +85,7 @@ Item {
                 spacing: 18
                 model: manualPage.manualImages
                 boundsBehavior: Flickable.StopAtBounds
-                cacheBuffer: height * 2
+                cacheBuffer: 0
 
                 ScrollBar.vertical: ScrollBar {
                     policy: ScrollBar.AsNeeded
@@ -116,9 +117,9 @@ Item {
                             height: width * manualPage.manualPageRatio
                             fillMode: Image.PreserveAspectFit
                             source: modelData
-                            sourceSize.width: width
+                            sourceSize.width: Math.min(width, manualPage.manualRasterWidth)
                             asynchronous: true
-                            cache: true
+                            cache: false
                         }
 
                         Rectangle {

@@ -7,9 +7,14 @@ Item {
     id: homepage
     objectName: "HomePage"
 
-    property string contentPageUrl: "qrc:/qml/data_page.qml"
+    property string contentPageUrl: ""
+    property string contentPageKey: ""
+    property string currentPageKey: ""
 
-    function openPage(pageUrl) {
+    function openPage(pageUrl, pageKey) {
+        if (pageKey !== undefined && pageKey !== "") {
+            currentPageKey = pageKey
+        }
         if (mainLoader.source !== pageUrl) {
             mainLoader.source = pageUrl
         } else if (mainLoader.item && mainLoader.item.forceActiveFocus) {
@@ -17,13 +22,14 @@ Item {
         }
     }
 
-    function openContentPage(pageUrl) {
+    function openContentPage(pageUrl, pageKey) {
         contentPageUrl = pageUrl
-        openPage(pageUrl)
+        contentPageKey = pageKey || ""
+        openPage(pageUrl, contentPageKey)
     }
 
     function openInstructionPage() {
-        openPage("qrc:/qml/ManualViewerPage.qml")
+        openPage("qrc:/qml/ManualViewerPage.qml", "help")
     }
 
     RowLayout {
@@ -106,9 +112,11 @@ Item {
                     id: optionsBar
                     Layout.fillWidth: true
                     Layout.preferredHeight: 40
+                    activePage: homepage.currentPageKey
                     onInstrumentCheckRequested: instrumentCheckPop.open()
                     onNewExperimentRequested: newExperimentPop.open()
-                    onUserManagementRequested: homepage.openContentPage("qrc:/qml/UserManagementPage.qml")
+                    onExperimentRecordRequested: homepage.openContentPage("qrc:/qml/ExperimentRecordPage.qml", "record")
+                    onUserManagementRequested: homepage.openContentPage("qrc:/qml/UserManagementPage.qml", "user")
                     onInstructionRequested: homepage.openInstructionPage()
                 }
 
@@ -121,7 +129,7 @@ Item {
                 Connections {
                     target: mainLoader.item
                     ignoreUnknownSignals: true
-                    onBackRequested: homepage.openContentPage(homepage.contentPageUrl)
+                    onBackRequested: homepage.openContentPage(homepage.contentPageUrl, homepage.contentPageKey)
                 }
             }
         }
@@ -135,7 +143,7 @@ Item {
         id: newExperimentPop
     }
 
-    Component.onCompleted: {
-        openContentPage("qrc:/qml/data_page.qml")
+    CustomPop {
+        id: custom_pop
     }
 }

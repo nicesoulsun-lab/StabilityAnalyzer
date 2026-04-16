@@ -193,7 +193,7 @@ Item {
                 title: qsTr("关于本机")
                 blockWidth: 315; blockHeight: 296
                 ColumnLayout {
-                    anchors.centerIn: parent; anchors.verticalCenterOffset: 20; spacing: 42
+                    anchors.centerIn: parent; anchors.verticalCenterOffset: 20; spacing: 21
 
                     IconButton {
                         button_text: qsTr("说明帮助")
@@ -202,6 +202,17 @@ Item {
                         onClicked: {
                             console.log("说明帮助")
                             mainStackView.push("qrc:/qml/Instruction.qml")
+                        }
+                    }
+                    IconButton {
+                        button_text: qsTr("查看序列号")
+                        Layout.preferredWidth: 245; Layout.preferredHeight: 45
+                        button_color: "#EDEEF0"; text_color: "#005BAC"
+                        onClicked: {
+                            console.log("查看序列号")
+                            var num = system_ctrl.getSerialNumber();
+                            console.log(num)
+                            info_pop.openDialog(num)
                         }
                     }
                     IconButton {

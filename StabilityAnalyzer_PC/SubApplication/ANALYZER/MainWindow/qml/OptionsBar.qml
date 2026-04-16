@@ -8,9 +8,11 @@ Rectangle{
     property bool _langSubOpen: false
     property int _lastClosedMenu: 0
     property double _lastClosedTs: 0
+    property string activePage: "record"
     // 由首页接住这个信号，统一决定如何打开仪器检查界面。
     signal instrumentCheckRequested()
     signal newExperimentRequested()
+    signal experimentRecordRequested()
     signal userManagementRequested()
     signal instructionRequested()
     color: "transparent"
@@ -176,17 +178,29 @@ Rectangle{
                     id: txtRecord
                     text: qsTr("实验记录")
                     font.pixelSize: 14
-                    color: _activeMenu === 2 ? "#336FFF" : "#444444"
+                    color: _activeMenu === 2 || optionsBar.activePage === "record" ? "#336FFF" : "#444444"
                     font.family: "Microsoft YaHei"
                     anchors.verticalCenter: parent.verticalCenter
                 }
+            }
+            Rectangle {
+                width: txtRecord.implicitWidth
+                height: 2
+                radius: 1
+                color: "#4A90FF"
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 2
+                visible: optionsBar.activePage === "record"
             }
             MouseArea {
                 id: maRecord
                 anchors.fill: parent
                 hoverEnabled: true
                 onClicked: {
+                    closeMenus()
                     _activeMenu = 2
+                    optionsBar.experimentRecordRequested()
                 }
             }
         }
@@ -279,7 +293,16 @@ Rectangle{
                             radius: 4
                             Text { text: qsTr("仪器检查"); font.pixelSize: 14; color: "#333333"; font.family: "Microsoft YaHei"; anchors.verticalCenter: parent.verticalCenter; x: 10 }
                             // 菜单项本身只负责派发事件，避免直接依赖外部页面或弹窗 id。
-                            MouseArea { id: maI1; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: { optionsBar.instrumentCheckRequested(); closeMenus() } }
+                            MouseArea {
+                                id: maI1;
+                                anchors.fill: parent;
+                                hoverEnabled: true;
+                                cursorShape: Qt.PointingHandCursor;
+                                onClicked: {
+                                    optionsBar.instrumentCheckRequested();
+                                    closeMenus()
+                                }
+                            }
                         }
                     }
                 }

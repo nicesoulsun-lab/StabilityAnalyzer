@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "CurveItem.h"
+#include "Controller/controllerManager.h"
 #include <QtWidgets/QApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -17,8 +18,15 @@ int main(int argc, char *argv[])
 
     // 注册 MainWindow 实例
     MainWindow *mainWindowInstance = new MainWindow();
+    CtrllerManager *controllerManager = new CtrllerManager(&engine);
     engine.rootContext()->setContextProperty("mainWindow", mainWindowInstance);
     engine.rootContext()->setContextProperty("dataModel", mainWindowInstance->curveModel());
+    engine.rootContext()->setContextProperty("system_ctrl", controllerManager->getSystemSettingCtrl());
+    engine.rootContext()->setContextProperty("user_ctrl", controllerManager->getUserCtrl());
+    engine.rootContext()->setContextProperty("data_ctrl", controllerManager->getDataCtrl());
+    engine.rootContext()->setContextProperty("experiment_ctrl", controllerManager->getExperimentCtrl());
+    engine.rootContext()->setContextProperty("user_list_model", controllerManager->getUserListmodel());
+    engine.rootContext()->setContextProperty("experiment_list_model", controllerManager->getExperimentListmodel());
 
     // 加载主 QML 文件
     engine.load(QUrl(QStringLiteral("qrc:/qml/MainWindow.qml")));

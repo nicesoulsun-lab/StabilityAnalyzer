@@ -78,8 +78,9 @@ private:
     };
     
     void setupExecutionThread();
+    void requestDispatch();
     
-    void executeTask(const QueuedTask &queuedTask);
+    bool executeTask(const QueuedTask &queuedTask);
     void updateQueueStatus();
     void waitForTaskCompletion(Task *task);
     
@@ -97,6 +98,7 @@ private:
     QThread *m_executionThread;
     TaskExecutionWorker *m_executionWorker;
     bool m_workerBusy;
+    bool m_dispatchPending;
     
     // 线程安全
     mutable QMutex m_queueMutex;

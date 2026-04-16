@@ -31,6 +31,10 @@
 
 using namespace sqlite_orm;
 
+namespace {
+constexpr int kExperimentDataInsertChunkSize = 180;
+}
+
 // ============================================================================
 // 数据模型定义（与 sqlManager 保持一致）
 // ============================================================================
@@ -1226,27 +1230,52 @@ bool SqlOrmManager::addExperimentData(const QVariantMap& data) {
 
 bool SqlOrmManager::batchAddExperimentData(const QVector<QVariantMap>& dataList) {
     Q_D(SqlOrmManager);
-    
+
     if (!d->initialized) return false;
-    
+    if (dataList.isEmpty()) return true;
+
+    const bool alreadyInTransaction = d->inTransaction;
+    bool transactionStarted = false;
+
     try {
-        // 使用事务批量插入
-        bool transactionStarted = beginTransaction();
-        
-        int successCount = 0;
+        QVector<ExperimentData> rows;
+        rows.reserve(dataList.size());
+
         for (const auto& data : dataList) {
-            if (addExperimentData(data)) {
-                successCount++;
-            }
+            ExperimentData expData;
+            expData.experiment_id = data.value("experiment_id", 0).toInt();
+            expData.timestamp = data.value("timestamp", 0).toInt();
+            expData.height = data.value("height", 0.0).toDouble();
+            expData.backscatter_intensity = data.value("backscatter_intensity", 0.0).toDouble();
+            expData.transmission_intensity = data.value("transmission_intensity", 0.0).toDouble();
+            rows.append(expData);
         }
-        
-        if (transactionStarted) {
-            commitTransaction();
+
+        transactionStarted = alreadyInTransaction ? false : beginTransaction();
+        if (!alreadyInTransaction && !transactionStarted) {
+            qWarning() << "[SqlOrmManager] batchAddExperimentData failed: unable to start transaction";
+            return false;
         }
-        
-        qDebug() << "[SqlOrmManager] 批量添加实验数据成功：" << successCount << "条";
-        return successCount == dataList.size();
+
+        for (int offset = 0; offset < rows.size(); offset += kExperimentDataInsertChunkSize) {
+            const int chunkSize = qMin(kExperimentDataInsertChunkSize, rows.size() - offset);
+            d->storage->insert_range(rows.constBegin() + offset, rows.constBegin() + offset + chunkSize);
+        }
+
+        if (transactionStarted && !commitTransaction()) {
+            qWarning() << "[SqlOrmManager] batchAddExperimentData failed: commit transaction failed";
+            rollbackTransaction();
+            return false;
+        }
+
+        qDebug() << "[SqlOrmManager] 批量添加实验数据成功：" << rows.size()
+                 << "条 chunks="
+                 << ((rows.size() + kExperimentDataInsertChunkSize - 1) / kExperimentDataInsertChunkSize);
+        return true;
     } catch (const std::exception& e) {
+        if (transactionStarted && d->inTransaction) {
+            rollbackTransaction();
+        }
         qWarning() << "[SqlOrmManager] 批量添加实验数据失败：" << QString::fromStdString(e.what());
         emit errorOccurred(QString::fromStdString(e.what()));
         return false;
