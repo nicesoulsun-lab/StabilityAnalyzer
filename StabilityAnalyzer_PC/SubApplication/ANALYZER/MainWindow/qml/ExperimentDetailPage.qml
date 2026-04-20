@@ -897,7 +897,7 @@ Item {
                             anchors.leftMargin: 72
                             anchors.rightMargin: 22
                             anchors.topMargin: 18
-                            anchors.bottomMargin: 36
+                            anchors.bottomMargin: 45
 
                             Repeater {
                                 model: instabilityPanel.yAxisLabels.length
@@ -943,6 +943,19 @@ Item {
                             }
 
                             Repeater {
+                                model: instabilityPanel.yAxisLabels
+                                delegate: Text {
+                                    anchors.right: parent.left
+                                    anchors.rightMargin: 10
+                                    y: index * (parent.height / Math.max(instabilityPanel.yAxisLabels.length - 1, 1)) - height / 2
+                                    text: instabilityPanel.yAxisLabels[instabilityPanel.yAxisLabels.length - 1 - index]
+                                    font.pixelSize: 11
+                                    font.family: "Microsoft YaHei"
+                                    color: "#7A8CA5"
+                                }
+                            }
+
+                            Repeater {
                                 model: instabilityPanel.xAxisTickValues
                                 delegate: Text {
                                     y: parent.height + 6
@@ -957,7 +970,7 @@ Item {
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 anchors.bottom: parent.bottom
-                                anchors.bottomMargin: -24
+                                anchors.bottomMargin: -38
                                 text: qsTr("时间(min)")
                                 font.pixelSize: 12
                                 font.family: "Microsoft YaHei"
@@ -1090,16 +1103,79 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 Layout.preferredHeight: 150
-                                CurveItem {
+                                
+                                Rectangle {
                                     anchors.fill: parent
-                                    lineColor: "#21A366"
-                                    lineWidth: 2
-                                    autoScale: false
-                                    minXValue: uniformityPanel.chartMinX
-                                    maxXValue: uniformityPanel.chartMaxX
-                                    minYValue: 0
-                                    maxYValue: 1
-                                    dataPoints: uniformityPanel.tPoints
+                                    radius: 6
+                                    color: "#FFFFFF"
+                                    border.color: "#DCE6F2"
+                                    border.width: 1
+                                }
+
+                                Item {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 58
+                                    anchors.rightMargin: 16
+                                    anchors.topMargin: 16
+                                    anchors.bottomMargin: 12
+
+                                    Repeater {
+                                        model: uniformityPanel.yAxisLabels.length
+                                        Rectangle {
+                                            width: parent.width
+                                            height: 1
+                                            color: "#EEF3F8"
+                                            y: index * (parent.height / Math.max(uniformityPanel.yAxisLabels.length - 1, 1))
+                                        }
+                                    }
+
+                                    Repeater {
+                                        model: uniformityPanel.xAxisTickValues
+                                        Rectangle {
+                                            width: 1
+                                            height: parent.height
+                                            color: "#EEF3F8"
+                                            x: (modelData - uniformityPanel.chartMinX) / Math.max(uniformityPanel.chartMaxX - uniformityPanel.chartMinX, 1) * parent.width
+                                        }
+                                    }
+
+                                    CurveItem {
+                                        anchors.fill: parent
+                                        lineColor: "#21A366"
+                                        lineWidth: 2
+                                        autoScale: false
+                                        minXValue: uniformityPanel.chartMinX
+                                        maxXValue: uniformityPanel.chartMaxX
+                                        minYValue: 0
+                                        maxYValue: 1
+                                        dataPoints: uniformityPanel.tPoints
+                                    }
+
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: -50
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "UI\n(T)"
+                                        font.pixelSize: 12
+                                        font.family: "Microsoft YaHei"
+                                        color: "#6E8096"
+                                        font.bold: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+
+                                    Repeater {
+                                        model: uniformityPanel.yAxisLabels
+                                        delegate: Text {
+                                            anchors.right: parent.left
+                                            anchors.rightMargin: 10
+                                            y: index * (parent.height / Math.max(uniformityPanel.yAxisLabels.length - 1, 1)) - height / 2
+                                            text: uniformityPanel.yAxisLabels[uniformityPanel.yAxisLabels.length - 1 - index]
+                                            font.pixelSize: 11
+                                            font.family: "Microsoft YaHei"
+                                            color: "#7A8CA5"
+                                        }
+                                    }
                                 }
                             }
 
@@ -1107,31 +1183,203 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 Layout.preferredHeight: 150
-                                CurveItem {
+                                
+                                Rectangle {
                                     anchors.fill: parent
-                                    lineColor: "#2F7CF6"
-                                    lineWidth: 2
-                                    autoScale: false
-                                    minXValue: uniformityPanel.chartMinX
-                                    maxXValue: uniformityPanel.chartMaxX
-                                    minYValue: 0
-                                    maxYValue: 1
-                                    dataPoints: uniformityPanel.bsPoints
+                                    radius: 6
+                                    color: "#FFFFFF"
+                                    border.color: "#DCE6F2"
+                                    border.width: 1
+                                }
+
+                                Item {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 58
+                                    anchors.rightMargin: 16
+                                    anchors.topMargin: 16
+                                    anchors.bottomMargin: 45
+
+                                    Repeater {
+                                        model: uniformityPanel.yAxisLabels.length
+                                        Rectangle {
+                                            width: parent.width
+                                            height: 1
+                                            color: "#EEF3F8"
+                                            y: index * (parent.height / Math.max(uniformityPanel.yAxisLabels.length - 1, 1))
+                                        }
+                                    }
+
+                                    Repeater {
+                                        model: uniformityPanel.xAxisTickValues
+                                        Rectangle {
+                                            width: 1
+                                            height: parent.height
+                                            color: "#EEF3F8"
+                                            x: (modelData - uniformityPanel.chartMinX) / Math.max(uniformityPanel.chartMaxX - uniformityPanel.chartMinX, 1) * parent.width
+                                        }
+                                    }
+
+                                    CurveItem {
+                                        anchors.fill: parent
+                                        lineColor: "#2F7CF6"
+                                        lineWidth: 2
+                                        autoScale: false
+                                        minXValue: uniformityPanel.chartMinX
+                                        maxXValue: uniformityPanel.chartMaxX
+                                        minYValue: 0
+                                        maxYValue: 1
+                                        dataPoints: uniformityPanel.bsPoints
+                                    }
+
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: -50
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "UI\n(BS)"
+                                        font.pixelSize: 12
+                                        font.family: "Microsoft YaHei"
+                                        color: "#6E8096"
+                                        font.bold: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+
+                                    Repeater {
+                                        model: uniformityPanel.yAxisLabels
+                                        delegate: Text {
+                                            anchors.right: parent.left
+                                            anchors.rightMargin: 10
+                                            y: index * (parent.height / Math.max(uniformityPanel.yAxisLabels.length - 1, 1)) - height / 2
+                                            text: uniformityPanel.yAxisLabels[uniformityPanel.yAxisLabels.length - 1 - index]
+                                            font.pixelSize: 11
+                                            font.family: "Microsoft YaHei"
+                                            color: "#7A8CA5"
+                                        }
+                                    }
+
+                                    Repeater {
+                                        model: uniformityPanel.xAxisTickValues
+                                        delegate: Text {
+                                            y: parent.height + 6
+                                            x: (modelData - uniformityPanel.chartMinX) / Math.max(uniformityPanel.chartMaxX - uniformityPanel.chartMinX, 1) * parent.width - width / 2
+                                            text: detailPage.formatNumber(modelData, 1)
+                                            font.pixelSize: 11
+                                            font.family: "Microsoft YaHei"
+                                            color: "#7A8CA5"
+                                        }
+                                    }
+
+                                    Text {
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        anchors.bottom: parent.bottom
+                                        anchors.bottomMargin: -38
+                                        text: qsTr("时间(min)")
+                                        font.pixelSize: 12
+                                        font.family: "Microsoft YaHei"
+                                        color: "#6E8096"
+                                        font.bold: true
+                                    }
                                 }
                             }
                         }
 
-                        CurveItem {
+                        Rectangle {
                             anchors.fill: parent
                             visible: uniformityPanel.currentModeIndex !== 2
-                            lineColor: uniformityPanel.currentModeIndex === 0 ? "#2F7CF6" : "#21A366"
-                            lineWidth: 2
-                            autoScale: false
-                            minXValue: uniformityPanel.chartMinX
-                            maxXValue: uniformityPanel.chartMaxX
-                            minYValue: 0
-                            maxYValue: 1
-                            dataPoints: uniformityPanel.currentModeIndex === 0 ? uniformityPanel.bsPoints : uniformityPanel.tPoints
+                            radius: 6
+                            color: "#FFFFFF"
+                            border.color: "#DCE6F2"
+                            border.width: 1
+                        }
+
+                        Item {
+                            anchors.fill: parent
+                            anchors.leftMargin: 58
+                            anchors.rightMargin: 16
+                            anchors.topMargin: 16
+                            anchors.bottomMargin: 45
+                            visible: uniformityPanel.currentModeIndex !== 2
+
+                            Repeater {
+                                model: uniformityPanel.yAxisLabels.length
+                                Rectangle {
+                                    width: parent.width
+                                    height: 1
+                                    color: "#EEF3F8"
+                                    y: index * (parent.height / Math.max(uniformityPanel.yAxisLabels.length - 1, 1))
+                                }
+                            }
+
+                            Repeater {
+                                model: uniformityPanel.xAxisTickValues
+                                Rectangle {
+                                    width: 1
+                                    height: parent.height
+                                    color: "#EEF3F8"
+                                    x: (modelData - uniformityPanel.chartMinX) / Math.max(uniformityPanel.chartMaxX - uniformityPanel.chartMinX, 1) * parent.width
+                                }
+                            }
+
+                            CurveItem {
+                                anchors.fill: parent
+                                lineColor: uniformityPanel.currentModeIndex === 0 ? "#2F7CF6" : "#21A366"
+                                lineWidth: 2
+                                autoScale: false
+                                minXValue: uniformityPanel.chartMinX
+                                maxXValue: uniformityPanel.chartMaxX
+                                minYValue: 0
+                                maxYValue: 1
+                                dataPoints: uniformityPanel.currentModeIndex === 0 ? uniformityPanel.bsPoints : uniformityPanel.tPoints
+                            }
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: -50
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: uniformityPanel.currentModeIndex === 0 ? "UI\n(BS)" : "UI\n(T)"
+                                font.pixelSize: 12
+                                font.family: "Microsoft YaHei"
+                                color: "#6E8096"
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+
+                            Repeater {
+                                model: uniformityPanel.yAxisLabels
+                                delegate: Text {
+                                    anchors.right: parent.left
+                                    anchors.rightMargin: 10
+                                    y: index * (parent.height / Math.max(uniformityPanel.yAxisLabels.length - 1, 1)) - height / 2
+                                    text: uniformityPanel.yAxisLabels[uniformityPanel.yAxisLabels.length - 1 - index]
+                                    font.pixelSize: 11
+                                    font.family: "Microsoft YaHei"
+                                    color: "#7A8CA5"
+                                }
+                            }
+
+                            Repeater {
+                                model: uniformityPanel.xAxisTickValues
+                                delegate: Text {
+                                    y: parent.height + 6
+                                    x: (modelData - uniformityPanel.chartMinX) / Math.max(uniformityPanel.chartMaxX - uniformityPanel.chartMinX, 1) * parent.width - width / 2
+                                    text: detailPage.formatNumber(modelData, 1)
+                                    font.pixelSize: 11
+                                    font.family: "Microsoft YaHei"
+                                    color: "#7A8CA5"
+                                }
+                            }
+
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: -38
+                                text: qsTr("时间(min)")
+                                font.pixelSize: 12
+                                font.family: "Microsoft YaHei"
+                                color: "#6E8096"
+                                font.bold: true
+                            }
                         }
                     }
                 }
@@ -1154,6 +1402,8 @@ Item {
             property real chartMaxX: 1
             property real chartMinY: 0
             property real chartMaxY: 1
+            property var xAxisTickValues: [0, 1]
+            property var yAxisLabels: detailPage.makeAxisLabels(chartMinY, chartMaxY, 6, 1)
 
             function loadAverageData() {
                 rows = []
@@ -1194,6 +1444,8 @@ Item {
                     chartMaxX = chartMinX + 1
                 chartMinY = isFinite(minY) ? detailPage.paddedMin(minY, maxY, 1) : 0
                 chartMaxY = isFinite(maxY) ? detailPage.paddedMax(maxY, minY, 1) : 1
+                xAxisTickValues = detailPage.buildTimeTicks(chartMinX, chartMaxX, 6)
+                yAxisLabels = detailPage.makeAxisLabels(chartMinY, chartMaxY, 6, 1)
             }
 
             Component.onCompleted: loadAverageData()
@@ -1260,16 +1512,78 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 Layout.preferredHeight: 150
-                                CurveItem {
+                                Rectangle {
                                     anchors.fill: parent
-                                    lineColor: "#21A366"
-                                    lineWidth: 2
-                                    autoScale: false
-                                    minXValue: avgPanel.chartMinX
-                                    maxXValue: avgPanel.chartMaxX
-                                    minYValue: avgPanel.chartMinY
-                                    maxYValue: avgPanel.chartMaxY
-                                    dataPoints: avgPanel.tPoints
+                                    radius: 6
+                                    color: "#FFFFFF"
+                                    border.color: "#DCE6F2"
+                                    border.width: 1
+                                }
+
+                                Item {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 58
+                                    anchors.rightMargin: 16
+                                    anchors.topMargin: 16
+                                    anchors.bottomMargin: 12
+
+                                    Repeater {
+                                        model: avgPanel.yAxisLabels.length
+                                        Rectangle {
+                                            width: parent.width
+                                            height: 1
+                                            color: "#EEF3F8"
+                                            y: index * (parent.height / Math.max(avgPanel.yAxisLabels.length - 1, 1))
+                                        }
+                                    }
+
+                                    Repeater {
+                                        model: avgPanel.xAxisTickValues
+                                        Rectangle {
+                                            width: 1
+                                            height: parent.height
+                                            color: "#EEF3F8"
+                                            x: (modelData - avgPanel.chartMinX) / Math.max(avgPanel.chartMaxX - avgPanel.chartMinX, 1) * parent.width
+                                        }
+                                    }
+
+                                    CurveItem {
+                                        anchors.fill: parent
+                                        lineColor: "#21A366"
+                                        lineWidth: 2
+                                        autoScale: false
+                                        minXValue: avgPanel.chartMinX
+                                        maxXValue: avgPanel.chartMaxX
+                                        minYValue: avgPanel.chartMinY
+                                        maxYValue: avgPanel.chartMaxY
+                                        dataPoints: avgPanel.tPoints
+                                    }
+
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: -50
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "Avg\n(T)"
+                                        font.pixelSize: 12
+                                        font.family: "Microsoft YaHei"
+                                        color: "#6E8096"
+                                        font.bold: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+
+                                    Repeater {
+                                        model: avgPanel.yAxisLabels
+                                        delegate: Text {
+                                            anchors.right: parent.left
+                                            anchors.rightMargin: 10
+                                            y: index * (parent.height / Math.max(avgPanel.yAxisLabels.length - 1, 1)) - height / 2
+                                            text: avgPanel.yAxisLabels[avgPanel.yAxisLabels.length - 1 - index]
+                                            font.pixelSize: 11
+                                            font.family: "Microsoft YaHei"
+                                            color: "#7A8CA5"
+                                        }
+                                    }
                                 }
                             }
 
@@ -1277,31 +1591,202 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 Layout.preferredHeight: 150
-                                CurveItem {
+                                Rectangle {
                                     anchors.fill: parent
-                                    lineColor: "#2F7CF6"
-                                    lineWidth: 2
-                                    autoScale: false
-                                    minXValue: avgPanel.chartMinX
-                                    maxXValue: avgPanel.chartMaxX
-                                    minYValue: avgPanel.chartMinY
-                                    maxYValue: avgPanel.chartMaxY
-                                    dataPoints: avgPanel.bsPoints
+                                    radius: 6
+                                    color: "#FFFFFF"
+                                    border.color: "#DCE6F2"
+                                    border.width: 1
+                                }
+
+                                Item {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 58
+                                    anchors.rightMargin: 16
+                                    anchors.topMargin: 16
+                                    anchors.bottomMargin: 45
+
+                                    Repeater {
+                                        model: avgPanel.yAxisLabels.length
+                                        Rectangle {
+                                            width: parent.width
+                                            height: 1
+                                            color: "#EEF3F8"
+                                            y: index * (parent.height / Math.max(avgPanel.yAxisLabels.length - 1, 1))
+                                        }
+                                    }
+
+                                    Repeater {
+                                        model: avgPanel.xAxisTickValues
+                                        Rectangle {
+                                            width: 1
+                                            height: parent.height
+                                            color: "#EEF3F8"
+                                            x: (modelData - avgPanel.chartMinX) / Math.max(avgPanel.chartMaxX - avgPanel.chartMinX, 1) * parent.width
+                                        }
+                                    }
+
+                                    CurveItem {
+                                        anchors.fill: parent
+                                        lineColor: "#2F7CF6"
+                                        lineWidth: 2
+                                        autoScale: false
+                                        minXValue: avgPanel.chartMinX
+                                        maxXValue: avgPanel.chartMaxX
+                                        minYValue: avgPanel.chartMinY
+                                        maxYValue: avgPanel.chartMaxY
+                                        dataPoints: avgPanel.bsPoints
+                                    }
+
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: -50
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "Avg\n(BS)"
+                                        font.pixelSize: 12
+                                        font.family: "Microsoft YaHei"
+                                        color: "#6E8096"
+                                        font.bold: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+
+                                    Repeater {
+                                        model: avgPanel.yAxisLabels
+                                        delegate: Text {
+                                            anchors.right: parent.left
+                                            anchors.rightMargin: 10
+                                            y: index * (parent.height / Math.max(avgPanel.yAxisLabels.length - 1, 1)) - height / 2
+                                            text: avgPanel.yAxisLabels[avgPanel.yAxisLabels.length - 1 - index]
+                                            font.pixelSize: 11
+                                            font.family: "Microsoft YaHei"
+                                            color: "#7A8CA5"
+                                        }
+                                    }
+
+                                    Repeater {
+                                        model: avgPanel.xAxisTickValues
+                                        delegate: Text {
+                                            y: parent.height + 6
+                                            x: (modelData - avgPanel.chartMinX) / Math.max(avgPanel.chartMaxX - avgPanel.chartMinX, 1) * parent.width - width / 2
+                                            text: detailPage.formatNumber(modelData, 1)
+                                            font.pixelSize: 11
+                                            font.family: "Microsoft YaHei"
+                                            color: "#7A8CA5"
+                                        }
+                                    }
+
+                                    Text {
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        anchors.bottom: parent.bottom
+                                        anchors.bottomMargin: -38
+                                        text: qsTr("时间(min)")
+                                        font.pixelSize: 12
+                                        font.family: "Microsoft YaHei"
+                                        color: "#6E8096"
+                                        font.bold: true
+                                    }
                                 }
                             }
                         }
 
-                        CurveItem {
+                        Rectangle {
                             anchors.fill: parent
                             visible: avgPanel.currentModeIndex !== 2
-                            lineColor: avgPanel.currentModeIndex === 0 ? "#2F7CF6" : "#21A366"
-                            lineWidth: 2
-                            autoScale: false
-                            minXValue: avgPanel.chartMinX
-                            maxXValue: avgPanel.chartMaxX
-                            minYValue: avgPanel.chartMinY
-                            maxYValue: avgPanel.chartMaxY
-                            dataPoints: avgPanel.currentModeIndex === 0 ? avgPanel.bsPoints : avgPanel.tPoints
+                            radius: 6
+                            color: "#FFFFFF"
+                            border.color: "#DCE6F2"
+                            border.width: 1
+                        }
+
+                        Item {
+                            anchors.fill: parent
+                            anchors.leftMargin: 58
+                            anchors.rightMargin: 16
+                            anchors.topMargin: 16
+                            anchors.bottomMargin: 45
+                            visible: avgPanel.currentModeIndex !== 2
+
+                            Repeater {
+                                model: avgPanel.yAxisLabels.length
+                                Rectangle {
+                                    width: parent.width
+                                    height: 1
+                                    color: "#EEF3F8"
+                                    y: index * (parent.height / Math.max(avgPanel.yAxisLabels.length - 1, 1))
+                                }
+                            }
+
+                            Repeater {
+                                model: avgPanel.xAxisTickValues
+                                Rectangle {
+                                    width: 1
+                                    height: parent.height
+                                    color: "#EEF3F8"
+                                    x: (modelData - avgPanel.chartMinX) / Math.max(avgPanel.chartMaxX - avgPanel.chartMinX, 1) * parent.width
+                                }
+                            }
+
+                            CurveItem {
+                                anchors.fill: parent
+                                lineColor: avgPanel.currentModeIndex === 0 ? "#2F7CF6" : "#21A366"
+                                lineWidth: 2
+                                autoScale: false
+                                minXValue: avgPanel.chartMinX
+                                maxXValue: avgPanel.chartMaxX
+                                minYValue: avgPanel.chartMinY
+                                maxYValue: avgPanel.chartMaxY
+                                dataPoints: avgPanel.currentModeIndex === 0 ? avgPanel.bsPoints : avgPanel.tPoints
+                            }
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: -50
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: avgPanel.currentModeIndex === 0 ? "Avg\n(BS)" : "Avg\n(T)"
+                                font.pixelSize: 12
+                                font.family: "Microsoft YaHei"
+                                color: "#6E8096"
+                                font.bold: true
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+
+                            Repeater {
+                                model: avgPanel.yAxisLabels
+                                delegate: Text {
+                                    anchors.right: parent.left
+                                    anchors.rightMargin: 10
+                                    y: index * (parent.height / Math.max(avgPanel.yAxisLabels.length - 1, 1)) - height / 2
+                                    text: avgPanel.yAxisLabels[avgPanel.yAxisLabels.length - 1 - index]
+                                    font.pixelSize: 11
+                                    font.family: "Microsoft YaHei"
+                                    color: "#7A8CA5"
+                                }
+                            }
+
+                            Repeater {
+                                model: avgPanel.xAxisTickValues
+                                delegate: Text {
+                                    y: parent.height + 6
+                                    x: (modelData - avgPanel.chartMinX) / Math.max(avgPanel.chartMaxX - avgPanel.chartMinX, 1) * parent.width - width / 2
+                                    text: detailPage.formatNumber(modelData, 1)
+                                    font.pixelSize: 11
+                                    font.family: "Microsoft YaHei"
+                                    color: "#7A8CA5"
+                                }
+                            }
+
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: -38
+                                text: qsTr("时间(min)")
+                                font.pixelSize: 12
+                                font.family: "Microsoft YaHei"
+                                color: "#6E8096"
+                                font.bold: true
+                            }
                         }
                     }
                 }
