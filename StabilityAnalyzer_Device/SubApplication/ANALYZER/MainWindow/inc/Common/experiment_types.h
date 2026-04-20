@@ -54,11 +54,13 @@ struct ExperimentParams
 struct ScanCycleContext
 {
     int sequence = 0;
+    int scanId = 0;
     int expectedPointCount = 0;
     int savedPointCount = 0;
     double startHeightUm = 0.0;
     double stepUm = 20.0;
     qint64 startedAtMs = 0;
+    qint64 elapsedSinceExperimentStartMs = 0;
 };
 
 /**
@@ -72,6 +74,8 @@ struct ExperimentScanProfile
     int expectedPointCount = 0;
     double startHeightUm = 0.0;
     double stepUm = 20.0;
+    qint64 experimentStartMs = 0;
+    qint64 idealScanIntervalMs = 0;
 };
 
 #endif

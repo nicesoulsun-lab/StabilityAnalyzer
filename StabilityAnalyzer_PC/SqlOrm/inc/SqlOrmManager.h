@@ -325,6 +325,14 @@ public:
      * @return 实验数据列表
      */
     QVector<QVariantMap> getExperimentDataByExperiment(int experimentId);
+    QVector<QVariantMap> getExperimentDataPreviewByExperiment(int experimentId, int limit);
+    QVector<QVariantMap> getLightIntensityCurvesByExperiment(int experimentId, int pointsPerCurve);
+    QVector<QVariantMap> getLightIntensityAveragesByExperiment(int experimentId);
+    QVector<QVariantMap> getUniformityIndicesByExperiment(int experimentId);
+    bool replaceInstabilityCurveData(int experimentId, const QVector<QVariantMap>& curveList);
+    QVector<QVariantMap> getInstabilityCurveDataByExperiment(int experimentId);
+    QVector<QVariantMap> getOrComputeInstabilityCurveDataByExperiment(int experimentId);
+    bool deleteInstabilityCurveDataByExperiment(int experimentId);
     
     /**
      * @brief 根据时间范围查询实验数据

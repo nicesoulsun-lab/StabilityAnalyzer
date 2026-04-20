@@ -32,6 +32,16 @@ ExperimentScanProfile ExperimentSessionService::buildScanProfile(const Experimen
     profile.expectedPointCount = calculateExpectedPointCount(params);
     profile.startHeightUm = static_cast<double>(params.scanRangeStart) * 1000.0;
     profile.stepUm = static_cast<double>(params.scanStep);
+    const qint64 configuredIntervalMs = static_cast<qint64>(
+                calculateTotalSeconds(0, params.intervalHours, params.intervalMinutes, params.intervalSeconds)) * 1000;
+    const qint64 totalDurationMs = static_cast<qint64>(
+                calculateTotalSeconds(params.durationDays, params.durationHours,
+                                      params.durationMinutes, params.durationSeconds)) * 1000;
+    if (params.scanCount > 1 && totalDurationMs > 0) {
+        profile.idealScanIntervalMs = qMax<qint64>(0, totalDurationMs / (params.scanCount - 1));
+    } else {
+        profile.idealScanIntervalMs = qMax<qint64>(0, configuredIntervalMs);
+    }
     return profile;
 }
 
@@ -55,21 +65,29 @@ void ExperimentSessionService::beginScanCycle(int channel, const ExperimentParam
             : buildScanProfile(params);
 
     ScanCycleContext context;
-    context.sequence = ++m_nextScanSequences[channel];
+    const int scanId = m_nextScanSequences.value(channel, 0);
+    context.sequence = scanId;
+    context.scanId = scanId;
     context.expectedPointCount = profile.expectedPointCount;
     context.savedPointCount = 0;
     context.startHeightUm = profile.startHeightUm;
     context.stepUm = profile.stepUm;
-    context.startedAtMs = QDateTime::currentMSecsSinceEpoch();
+    const qint64 experimentStartMs = (profile.experimentStartMs > 0)
+            ? profile.experimentStartMs
+            : QDateTime::currentMSecsSinceEpoch();
+    context.elapsedSinceExperimentStartMs = qMax<qint64>(0, profile.idealScanIntervalMs * scanId);
+    context.startedAtMs = experimentStartMs + context.elapsedSinceExperimentStartMs;
+    m_nextScanSequences[channel] = scanId + 1;
 
     m_scanContexts[channel].append(context);
     refreshCurrentScanCount(channel);
 
     qDebug() << "[ExperimentSessionService][ScanCycle] channel=" << channel
-             << "sequence=" << context.sequence
+             << "scanId=" << context.scanId
              << "expectedPointCount=" << context.expectedPointCount
              << "startHeightUm=" << context.startHeightUm
              << "stepUm=" << context.stepUm
+             << "elapsedSinceExperimentStartMs=" << context.elapsedSinceExperimentStartMs
              << "pendingContexts=" << m_scanContexts.value(channel).size();
 }
 
@@ -98,7 +116,7 @@ QVector<QVariantMap> ExperimentSessionService::buildRowsFromStorageData(int chan
             const ScanCycleContext completed = contexts.first();
             contexts.remove(0);
             qDebug() << "[ExperimentSessionService][ScanCycle] channel=" << channel
-                     << "sequence=" << completed.sequence
+                     << "scanId=" << completed.scanId
                      << "completed before consume"
                      << "savedPointCount=" << completed.savedPointCount;
         }
@@ -122,7 +140,10 @@ QVector<QVariantMap> ExperimentSessionService::buildRowsFromStorageData(int chan
         const QVector<QVariantMap> batch = parseStoragePairs(channel, slice, areaA,
                                                              context.startHeightUm,
                                                              context.stepUm,
-                                                             context.savedPointCount);
+                                                             context.savedPointCount,
+                                                             context.startedAtMs,
+                                                             context.elapsedSinceExperimentStartMs,
+                                                             context.scanId);
         dataList += batch;
 
         const int savedPairs = batch.size();
@@ -130,7 +151,7 @@ QVector<QVariantMap> ExperimentSessionService::buildRowsFromStorageData(int chan
         consumedPairs += savedPairs;
 
         qDebug() << "[ExperimentSessionService][ScanCycle] channel=" << channel
-                 << "sequence=" << context.sequence
+                 << "scanId=" << context.scanId
                  << "area=" << (areaA ? "A" : "B")
                  << "savedPairs=" << savedPairs
                  << "progress=" << context.savedPointCount << "/" << context.expectedPointCount;
@@ -139,7 +160,7 @@ QVector<QVariantMap> ExperimentSessionService::buildRowsFromStorageData(int chan
             const ScanCycleContext completed = contexts.first();
             contexts.remove(0);
             qDebug() << "[ExperimentSessionService][ScanCycle] channel=" << channel
-                     << "sequence=" << completed.sequence
+                     << "scanId=" << completed.scanId
                      << "completed"
                      << "totalSavedPoints=" << completed.savedPointCount;
         }
@@ -160,18 +181,23 @@ QVector<QVariantMap> ExperimentSessionService::parseStoragePairs(int channel,
                                                                  bool areaA,
                                                                  double startHeightUm,
                                                                  double stepUm,
-                                                                 int startPointIndex) const
+                                                                 int startPointIndex,
+                                                                 qint64 scanStartedAtMs,
+                                                                 qint64 elapsedSinceExperimentStartMs,
+                                                                 int scanId) const
 {
     QVector<QVariantMap> dataList;
     const int pairCount = raw.size() / 2;
     dataList.reserve(pairCount);
-    const int baseTs = static_cast<int>(QDateTime::currentSecsSinceEpoch());
+    const int baseTs = static_cast<int>(scanStartedAtMs / 1000);
 
     for (int i = 0; i < pairCount; ++i) {
         const int pointIndex = startPointIndex + i;
 
         QVariantMap row;
         row["timestamp"] = baseTs;
+        row["scan_id"] = scanId;
+        row["scan_elapsed_ms"] = elapsedSinceExperimentStartMs;
         row["height"] = startHeightUm + (static_cast<double>(pointIndex) * stepUm);
         row["transmission_intensity"] = raw[(i * 2)] / 10.0;
         row["backscatter_intensity"] = raw[(i * 2) + 1] / 10.0;

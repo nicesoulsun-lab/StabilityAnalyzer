@@ -74,6 +74,13 @@ Item {
 
                 onClicked: {
                     console.log("删除选中的实验")
+
+                    var checkedIds = experiment_list_model.getCheckedExpIds()
+                    if (checkedIds.length === 0) {
+                        info_pop.openDialog(qsTr("请勾选实验记录"))
+                        return
+                    }
+
                     custom_pop.show(2)
                 }
             }

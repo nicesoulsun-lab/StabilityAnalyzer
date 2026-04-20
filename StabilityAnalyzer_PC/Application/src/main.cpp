@@ -79,7 +79,7 @@ int main(int argc, char *argv[])
     LOG_INFO()<<"程序启动主线程:"<<QThread::currentThread();
 
     // 注册 CurveItem 类型到 QML
-    //qmlRegisterType<CurveItem>("CustomComponents", 1, 0, "CurveItem");
+    qmlRegisterType<CurveItem>("CustomComponents", 1, 0, "CurveItem");
     
     // 注册 ExperimentCtrl 类到 QML，这样可以访问 Channel 枚举
     qmlRegisterUncreatableType<ExperimentCtrl>("StabilityAnalyzer", 1, 0, "ExperimentCtrl", "Cannot create ExperimentCtrl in QML");

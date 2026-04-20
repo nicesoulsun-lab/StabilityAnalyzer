@@ -46,7 +46,8 @@ private:
     void refreshCurrentScanCount(int channel);
     QVector<QVariantMap> parseStoragePairs(int channel, const QVector<quint16>& raw, bool areaA,
                                           double startHeightUm, double stepUm,
-                                          int startPointIndex) const;
+                                          int startPointIndex, qint64 scanStartedAtMs,
+                                          qint64 elapsedSinceExperimentStartMs, int scanId) const;
 
     QMap<int, QVector<ScanCycleContext>> m_scanContexts;
     QMap<int, ExperimentScanProfile> m_scanProfiles;

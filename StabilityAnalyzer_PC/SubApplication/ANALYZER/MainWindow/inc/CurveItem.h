@@ -42,6 +42,8 @@ class MAINWINDOW_EXPORT CurveItem : public QQuickItem
     Q_PROPERTY(QVariantList dataPoints READ dataPoints WRITE setDataPoints NOTIFY dataPointsChanged)
     Q_PROPERTY(int maxPoints READ maxPoints WRITE setMaxPoints NOTIFY maxPointsChanged)
     Q_PROPERTY(bool autoScale READ autoScale WRITE setAutoScale NOTIFY autoScaleChanged)
+    Q_PROPERTY(qreal minXValue READ minXValue WRITE setMinXValue NOTIFY minXValueChanged)
+    Q_PROPERTY(qreal maxXValue READ maxXValue WRITE setMaxXValue NOTIFY maxXValueChanged)
     Q_PROPERTY(qreal minYValue READ minYValue WRITE setMinYValue NOTIFY minYValueChanged)
     Q_PROPERTY(qreal maxYValue READ maxYValue WRITE setMaxYValue NOTIFY maxYValueChanged)
 
@@ -60,6 +62,10 @@ public:
     void setMaxPoints(int max);
     bool autoScale() const;
     void setAutoScale(bool autoScale);
+    qreal minXValue() const;
+    void setMinXValue(qreal min);
+    qreal maxXValue() const;
+    void setMaxXValue(qreal max);
     qreal minYValue() const;
     void setMinYValue(qreal min);
     qreal maxYValue() const;
@@ -76,6 +82,8 @@ signals:
     void dataPointsChanged();
     void maxPointsChanged();
     void autoScaleChanged();
+    void minXValueChanged();
+    void maxXValueChanged();
     void minYValueChanged();
     void maxYValueChanged();
 
@@ -98,6 +106,8 @@ private:
     QList<QPointF> m_points;
     int m_maxPoints;
     bool m_autoScale;
+    qreal m_minXValue;
+    qreal m_maxXValue;
     qreal m_minYValue;
     qreal m_maxYValue;
     qreal m_actualMinY;

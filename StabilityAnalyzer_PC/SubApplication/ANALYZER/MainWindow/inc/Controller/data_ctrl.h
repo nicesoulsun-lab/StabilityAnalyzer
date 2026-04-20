@@ -1,4 +1,4 @@
-#ifndef DATA_CTRL_H
+﻿#ifndef DATA_CTRL_H
 #define DATA_CTRL_H
 
 #include <QObject>
@@ -27,7 +27,7 @@ public:
     Q_INVOKABLE bool updateExperimentStatus(int experimentId, int status);
     
     // 查询指定状态的实验
-    Q_INVOKABLE QVector<QVariantMap> getExperimentsByStatus(int status);
+    Q_INVOKABLE QVariantList getExperimentsByStatus(int status);
     
     // 删除实验
     Q_INVOKABLE bool deleteExperiment(int experimentId);
@@ -44,9 +44,13 @@ public:
     Q_INVOKABLE bool batchAddData(const QVector<QVariantMap>& dataList);
     
     // 查询实验数据
-    Q_INVOKABLE QVector<QVariantMap> getDataByExperiment(int experimentId);
-    Q_INVOKABLE QVector<QVariantMap> getDataByRange(int experimentId, int startTimestamp, int endTimestamp);
-    Q_INVOKABLE QVector<QVariantMap> getAllData();
+    Q_INVOKABLE QVariantList getDataByExperiment(int experimentId);
+    Q_INVOKABLE QVariantList getDataByRange(int experimentId, int startTimestamp, int endTimestamp);
+    Q_INVOKABLE QVariantList getAllData();
+    Q_INVOKABLE QVariantList getLightIntensityCurves(int experimentId, int pointsPerCurve);
+    Q_INVOKABLE QVariantList getInstabilityCurveData(int experimentId);
+    Q_INVOKABLE QVariantList getUniformityIndices(int experimentId);
+    Q_INVOKABLE QVariantList getLightIntensityAverages(int experimentId);
     
     // 删除实验数据
     Q_INVOKABLE bool deleteData(int dataId);

@@ -399,8 +399,10 @@ bool ExperimentCtrl::startExperiment(int channel, int creatorId)
 
     m_experimentIds[ch] = experimentId;
     m_sessionService->resetScanContexts(channel);
-    m_sessionService->setScanProfile(channel, m_sessionService->buildScanProfile(params));
-    m_startTimes[ch] = QDateTime::currentMSecsSinceEpoch();
+    ExperimentScanProfile scanProfile = m_sessionService->buildScanProfile(params);
+    scanProfile.experimentStartMs = QDateTime::currentMSecsSinceEpoch();
+    m_sessionService->setScanProfile(channel, scanProfile);
+    m_startTimes[ch] = scanProfile.experimentStartMs;
     m_runningFlags[ch] = true;
 
     if (durationSeconds > 0) {

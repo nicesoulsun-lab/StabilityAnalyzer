@@ -35,10 +35,11 @@ Item {
         var remainingSeconds = Number(status.remainingSeconds)
         if (isNaN(remainingSeconds) || remainingSeconds < 0) remainingSeconds = 0
 
-        var remainingHours = (remainingSeconds / 3600.0).toFixed(2)
-
-        if(remainingHours > 0 && remainingHours <= 0.01) remainingHours = 0.01
-        card.remainingHours = remainingHours
+        if(remainingSeconds > 0 && remainingSeconds <= 36) {
+            card.remainingHours = "0.01";
+        }else{
+            card.remainingHours = (remainingSeconds / 3600.0).toFixed(2)
+        }
     }
 
     // 页面初始化时主动拉取一次四通道快照，避免等待首个轮询信号。

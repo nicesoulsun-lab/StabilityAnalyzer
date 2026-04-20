@@ -6,12 +6,51 @@ import "component"
 
 Popup {
     id: selectionPopup
+    property bool channelARunning: false
+    property bool channelBRunning: false
+    property bool channelCRunning: false
+    property bool channelDRunning: false
+
+    function syncChannelRunningState(channel, status) {
+        var running = Boolean(status && status.running)
+        if (channel === 0) {
+            channelARunning = running
+            if (running) channel_A_check.checked = false
+        } else if (channel === 1) {
+            channelBRunning = running
+            if (running) channel_B_check.checked = false
+        } else if (channel === 2) {
+            channelCRunning = running
+            if (running) channel_C_check.checked = false
+        } else if (channel === 3) {
+            channelDRunning = running
+            if (running) channel_D_check.checked = false
+        }
+    }
+
+    function refreshChannelRunningState() {
+        for (var i = 0; i < 4; ++i) {
+            syncChannelRunningState(i, experiment_ctrl.getChannelStatus(i))
+        }
+    }
+
     width: 557
     height: 366
     anchors.centerIn: Overlay.overlay
     dim: true
     modal: true
     closePolicy: Popup.CloseOnEscape
+
+    onOpened: {
+        refreshChannelRunningState()
+    }
+
+    Connections {
+        target: experiment_ctrl
+        onChannelStatusUpdated: {
+            selectionPopup.syncChannelRunningState(channel, status)
+        }
+    }
 
     background: Rectangle {
         color: "white"
@@ -41,6 +80,7 @@ Popup {
                 CheckBox {
                     id: channel_A_check
                     checked: false
+                    enabled: !selectionPopup.channelARunning
                     text: qsTr("A通道")
                     font.pixelSize: 24
                     font.bold: true
@@ -54,6 +94,7 @@ Popup {
                     button_text: qsTr("设置参数")
                     Layout.preferredWidth: 128; Layout.preferredHeight: 42
                     button_color: "#3B87E4"; text_color: "#FFFFFF"
+                    enabled: !selectionPopup.channelARunning
                     onClicked: {
                         console.log("设置参数：A通道")
                         mainStackView.push(Qt.resolvedUrl("qrc:/qml/ParaSetting_A.qml"))
@@ -67,6 +108,7 @@ Popup {
                 CheckBox {
                     id: channel_B_check
                     checked: false
+                    enabled: !selectionPopup.channelBRunning
                     text: qsTr("B通道")
                     font.pixelSize: 24
                     font.bold: true
@@ -79,6 +121,7 @@ Popup {
                     button_text: qsTr("设置参数")
                     Layout.preferredWidth: 128; Layout.preferredHeight: 42
                     button_color: "#3B87E4"; text_color: "#FFFFFF"
+                    enabled: !selectionPopup.channelBRunning
                     onClicked: {
                         console.log("设置参数：B通道")
                         mainStackView.push(Qt.resolvedUrl("qrc:/qml/ParaSetting_B.qml"))
@@ -92,6 +135,7 @@ Popup {
                 CheckBox {
                     id: channel_C_check
                     checked: false
+                    enabled: !selectionPopup.channelCRunning
                     text: qsTr("C通道")
                     font.pixelSize: 24
                     font.bold: true
@@ -104,6 +148,7 @@ Popup {
                     button_text: qsTr("设置参数")
                     Layout.preferredWidth: 128; Layout.preferredHeight: 42
                     button_color: "#3B87E4"; text_color: "#FFFFFF"
+                    enabled: !selectionPopup.channelCRunning
                     onClicked: {
                         console.log("设置参数：C通道")
                         mainStackView.push(Qt.resolvedUrl("qrc:/qml/ParaSetting_C.qml"))
@@ -117,6 +162,7 @@ Popup {
                 CheckBox {
                     id: channel_D_check
                     checked: false
+                    enabled: !selectionPopup.channelDRunning
                     text: qsTr("D通道")
                     font.pixelSize: 24
                     font.bold: true
@@ -129,6 +175,7 @@ Popup {
                     button_text: qsTr("设置参数")
                     Layout.preferredWidth: 128; Layout.preferredHeight: 42
                     button_color: "#3B87E4"; text_color: "#FFFFFF"
+                    enabled: !selectionPopup.channelDRunning
                     onClicked: {
                         console.log("设置参数：D通道")
                         mainStackView.push(Qt.resolvedUrl("qrc:/qml/ParaSetting_D.qml"))

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file SqlOrmManager.cpp
  * @brief SQLite ORM 数据库管理器实现文件
  * 
@@ -17,13 +17,19 @@
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QSqlError>
+#include <QStringList>
+#include <QPointF>
 #include <QVariantMap>
 #include <QVector>
-#include <QStringList>
+#include <QHash>
+#include <QSet>
 #include <QFileInfo>
 #include <QFile>
 #include <QDir>
 #include <QCoreApplication>
+#include <QtMath>
+#include <limits>
+#include <algorithm>
 
 // 引入 sqlite_orm 头文件（仅在此文件中包含模板代码）
 // 注意：sqlite_orm 是头文件库，模板实例化在此文件中完成，避免在其他文件中重复编译
@@ -31,83 +37,6 @@
 #include "qt_sqlite_orm.h"
 
 using namespace sqlite_orm;
-
-namespace {
-constexpr int kExperimentDataInsertChunkSize = 180;
-
-QSqlDatabase openQtDb(const QString& dbPath, const QString& connectionName);
-void closeQtDb(const QString& connectionName);
-
-QString makeMigrationConnectionName()
-{
-    return QStringLiteral("SqlOrmQtConnection");
-}
-
-bool ensureExperimentDataColumn(const QString& dbPath, const QString& columnName, const QString& columnDefinition)
-{
-    const QString connectionName = makeMigrationConnectionName();
-    {
-        QSqlDatabase db = openQtDb(dbPath, connectionName);
-        if (!db.open()) {
-            qWarning() << "[SqlOrmManager] failed to open db for migration:" << db.lastError().text();
-            return false;
-        }
-
-        bool exists = false;
-        QSqlQuery pragma(db);
-        if (pragma.exec(QStringLiteral("PRAGMA table_info(experiment_data)"))) {
-            while (pragma.next()) {
-                if (pragma.value(1).toString().compare(columnName, Qt::CaseInsensitive) == 0) {
-                    exists = true;
-                    break;
-                }
-            }
-        }
-
-        if (!exists) {
-            QSqlQuery alter(db);
-            const QString sql = QStringLiteral("ALTER TABLE experiment_data ADD COLUMN %1 %2")
-                                    .arg(columnName, columnDefinition);
-            if (!alter.exec(sql)) {
-                qWarning() << "[SqlOrmManager] failed to add column" << columnName
-                           << ":" << alter.lastError().text();
-                db.close();
-                return false;
-            }
-            qDebug() << "[SqlOrmManager] migrated experiment_data add column" << columnName;
-        }
-
-        db.close();
-    }
-    closeQtDb(connectionName);
-    return true;
-}
-
-void migrateExperimentDataSchema(const QString& dbPath)
-{
-    ensureExperimentDataColumn(dbPath, QStringLiteral("scan_id"), QStringLiteral("INTEGER NOT NULL DEFAULT 0"));
-    ensureExperimentDataColumn(dbPath, QStringLiteral("scan_elapsed_ms"), QStringLiteral("INTEGER NOT NULL DEFAULT 0"));
-}
-
-QSqlDatabase openQtDb(const QString& dbPath, const QString& connectionName)
-{
-    QSqlDatabase db = QSqlDatabase::contains(connectionName)
-            ? QSqlDatabase::database(connectionName)
-            : QSqlDatabase::addDatabase("QSQLITE", connectionName);
-    db.setDatabaseName(dbPath);
-    return db;
-}
-
-void closeQtDb(const QString& connectionName)
-{
-    if (QSqlDatabase::contains(connectionName)) {
-        QSqlDatabase db = QSqlDatabase::database(connectionName, false);
-        if (db.isValid()) {
-            db.close();
-        }
-    }
-}
-}
 
 // ============================================================================
 // 数据模型定义（与 sqlManager 保持一致）
@@ -178,6 +107,8 @@ struct ExperimentData {
     int id;                        ///< 主键，自增
     int experiment_id;             ///< 所属实验 ID（外键）
     int timestamp;                 ///< 时间戳（秒）
+    int scan_id;                   ///< 扫描 ID
+    int scan_elapsed_ms;           ///< 距离实验开始的毫秒数
     double height;                 ///< 高度
     double backscatter_intensity;  ///< 背射光强
     double transmission_intensity; ///< 透射光强
@@ -267,6 +198,8 @@ public:
                                        make_column("id", &ExperimentData::id, primary_key().autoincrement()),
                                        make_column("experiment_id", &ExperimentData::experiment_id),
                                        make_column("timestamp", &ExperimentData::timestamp),
+                                       make_column("scan_id", &ExperimentData::scan_id),
+                                       make_column("scan_elapsed_ms", &ExperimentData::scan_elapsed_ms),
                                        make_column("height", &ExperimentData::height),
                                        make_column("backscatter_intensity", &ExperimentData::backscatter_intensity),
                                        make_column("transmission_intensity", &ExperimentData::transmission_intensity)
@@ -319,6 +252,300 @@ public:
 // 单例实例和互斥锁（线程安全）
 static SqlOrmManager* s_instance = nullptr;
 static QMutex s_instanceMutex;
+
+namespace {
+
+QSqlDatabase openReadOnlyDb(const QString& dbPath, const QString& connectionName, QString* errorMessage = nullptr) {
+    if (QSqlDatabase::contains(connectionName)) {
+        QSqlDatabase::removeDatabase(connectionName);
+    }
+
+    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", connectionName);
+    db.setDatabaseName(dbPath);
+    if (!db.open() && errorMessage) {
+        *errorMessage = db.lastError().text();
+    }
+    return db;
+}
+
+void closeReadOnlyDb(const QString& connectionName) {
+    if (!QSqlDatabase::contains(connectionName)) {
+        return;
+    }
+    QSqlDatabase db = QSqlDatabase::database(connectionName, false);
+    if (db.isValid()) {
+        db.close();
+    }
+}
+
+QVariantMap readExtendedExperimentDataRow(const QSqlQuery& query) {
+    QVariantMap data;
+    data["id"] = query.value("id");
+    data["experiment_id"] = query.value("experiment_id");
+    data["timestamp"] = query.value("timestamp");
+    data["scan_id"] = query.value("scan_id");
+    data["scan_elapsed_ms"] = query.value("scan_elapsed_ms");
+    data["height"] = query.value("height");
+    data["backscatter_intensity"] = query.value("backscatter_intensity");
+    data["transmission_intensity"] = query.value("transmission_intensity");
+    return data;
+}
+
+struct LightCurveRowEx {
+    double heightMm = 0.0;
+    double backscatter = 0.0;
+    double transmission = 0.0;
+};
+
+struct InstabilityRowEx {
+    double heightMm = 0.0;
+    double backscatter = 0.0;
+    double transmission = 0.0;
+};
+
+QVariantList makePointList(const QVector<QPointF> &points)
+{
+    QVariantList result;
+    result.reserve(points.size());
+    for (const QPointF &point : points) {
+        QVariantMap map;
+        map["x"] = point.x();
+        map["y"] = point.y();
+        result.append(map);
+    }
+    return result;
+}
+
+QVariantList downsampleCurvePoints(const QVector<LightCurveRowEx> &rows, bool useTransmission, int maxPoints)
+{
+    if (rows.isEmpty()) {
+        return QVariantList();
+    }
+
+    if (maxPoints <= 2 || rows.size() <= maxPoints) {
+        QVector<QPointF> points;
+        points.reserve(rows.size());
+        for (const LightCurveRowEx &row : rows) {
+            points.append(QPointF(row.heightMm, useTransmission ? row.transmission : row.backscatter));
+        }
+        return makePointList(points);
+    }
+
+    const int bucketCount = qMax(1, maxPoints / 2);
+    QVector<QPointF> sampled;
+    sampled.reserve(bucketCount * 2 + 2);
+    sampled.append(QPointF(rows.first().heightMm, useTransmission ? rows.first().transmission : rows.first().backscatter));
+
+    const int innerCount = rows.size() - 2;
+    for (int bucket = 0; bucket < bucketCount; ++bucket) {
+        const int startIndex = 1 + bucket * innerCount / bucketCount;
+        const int endIndex = 1 + (bucket + 1) * innerCount / bucketCount;
+        if (startIndex >= rows.size() - 1) {
+            break;
+        }
+
+        const int safeEnd = qMax(startIndex + 1, qMin(endIndex, rows.size() - 1));
+        int minIndex = startIndex;
+        int maxIndex = startIndex;
+        double minValue = useTransmission ? rows.at(startIndex).transmission : rows.at(startIndex).backscatter;
+        double maxValue = minValue;
+
+        for (int i = startIndex + 1; i < safeEnd; ++i) {
+            const double value = useTransmission ? rows.at(i).transmission : rows.at(i).backscatter;
+            if (value < minValue) {
+                minValue = value;
+                minIndex = i;
+            }
+            if (value > maxValue) {
+                maxValue = value;
+                maxIndex = i;
+            }
+        }
+
+        if (minIndex <= maxIndex) {
+            sampled.append(QPointF(rows.at(minIndex).heightMm, useTransmission ? rows.at(minIndex).transmission : rows.at(minIndex).backscatter));
+            if (maxIndex != minIndex) {
+                sampled.append(QPointF(rows.at(maxIndex).heightMm, useTransmission ? rows.at(maxIndex).transmission : rows.at(maxIndex).backscatter));
+            }
+        } else {
+            sampled.append(QPointF(rows.at(maxIndex).heightMm, useTransmission ? rows.at(maxIndex).transmission : rows.at(maxIndex).backscatter));
+            sampled.append(QPointF(rows.at(minIndex).heightMm, useTransmission ? rows.at(minIndex).transmission : rows.at(minIndex).backscatter));
+        }
+    }
+
+    sampled.append(QPointF(rows.last().heightMm, useTransmission ? rows.last().transmission : rows.last().backscatter));
+    std::sort(sampled.begin(), sampled.end(), [](const QPointF &a, const QPointF &b) {
+        if (qFuzzyCompare(a.x(), b.x())) {
+            return a.y() < b.y();
+        }
+        return a.x() < b.x();
+    });
+    return makePointList(sampled);
+}
+
+double valueAtHeight(const QVector<InstabilityRowEx> &rows, bool useTransmission, double heightMm)
+{
+    if (rows.isEmpty()) {
+        return 0.0;
+    }
+    if (heightMm <= rows.first().heightMm) {
+        return useTransmission ? rows.first().transmission : rows.first().backscatter;
+    }
+    if (heightMm >= rows.last().heightMm) {
+        return useTransmission ? rows.last().transmission : rows.last().backscatter;
+    }
+
+    for (int i = 1; i < rows.size(); ++i) {
+        const InstabilityRowEx &left = rows.at(i - 1);
+        const InstabilityRowEx &right = rows.at(i);
+        if (heightMm > right.heightMm) {
+            continue;
+        }
+
+        const double x0 = left.heightMm;
+        const double x1 = right.heightMm;
+        const double y0 = useTransmission ? left.transmission : left.backscatter;
+        const double y1 = useTransmission ? right.transmission : right.backscatter;
+        if (qFuzzyCompare(x0, x1)) {
+            return y1;
+        }
+        const double ratio = (heightMm - x0) / (x1 - x0);
+        return y0 + (y1 - y0) * ratio;
+    }
+
+    return useTransmission ? rows.last().transmission : rows.last().backscatter;
+}
+
+double averageTransmissionValue(const QVector<InstabilityRowEx> &rows)
+{
+    if (rows.isEmpty()) {
+        return 0.0;
+    }
+
+    double sum = 0.0;
+    for (const InstabilityRowEx &row : rows) {
+        sum += row.transmission;
+    }
+    return sum / rows.size();
+}
+
+double computeInstabilityIntegral(const QVector<InstabilityRowEx> &referenceRows,
+                                  const QVector<InstabilityRowEx> &currentRows,
+                                  bool useTransmission)
+{
+    if (referenceRows.size() < 2 || currentRows.size() < 2) {
+        return 0.0;
+    }
+
+    const double overlapStart = qMax(referenceRows.first().heightMm, currentRows.first().heightMm);
+    const double overlapEnd = qMin(referenceRows.last().heightMm, currentRows.last().heightMm);
+    if (overlapEnd <= overlapStart) {
+        return 0.0;
+    }
+
+    QVector<double> sampleHeights;
+    sampleHeights.reserve(referenceRows.size() + currentRows.size() + 2);
+    sampleHeights.append(overlapStart);
+    for (const InstabilityRowEx &row : referenceRows) {
+        if (row.heightMm > overlapStart && row.heightMm < overlapEnd) {
+            sampleHeights.append(row.heightMm);
+        }
+    }
+    for (const InstabilityRowEx &row : currentRows) {
+        if (row.heightMm > overlapStart && row.heightMm < overlapEnd) {
+            sampleHeights.append(row.heightMm);
+        }
+    }
+    sampleHeights.append(overlapEnd);
+    std::sort(sampleHeights.begin(), sampleHeights.end());
+    sampleHeights.erase(std::unique(sampleHeights.begin(), sampleHeights.end(), [](double a, double b) {
+        return qAbs(a - b) < 1e-9;
+    }), sampleHeights.end());
+
+    double accumulated = 0.0;
+    for (int i = 1; i < sampleHeights.size(); ++i) {
+        const double x0 = sampleHeights.at(i - 1);
+        const double x1 = sampleHeights.at(i);
+        const double diff0 = qAbs(valueAtHeight(referenceRows, useTransmission, x0) - valueAtHeight(currentRows, useTransmission, x0));
+        const double diff1 = qAbs(valueAtHeight(referenceRows, useTransmission, x1) - valueAtHeight(currentRows, useTransmission, x1));
+        accumulated += 0.5 * (diff0 + diff1) * (x1 - x0);
+    }
+
+    const double totalHeight = overlapEnd - overlapStart;
+    return totalHeight > 0.0 ? accumulated / totalHeight : 0.0;
+}
+
+bool ensureInstabilityResultTable(QSqlDatabase &db, QString *errorMessage = nullptr)
+{
+    if (!db.isOpen()) {
+        if (errorMessage) {
+            *errorMessage = QStringLiteral("database is not open");
+        }
+        return false;
+    }
+
+    QSqlQuery query(db);
+    const QString sql =
+        "CREATE TABLE IF NOT EXISTS instability_curve_data ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "experiment_id INTEGER NOT NULL, "
+        "scan_id INTEGER DEFAULT 0, "
+        "scan_elapsed_ms INTEGER DEFAULT 0, "
+        "channel_used TEXT, "
+        "instability_value REAL DEFAULT 0, "
+        "created_at TEXT)";
+    const bool ok = query.exec(sql);
+    if (!ok && errorMessage) {
+        *errorMessage = query.lastError().text();
+    }
+    return ok;
+}
+
+bool ensureExperimentDataColumns(QSqlDatabase &db, QString *errorMessage = nullptr)
+{
+    if (!db.isOpen()) {
+        if (errorMessage) {
+            *errorMessage = QStringLiteral("database is not open");
+        }
+        return false;
+    }
+
+    QSet<QString> columns;
+    QSqlQuery pragmaQuery(db);
+    if (!pragmaQuery.exec("PRAGMA table_info(experiment_data)")) {
+        if (errorMessage) {
+            *errorMessage = pragmaQuery.lastError().text();
+        }
+        return false;
+    }
+
+    while (pragmaQuery.next()) {
+        columns.insert(pragmaQuery.value("name").toString());
+    }
+
+    QSqlQuery alterQuery(db);
+    if (!columns.contains("scan_id")) {
+        if (!alterQuery.exec("ALTER TABLE experiment_data ADD COLUMN scan_id INTEGER DEFAULT 0")) {
+            if (errorMessage) {
+                *errorMessage = alterQuery.lastError().text();
+            }
+            return false;
+        }
+    }
+
+    if (!columns.contains("scan_elapsed_ms")) {
+        if (!alterQuery.exec("ALTER TABLE experiment_data ADD COLUMN scan_elapsed_ms INTEGER DEFAULT 0")) {
+            if (errorMessage) {
+                *errorMessage = alterQuery.lastError().text();
+            }
+            return false;
+        }
+    }
+
+    return true;
+}
+
+}
 
 /**
  * @brief 获取单例实例（线程安全的双重检查锁定）
@@ -445,10 +672,21 @@ void SqlOrmManager::initialize() {
         } else {
             qDebug() << "[SqlOrmManager] 数据库文件已存在，跳过 sync_schema 避免数据丢失";
         }
+
+        QString migrationError;
+        QSqlDatabase migrationDb = openReadOnlyDb(d->dbPath, QStringLiteral("sqlorm_migration"), &migrationError);
+        if (!migrationDb.isOpen()) {
+            qWarning() << "[SqlOrmManager] 打开迁移连接失败:" << migrationError;
+        } else {
+            if (!ensureExperimentDataColumns(migrationDb, &migrationError)) {
+                qWarning() << "[SqlOrmManager] 补齐 experiment_data 列失败:" << migrationError;
+            }
+            closeReadOnlyDb(QStringLiteral("sqlorm_migration"));
+            QSqlDatabase::removeDatabase(QStringLiteral("sqlorm_migration"));
+        }
         
         // 检查最终用户数量
         try {
-            migrateExperimentDataSchema(d->dbPath);
             auto finalUsers = d->storage->get_all<User>();
             qDebug() << "[SqlOrmManager] 最终用户数量：" << finalUsers.size();
             for (const auto& u : finalUsers) {
@@ -1264,56 +1502,18 @@ bool SqlOrmManager::deleteExperiment(int experimentId) {
     Q_D(SqlOrmManager);
     
     if (!d->initialized) return false;
-
-    const QString connectionName = QStringLiteral("SqlOrmDeleteExperimentConnection");
-    QSqlDatabase db = openQtDb(d->dbPath, connectionName);
-    if (!db.open()) {
-        qWarning() << "[SqlOrmManager] deleteExperiment open db failed:" << db.lastError().text();
-        closeQtDb(connectionName);
+    
+    try {
+        d->storage->remove_all<Experiment>(
+                    where(c(&Experiment::id) == experimentId)
+                    );
+        qDebug() << "[SqlOrmManager] 实验删除成功：" << experimentId;
+        return true;
+    } catch (const std::exception& e) {
+        qWarning() << "[SqlOrmManager] 删除实验失败：" << QString::fromStdString(e.what());
+        emit errorOccurred(QString::fromStdString(e.what()));
         return false;
     }
-
-    if (!db.transaction()) {
-        qWarning() << "[SqlOrmManager] deleteExperiment start transaction failed:" << db.lastError().text();
-        db.close();
-        closeQtDb(connectionName);
-        return false;
-    }
-
-    QSqlQuery deleteDataQuery(db);
-    deleteDataQuery.prepare(QStringLiteral("DELETE FROM experiment_data WHERE experiment_id = ?"));
-    deleteDataQuery.addBindValue(experimentId);
-    if (!deleteDataQuery.exec()) {
-        qWarning() << "[SqlOrmManager] deleteExperiment delete data failed:" << deleteDataQuery.lastError().text();
-        db.rollback();
-        db.close();
-        closeQtDb(connectionName);
-        return false;
-    }
-
-    QSqlQuery deleteExperimentQuery(db);
-    deleteExperimentQuery.prepare(QStringLiteral("DELETE FROM experiments WHERE id = ?"));
-    deleteExperimentQuery.addBindValue(experimentId);
-    if (!deleteExperimentQuery.exec()) {
-        qWarning() << "[SqlOrmManager] deleteExperiment delete experiment failed:" << deleteExperimentQuery.lastError().text();
-        db.rollback();
-        db.close();
-        closeQtDb(connectionName);
-        return false;
-    }
-
-    if (!db.commit()) {
-        qWarning() << "[SqlOrmManager] deleteExperiment commit failed:" << db.lastError().text();
-        db.rollback();
-        db.close();
-        closeQtDb(connectionName);
-        return false;
-    }
-
-    db.close();
-    closeQtDb(connectionName);
-    qDebug() << "[SqlOrmManager] 实验及关联数据删除成功：" << experimentId;
-    return true;
 }
 
 // ==================== 实验数据管理 ====================
@@ -1322,40 +1522,13 @@ bool SqlOrmManager::addExperimentData(const QVariantMap& data) {
     Q_D(SqlOrmManager);
     
     if (!d->initialized) return false;
-
-    const QString connectionName = makeMigrationConnectionName();
-    QSqlDatabase db = openQtDb(d->dbPath, connectionName);
-    if (!db.open()) {
-        qWarning() << "[SqlOrmManager] addExperimentData open db failed:" << db.lastError().text();
-        closeQtDb(connectionName);
-        return false;
-    }
-
-    QSqlQuery query(db);
-    query.prepare(QStringLiteral(
-        "INSERT INTO experiment_data "
-        "(experiment_id, timestamp, scan_id, scan_elapsed_ms, height, backscatter_intensity, transmission_intensity) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)"));
-    query.addBindValue(data.value("experiment_id", 0).toInt());
-    query.addBindValue(data.value("timestamp", 0).toInt());
-    query.addBindValue(data.value("scan_id", 0).toInt());
-    query.addBindValue(data.value("scan_elapsed_ms", 0).toLongLong());
-    query.addBindValue(data.value("height", 0.0).toDouble());
-    query.addBindValue(data.value("backscatter_intensity", 0.0).toDouble());
-    query.addBindValue(data.value("transmission_intensity", 0.0).toDouble());
-
-    const bool ok = query.exec();
-    if (!ok) {
-        qWarning() << "[SqlOrmManager] addExperimentData insert failed:" << query.lastError().text();
-    }
-    db.close();
-    closeQtDb(connectionName);
-    return ok;
     
     try {
         ExperimentData expData;
         expData.experiment_id = data.value("experiment_id", 0).toInt();
         expData.timestamp = data.value("timestamp", 0).toInt();
+        expData.scan_id = data.value("scan_id", 0).toInt();
+        expData.scan_elapsed_ms = data.value("scan_elapsed_ms", 0).toInt();
         expData.height = data.value("height", 0.0).toDouble();
         expData.backscatter_intensity = data.value("backscatter_intensity", 0.0).toDouble();
         expData.transmission_intensity = data.value("transmission_intensity", 0.0).toDouble();
@@ -1372,105 +1545,27 @@ bool SqlOrmManager::addExperimentData(const QVariantMap& data) {
 
 bool SqlOrmManager::batchAddExperimentData(const QVector<QVariantMap>& dataList) {
     Q_D(SqlOrmManager);
-
+    
     if (!d->initialized) return false;
-    if (dataList.isEmpty()) return true;
-
-    const QString connectionName = makeMigrationConnectionName();
-    QSqlDatabase db = openQtDb(d->dbPath, connectionName);
-    if (!db.open()) {
-        qWarning() << "[SqlOrmManager] batchAddExperimentData open db failed:" << db.lastError().text();
-        closeQtDb(connectionName);
-        return false;
-    }
-
-    if (!db.transaction()) {
-        qWarning() << "[SqlOrmManager] batchAddExperimentData failed: unable to start transaction";
-        db.close();
-        closeQtDb(connectionName);
-        return false;
-    }
-
-    QSqlQuery query(db);
-    query.prepare(QStringLiteral(
-        "INSERT INTO experiment_data "
-        "(experiment_id, timestamp, scan_id, scan_elapsed_ms, height, backscatter_intensity, transmission_intensity) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)"));
-
-    int inserted = 0;
-    for (const auto& data : dataList) {
-        query.bindValue(0, data.value("experiment_id", 0).toInt());
-        query.bindValue(1, data.value("timestamp", 0).toInt());
-        query.bindValue(2, data.value("scan_id", 0).toInt());
-        query.bindValue(3, data.value("scan_elapsed_ms", 0).toLongLong());
-        query.bindValue(4, data.value("height", 0.0).toDouble());
-        query.bindValue(5, data.value("backscatter_intensity", 0.0).toDouble());
-        query.bindValue(6, data.value("transmission_intensity", 0.0).toDouble());
-        if (!query.exec()) {
-            qWarning() << "[SqlOrmManager] batchAddExperimentData insert failed:" << query.lastError().text();
-            db.rollback();
-            db.close();
-            closeQtDb(connectionName);
-            return false;
-        }
-        ++inserted;
-    }
-
-    if (!db.commit()) {
-        qWarning() << "[SqlOrmManager] batchAddExperimentData failed: commit transaction failed";
-        db.rollback();
-        db.close();
-        closeQtDb(connectionName);
-        return false;
-    }
-
-    db.close();
-    closeQtDb(connectionName);
-    qDebug() << "[SqlOrmManager] batchAddExperimentData success rows=" << inserted;
-    return true;
-
-    const bool alreadyInTransaction = d->inTransaction;
-    bool transactionStarted = false;
-
+    
     try {
-        QVector<ExperimentData> rows;
-        rows.reserve(dataList.size());
-
+        // 使用事务批量插入
+        bool transactionStarted = beginTransaction();
+        
+        int successCount = 0;
         for (const auto& data : dataList) {
-            ExperimentData expData;
-            expData.experiment_id = data.value("experiment_id", 0).toInt();
-            expData.timestamp = data.value("timestamp", 0).toInt();
-            expData.height = data.value("height", 0.0).toDouble();
-            expData.backscatter_intensity = data.value("backscatter_intensity", 0.0).toDouble();
-            expData.transmission_intensity = data.value("transmission_intensity", 0.0).toDouble();
-            rows.append(expData);
+            if (addExperimentData(data)) {
+                successCount++;
+            }
         }
-
-        transactionStarted = alreadyInTransaction ? false : beginTransaction();
-        if (!alreadyInTransaction && !transactionStarted) {
-            qWarning() << "[SqlOrmManager] batchAddExperimentData failed: unable to start transaction";
-            return false;
+        
+        if (transactionStarted) {
+            commitTransaction();
         }
-
-        for (int offset = 0; offset < rows.size(); offset += kExperimentDataInsertChunkSize) {
-            const int chunkSize = qMin(kExperimentDataInsertChunkSize, rows.size() - offset);
-            d->storage->insert_range(rows.constBegin() + offset, rows.constBegin() + offset + chunkSize);
-        }
-
-        if (transactionStarted && !commitTransaction()) {
-            qWarning() << "[SqlOrmManager] batchAddExperimentData failed: commit transaction failed";
-            rollbackTransaction();
-            return false;
-        }
-
-        qDebug() << "[SqlOrmManager] 批量添加实验数据成功：" << rows.size()
-                 << "条 chunks="
-                 << ((rows.size() + kExperimentDataInsertChunkSize - 1) / kExperimentDataInsertChunkSize);
-        return true;
+        
+        qDebug() << "[SqlOrmManager] 批量添加实验数据成功：" << successCount << "条";
+        return successCount == dataList.size();
     } catch (const std::exception& e) {
-        if (transactionStarted && d->inTransaction) {
-            rollbackTransaction();
-        }
         qWarning() << "[SqlOrmManager] 批量添加实验数据失败：" << QString::fromStdString(e.what());
         emit errorOccurred(QString::fromStdString(e.what()));
         return false;
@@ -1482,34 +1577,6 @@ QVariantMap SqlOrmManager::getExperimentDataById(int dataId) {
     Q_D(SqlOrmManager);
     
     if (!d->initialized) return result;
-
-    const QString connectionName = makeMigrationConnectionName();
-    QSqlDatabase db = openQtDb(d->dbPath, connectionName);
-    if (!db.open()) {
-        qWarning() << "[SqlOrmManager] getExperimentDataById open db failed:" << db.lastError().text();
-        closeQtDb(connectionName);
-        return result;
-    }
-
-    QSqlQuery query(db);
-    query.prepare(QStringLiteral(
-        "SELECT id, experiment_id, timestamp, scan_id, scan_elapsed_ms, height, "
-        "backscatter_intensity, transmission_intensity "
-        "FROM experiment_data WHERE id = ?"));
-    query.addBindValue(dataId);
-    if (query.exec() && query.next()) {
-        result["id"] = query.value(0).toInt();
-        result["experiment_id"] = query.value(1).toInt();
-        result["timestamp"] = query.value(2).toInt();
-        result["scan_id"] = query.value(3).toInt();
-        result["scan_elapsed_ms"] = query.value(4).toLongLong();
-        result["height"] = query.value(5).toDouble();
-        result["backscatter_intensity"] = query.value(6).toDouble();
-        result["transmission_intensity"] = query.value(7).toDouble();
-    }
-    db.close();
-    closeQtDb(connectionName);
-    return result;
     
     try {
         auto dataList = d->storage->get_all<ExperimentData>(
@@ -1521,6 +1588,8 @@ QVariantMap SqlOrmManager::getExperimentDataById(int dataId) {
             result["id"] = expData.id;
             result["experiment_id"] = expData.experiment_id;
             result["timestamp"] = expData.timestamp;
+            result["scan_id"] = expData.scan_id;
+            result["scan_elapsed_ms"] = expData.scan_elapsed_ms;
             result["height"] = expData.height;
             result["backscatter_intensity"] = expData.backscatter_intensity;
             result["transmission_intensity"] = expData.transmission_intensity;
@@ -1538,39 +1607,6 @@ QVector<QVariantMap> SqlOrmManager::getExperimentDataByExperiment(int experiment
     Q_D(SqlOrmManager);
     
     if (!d->initialized) return result;
-
-    const QString connectionName = makeMigrationConnectionName();
-    QSqlDatabase db = openQtDb(d->dbPath, connectionName);
-    if (!db.open()) {
-        qWarning() << "[SqlOrmManager] getExperimentDataByExperiment open db failed:" << db.lastError().text();
-        closeQtDb(connectionName);
-        return result;
-    }
-
-    QSqlQuery query(db);
-    query.prepare(QStringLiteral(
-        "SELECT id, experiment_id, timestamp, scan_id, scan_elapsed_ms, height, "
-        "backscatter_intensity, transmission_intensity "
-        "FROM experiment_data WHERE experiment_id = ? "
-        "ORDER BY scan_id ASC, id ASC"));
-    query.addBindValue(experimentId);
-    if (query.exec()) {
-        while (query.next()) {
-            QVariantMap data;
-            data["id"] = query.value(0).toInt();
-            data["experiment_id"] = query.value(1).toInt();
-            data["timestamp"] = query.value(2).toInt();
-            data["scan_id"] = query.value(3).toInt();
-            data["scan_elapsed_ms"] = query.value(4).toLongLong();
-            data["height"] = query.value(5).toDouble();
-            data["backscatter_intensity"] = query.value(6).toDouble();
-            data["transmission_intensity"] = query.value(7).toDouble();
-            result.append(data);
-        }
-    }
-    db.close();
-    closeQtDb(connectionName);
-    return result;
     
     try {
         auto dataList = d->storage->get_all<ExperimentData>(
@@ -1583,6 +1619,8 @@ QVector<QVariantMap> SqlOrmManager::getExperimentDataByExperiment(int experiment
             data["id"] = expData.id;
             data["experiment_id"] = expData.experiment_id;
             data["timestamp"] = expData.timestamp;
+            data["scan_id"] = expData.scan_id;
+            data["scan_elapsed_ms"] = expData.scan_elapsed_ms;
             data["height"] = expData.height;
             data["backscatter_intensity"] = expData.backscatter_intensity;
             data["transmission_intensity"] = expData.transmission_intensity;
@@ -1601,42 +1639,6 @@ QVector<QVariantMap> SqlOrmManager::getExperimentDataByRange(int experimentId, i
     Q_D(SqlOrmManager);
     
     if (!d->initialized) return result;
-
-    const QString connectionName = makeMigrationConnectionName();
-    QSqlDatabase db = openQtDb(d->dbPath, connectionName);
-    if (!db.open()) {
-        qWarning() << "[SqlOrmManager] getExperimentDataByRange open db failed:" << db.lastError().text();
-        closeQtDb(connectionName);
-        return result;
-    }
-
-    QSqlQuery query(db);
-    query.prepare(QStringLiteral(
-        "SELECT id, experiment_id, timestamp, scan_id, scan_elapsed_ms, height, "
-        "backscatter_intensity, transmission_intensity "
-        "FROM experiment_data "
-        "WHERE experiment_id = ? AND timestamp >= ? AND timestamp <= ? "
-        "ORDER BY scan_id ASC, id ASC"));
-    query.addBindValue(experimentId);
-    query.addBindValue(startTimestamp);
-    query.addBindValue(endTimestamp);
-    if (query.exec()) {
-        while (query.next()) {
-            QVariantMap data;
-            data["id"] = query.value(0).toInt();
-            data["experiment_id"] = query.value(1).toInt();
-            data["timestamp"] = query.value(2).toInt();
-            data["scan_id"] = query.value(3).toInt();
-            data["scan_elapsed_ms"] = query.value(4).toLongLong();
-            data["height"] = query.value(5).toDouble();
-            data["backscatter_intensity"] = query.value(6).toDouble();
-            data["transmission_intensity"] = query.value(7).toDouble();
-            result.append(data);
-        }
-    }
-    db.close();
-    closeQtDb(connectionName);
-    return result;
     
     try {
         auto dataList = d->storage->get_all<ExperimentData>(
@@ -1653,6 +1655,8 @@ QVector<QVariantMap> SqlOrmManager::getExperimentDataByRange(int experimentId, i
             data["id"] = expData.id;
             data["experiment_id"] = expData.experiment_id;
             data["timestamp"] = expData.timestamp;
+            data["scan_id"] = expData.scan_id;
+            data["scan_elapsed_ms"] = expData.scan_elapsed_ms;
             data["height"] = expData.height;
             data["backscatter_intensity"] = expData.backscatter_intensity;
             data["transmission_intensity"] = expData.transmission_intensity;
@@ -1671,36 +1675,6 @@ QVector<QVariantMap> SqlOrmManager::getAllExperimentData() {
     Q_D(SqlOrmManager);
     
     if (!d->initialized) return result;
-
-    const QString connectionName = makeMigrationConnectionName();
-    QSqlDatabase db = openQtDb(d->dbPath, connectionName);
-    if (!db.open()) {
-        qWarning() << "[SqlOrmManager] getAllExperimentData open db failed:" << db.lastError().text();
-        closeQtDb(connectionName);
-        return result;
-    }
-
-    QSqlQuery query(db);
-    if (query.exec(QStringLiteral(
-            "SELECT id, experiment_id, timestamp, scan_id, scan_elapsed_ms, height, "
-            "backscatter_intensity, transmission_intensity "
-            "FROM experiment_data ORDER BY experiment_id ASC, scan_id ASC, id ASC"))) {
-        while (query.next()) {
-            QVariantMap data;
-            data["id"] = query.value(0).toInt();
-            data["experiment_id"] = query.value(1).toInt();
-            data["timestamp"] = query.value(2).toInt();
-            data["scan_id"] = query.value(3).toInt();
-            data["scan_elapsed_ms"] = query.value(4).toLongLong();
-            data["height"] = query.value(5).toDouble();
-            data["backscatter_intensity"] = query.value(6).toDouble();
-            data["transmission_intensity"] = query.value(7).toDouble();
-            result.append(data);
-        }
-    }
-    db.close();
-    closeQtDb(connectionName);
-    return result;
     
     try {
         auto dataList = d->storage->get_all<ExperimentData>();
@@ -1710,6 +1684,8 @@ QVector<QVariantMap> SqlOrmManager::getAllExperimentData() {
             data["id"] = expData.id;
             data["experiment_id"] = expData.experiment_id;
             data["timestamp"] = expData.timestamp;
+            data["scan_id"] = expData.scan_id;
+            data["scan_elapsed_ms"] = expData.scan_elapsed_ms;
             data["height"] = expData.height;
             data["backscatter_intensity"] = expData.backscatter_intensity;
             data["transmission_intensity"] = expData.transmission_intensity;
@@ -1727,70 +1703,6 @@ bool SqlOrmManager::updateExperimentData(int dataId, const QVariantMap& data) {
     Q_D(SqlOrmManager);
     
     if (!d->initialized) return false;
-
-    const QString connectionName = makeMigrationConnectionName();
-    QSqlDatabase db = openQtDb(d->dbPath, connectionName);
-    if (!db.open()) {
-        qWarning() << "[SqlOrmManager] updateExperimentData open db failed:" << db.lastError().text();
-        closeQtDb(connectionName);
-        return false;
-    }
-
-    QStringList updates;
-    QVariantList values;
-    if (data.contains("timestamp")) {
-        updates.append(QStringLiteral("timestamp = ?"));
-        values.append(data.value("timestamp").toInt());
-    }
-    if (data.contains("scan_id")) {
-        updates.append(QStringLiteral("scan_id = ?"));
-        values.append(data.value("scan_id").toInt());
-    }
-    if (data.contains("scan_elapsed_ms")) {
-        updates.append(QStringLiteral("scan_elapsed_ms = ?"));
-        values.append(data.value("scan_elapsed_ms").toLongLong());
-    }
-    if (data.contains("height")) {
-        updates.append(QStringLiteral("height = ?"));
-        values.append(data.value("height").toDouble());
-    }
-    if (data.contains("backscatter_intensity")) {
-        updates.append(QStringLiteral("backscatter_intensity = ?"));
-        values.append(data.value("backscatter_intensity").toDouble());
-    }
-    if (data.contains("transmission_intensity")) {
-        updates.append(QStringLiteral("transmission_intensity = ?"));
-        values.append(data.value("transmission_intensity").toDouble());
-    }
-    if (data.contains("backscatterIntensity")) {
-        updates.append(QStringLiteral("backscatter_intensity = ?"));
-        values.append(data.value("backscatterIntensity").toDouble());
-    }
-    if (data.contains("transmissionIntensity")) {
-        updates.append(QStringLiteral("transmission_intensity = ?"));
-        values.append(data.value("transmissionIntensity").toDouble());
-    }
-
-    if (updates.isEmpty()) {
-        db.close();
-        closeQtDb(connectionName);
-        return true;
-    }
-
-    QSqlQuery query(db);
-    query.prepare(QStringLiteral("UPDATE experiment_data SET %1 WHERE id = ?").arg(updates.join(QStringLiteral(", "))));
-    for (const QVariant& value : values) {
-        query.addBindValue(value);
-    }
-    query.addBindValue(dataId);
-
-    const bool ok = query.exec();
-    if (!ok) {
-        qWarning() << "[SqlOrmManager] updateExperimentData failed:" << query.lastError().text();
-    }
-    db.close();
-    closeQtDb(connectionName);
-    return ok;
     
     try {
         auto dataList = d->storage->get_all<ExperimentData>(
@@ -1862,6 +1774,574 @@ bool SqlOrmManager::deleteExperimentDataByExperiment(int experimentId) {
 // ============================================================================
 // 操作日志管理
 // ============================================================================
+
+QVector<QVariantMap> SqlOrmManager::getExperimentDataPreviewByExperiment(int experimentId, int limit) {
+    QVector<QVariantMap> result;
+    Q_D(SqlOrmManager);
+
+    if (!d->initialized || experimentId <= 0 || limit <= 0) return result;
+
+    const QString connectionName = QString("SqlOrmPreview_%1").arg(reinterpret_cast<quintptr>(this));
+    QString openError;
+    QSqlDatabase db = openReadOnlyDb(d->dbPath, connectionName, &openError);
+    if (!db.isOpen()) {
+        emit errorOccurred(openError);
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    QSqlQuery query(db);
+    query.setForwardOnly(true);
+    query.prepare(
+        "SELECT id, experiment_id, timestamp, scan_id, scan_elapsed_ms, height, "
+        "backscatter_intensity, transmission_intensity "
+        "FROM experiment_data WHERE experiment_id = ? "
+        "ORDER BY timestamp ASC, scan_id ASC, id ASC LIMIT ?");
+    query.addBindValue(experimentId);
+    query.addBindValue(limit);
+
+    if (!query.exec()) {
+        emit errorOccurred(query.lastError().text());
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    while (query.next()) {
+        result.append(readExtendedExperimentDataRow(query));
+    }
+
+    closeReadOnlyDb(connectionName);
+    return result;
+}
+
+QVector<QVariantMap> SqlOrmManager::getLightIntensityAveragesByExperiment(int experimentId) {
+    QVector<QVariantMap> result;
+    Q_D(SqlOrmManager);
+
+    if (!d->initialized || experimentId <= 0) return result;
+
+    const QString connectionName = QString("SqlOrmLightAvg_%1").arg(reinterpret_cast<quintptr>(this));
+    QString openError;
+    QSqlDatabase db = openReadOnlyDb(d->dbPath, connectionName, &openError);
+    if (!db.isOpen()) {
+        emit errorOccurred(openError);
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    QSqlQuery query(db);
+    query.prepare(
+        "SELECT scan_id, MAX(scan_elapsed_ms) AS scan_elapsed_ms, "
+        "AVG(backscatter_intensity) AS avg_backscatter, "
+        "AVG(transmission_intensity) AS avg_transmission "
+        "FROM experiment_data WHERE experiment_id = ? "
+        "GROUP BY scan_id "
+        "ORDER BY scan_elapsed_ms ASC, scan_id ASC");
+    query.addBindValue(experimentId);
+
+    if (!query.exec()) {
+        emit errorOccurred(query.lastError().text());
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    while (query.next()) {
+        QVariantMap row;
+        row["scan_id"] = query.value("scan_id");
+        row["scan_elapsed_ms"] = query.value("scan_elapsed_ms");
+        row["avg_backscatter"] = query.value("avg_backscatter");
+        row["avg_transmission"] = query.value("avg_transmission");
+        result.append(row);
+    }
+
+    closeReadOnlyDb(connectionName);
+    return result;
+}
+
+QVector<QVariantMap> SqlOrmManager::getUniformityIndicesByExperiment(int experimentId) {
+    QVector<QVariantMap> result;
+    Q_D(SqlOrmManager);
+
+    if (!d->initialized || experimentId <= 0) return result;
+
+    const QString connectionName = QString("SqlOrmUniformity_%1").arg(reinterpret_cast<quintptr>(this));
+    QString openError;
+    QSqlDatabase db = openReadOnlyDb(d->dbPath, connectionName, &openError);
+    if (!db.isOpen()) {
+        emit errorOccurred(openError);
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    QSqlQuery query(db);
+    query.prepare(
+        "SELECT scan_id, MAX(scan_elapsed_ms) AS scan_elapsed_ms, "
+        "AVG(backscatter_intensity) AS avg_bs, "
+        "AVG(backscatter_intensity * backscatter_intensity) AS avg_bs_square, "
+        "AVG(transmission_intensity) AS avg_t, "
+        "AVG(transmission_intensity * transmission_intensity) AS avg_t_square "
+        "FROM experiment_data WHERE experiment_id = ? "
+        "GROUP BY scan_id "
+        "ORDER BY scan_elapsed_ms ASC, scan_id ASC");
+    query.addBindValue(experimentId);
+
+    if (!query.exec()) {
+        emit errorOccurred(query.lastError().text());
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    while (query.next()) {
+        const double avgBs = query.value("avg_bs").toDouble();
+        const double avgBsSquare = query.value("avg_bs_square").toDouble();
+        const double avgT = query.value("avg_t").toDouble();
+        const double avgTSquare = query.value("avg_t_square").toDouble();
+        const double bsStd = avgBs > 0.0 ? qSqrt(qMax(0.0, avgBsSquare - avgBs * avgBs)) : 0.0;
+        const double tStd = avgT > 0.0 ? qSqrt(qMax(0.0, avgTSquare - avgT * avgT)) : 0.0;
+        const double uiBs = avgBs > 0.0 ? qBound(0.0, 1.0 - bsStd / avgBs, 1.0) : 0.0;
+        const double uiT = avgT > 0.0 ? qBound(0.0, 1.0 - tStd / avgT, 1.0) : 0.0;
+
+        QVariantMap row;
+        row["scan_id"] = query.value("scan_id");
+        row["scan_elapsed_ms"] = query.value("scan_elapsed_ms");
+        row["ui_backscatter"] = uiBs;
+        row["ui_transmission"] = uiT;
+        row["ui_combined"] = (uiBs + uiT) / 2.0;
+        result.append(row);
+    }
+
+    closeReadOnlyDb(connectionName);
+    return result;
+}
+
+QVector<QVariantMap> SqlOrmManager::getLightIntensityCurvesByExperiment(int experimentId, int pointsPerCurve) {
+    QVector<QVariantMap> result;
+    Q_D(SqlOrmManager);
+
+    if (!d->initialized || experimentId <= 0) return result;
+
+    const QString connectionName = QString("SqlOrmLightCurves_%1").arg(reinterpret_cast<quintptr>(this));
+    QString openError;
+    QSqlDatabase db = openReadOnlyDb(d->dbPath, connectionName, &openError);
+    if (!db.isOpen()) {
+        emit errorOccurred(openError);
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    struct CurveSummary {
+        int scanId = 0;
+        int timestamp = 0;
+        int elapsedMs = 0;
+        int pointCount = 0;
+        double minHeightMm = 0.0;
+        double maxHeightMm = 0.0;
+        double minBackscatter = 0.0;
+        double maxBackscatter = 0.0;
+        double minTransmission = 0.0;
+        double maxTransmission = 0.0;
+    };
+
+    QSqlQuery summaryQuery(db);
+    summaryQuery.prepare(
+        "SELECT scan_id, MIN(timestamp) AS timestamp, MAX(scan_elapsed_ms) AS scan_elapsed_ms, "
+        "COUNT(*) AS point_count, "
+        "MIN(height) / 1000.0 AS min_height_mm, MAX(height) / 1000.0 AS max_height_mm, "
+        "MIN(backscatter_intensity) AS min_backscatter, MAX(backscatter_intensity) AS max_backscatter, "
+        "MIN(transmission_intensity) AS min_transmission, MAX(transmission_intensity) AS max_transmission "
+        "FROM experiment_data "
+        "WHERE experiment_id = ? "
+        "GROUP BY scan_id "
+        "ORDER BY scan_id ASC");
+    summaryQuery.addBindValue(experimentId);
+
+    if (!summaryQuery.exec()) {
+        emit errorOccurred(summaryQuery.lastError().text());
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    QVector<CurveSummary> summaries;
+    QHash<int, int> summaryIndexByScanId;
+    while (summaryQuery.next()) {
+        CurveSummary summary;
+        summary.scanId = summaryQuery.value("scan_id").toInt();
+        summary.timestamp = summaryQuery.value("timestamp").toInt();
+        summary.elapsedMs = summaryQuery.value("scan_elapsed_ms").toInt();
+        summary.pointCount = summaryQuery.value("point_count").toInt();
+        summary.minHeightMm = summaryQuery.value("min_height_mm").toDouble();
+        summary.maxHeightMm = summaryQuery.value("max_height_mm").toDouble();
+        summary.minBackscatter = summaryQuery.value("min_backscatter").toDouble();
+        summary.maxBackscatter = summaryQuery.value("max_backscatter").toDouble();
+        summary.minTransmission = summaryQuery.value("min_transmission").toDouble();
+        summary.maxTransmission = summaryQuery.value("max_transmission").toDouble();
+        summaryIndexByScanId.insert(summary.scanId, summaries.size());
+        summaries.append(summary);
+    }
+
+    if (summaries.isEmpty()) {
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    const int totalPointBudgetPerChannel = 12000;
+    const int effectivePointsPerCurve = qMax(64, qMin(pointsPerCurve > 0 ? pointsPerCurve : 640,
+                                                      qMax(64, totalPointBudgetPerChannel / qMax(1, summaries.size()))));
+
+    QSqlQuery query(db);
+    query.setForwardOnly(true);
+    query.prepare(
+        "SELECT scan_id, height, backscatter_intensity, transmission_intensity "
+        "FROM experiment_data WHERE experiment_id = ? "
+        "ORDER BY scan_id ASC, height ASC, id ASC");
+    query.addBindValue(experimentId);
+
+    if (!query.exec()) {
+        emit errorOccurred(query.lastError().text());
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    int currentScanId = std::numeric_limits<int>::min();
+    QVector<LightCurveRowEx> currentRows;
+    auto flushCurve = [&](int scanId) {
+        if (!summaryIndexByScanId.contains(scanId) || currentRows.isEmpty()) {
+            return;
+        }
+        const CurveSummary &summary = summaries.at(summaryIndexByScanId.value(scanId));
+        QVariantMap curve;
+        curve["scan_id"] = summary.scanId;
+        curve["timestamp"] = summary.timestamp;
+        curve["scan_elapsed_ms"] = summary.elapsedMs;
+        curve["point_count"] = summary.pointCount;
+        curve["min_height_mm"] = summary.minHeightMm;
+        curve["max_height_mm"] = summary.maxHeightMm;
+        curve["min_backscatter"] = summary.minBackscatter;
+        curve["max_backscatter"] = summary.maxBackscatter;
+        curve["min_transmission"] = summary.minTransmission;
+        curve["max_transmission"] = summary.maxTransmission;
+        curve["backscatter_points"] = downsampleCurvePoints(currentRows, false, effectivePointsPerCurve);
+        curve["transmission_points"] = downsampleCurvePoints(currentRows, true, effectivePointsPerCurve);
+        result.append(curve);
+    };
+
+    while (query.next()) {
+        const int scanId = query.value("scan_id").toInt();
+        if (currentScanId != std::numeric_limits<int>::min() && scanId != currentScanId) {
+            flushCurve(currentScanId);
+            currentRows.clear();
+        }
+
+        currentScanId = scanId;
+        LightCurveRowEx row;
+        row.heightMm = query.value("height").toDouble() / 1000.0;
+        row.backscatter = query.value("backscatter_intensity").toDouble();
+        row.transmission = query.value("transmission_intensity").toDouble();
+        currentRows.append(row);
+    }
+
+    if (currentScanId != std::numeric_limits<int>::min()) {
+        flushCurve(currentScanId);
+    }
+
+    closeReadOnlyDb(connectionName);
+    return result;
+}
+
+bool SqlOrmManager::replaceInstabilityCurveData(int experimentId, const QVector<QVariantMap>& curveList) {
+    Q_D(SqlOrmManager);
+
+    if (!d->initialized || experimentId <= 0) return false;
+
+    const QString connectionName = QString("SqlOrmInstabilityCurveWrite_%1").arg(reinterpret_cast<quintptr>(this));
+    QString openError;
+    QSqlDatabase db = openReadOnlyDb(d->dbPath, connectionName, &openError);
+    if (!db.isOpen()) {
+        emit errorOccurred(openError);
+        closeReadOnlyDb(connectionName);
+        return false;
+    }
+
+    QString schemaError;
+    if (!ensureInstabilityResultTable(db, &schemaError)) {
+        emit errorOccurred(schemaError);
+        closeReadOnlyDb(connectionName);
+        return false;
+    }
+
+    if (!db.transaction()) {
+        emit errorOccurred(db.lastError().text());
+        closeReadOnlyDb(connectionName);
+        return false;
+    }
+
+    QSqlQuery deleteQuery(db);
+    deleteQuery.prepare("DELETE FROM instability_curve_data WHERE experiment_id = ?");
+    deleteQuery.addBindValue(experimentId);
+    if (!deleteQuery.exec()) {
+        emit errorOccurred(deleteQuery.lastError().text());
+        db.rollback();
+        closeReadOnlyDb(connectionName);
+        return false;
+    }
+
+    if (!curveList.isEmpty()) {
+        QSqlQuery insertQuery(db);
+        insertQuery.prepare(
+            "INSERT INTO instability_curve_data "
+            "(experiment_id, scan_id, scan_elapsed_ms, channel_used, instability_value, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)");
+        const QString now = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
+
+        for (const QVariantMap &curve : curveList) {
+            insertQuery.bindValue(0, experimentId);
+            insertQuery.bindValue(1, curve.value("scan_id", 0).toInt());
+            insertQuery.bindValue(2, curve.value("scan_elapsed_ms", 0).toInt());
+            insertQuery.bindValue(3, curve.value("channel_used").toString());
+            insertQuery.bindValue(4, curve.value("instability_value", 0.0).toDouble());
+            insertQuery.bindValue(5, curve.value("created_at", now).toString());
+            if (!insertQuery.exec()) {
+                emit errorOccurred(insertQuery.lastError().text());
+                db.rollback();
+                closeReadOnlyDb(connectionName);
+                return false;
+            }
+        }
+    }
+
+    if (!db.commit()) {
+        emit errorOccurred(db.lastError().text());
+        closeReadOnlyDb(connectionName);
+        return false;
+    }
+
+    closeReadOnlyDb(connectionName);
+    return true;
+}
+
+QVector<QVariantMap> SqlOrmManager::getInstabilityCurveDataByExperiment(int experimentId) {
+    QVector<QVariantMap> result;
+    Q_D(SqlOrmManager);
+
+    if (!d->initialized || experimentId <= 0) return result;
+
+    const QString connectionName = QString("SqlOrmInstabilityCurveRead_%1").arg(reinterpret_cast<quintptr>(this));
+    QString openError;
+    QSqlDatabase db = openReadOnlyDb(d->dbPath, connectionName, &openError);
+    if (!db.isOpen()) {
+        emit errorOccurred(openError);
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    QString schemaError;
+    if (!ensureInstabilityResultTable(db, &schemaError)) {
+        emit errorOccurred(schemaError);
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    QSqlQuery query(db);
+    query.prepare(
+        "SELECT id, experiment_id, scan_id, scan_elapsed_ms, channel_used, instability_value, created_at "
+        "FROM instability_curve_data WHERE experiment_id = ? "
+        "ORDER BY scan_elapsed_ms ASC, scan_id ASC, id ASC");
+    query.addBindValue(experimentId);
+
+    if (!query.exec()) {
+        emit errorOccurred(query.lastError().text());
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    while (query.next()) {
+        QVariantMap row;
+        row["id"] = query.value("id");
+        row["experiment_id"] = query.value("experiment_id");
+        row["scan_id"] = query.value("scan_id");
+        row["scan_elapsed_ms"] = query.value("scan_elapsed_ms");
+        row["channel_used"] = query.value("channel_used");
+        row["instability_value"] = query.value("instability_value");
+        row["created_at"] = query.value("created_at");
+        result.append(row);
+    }
+
+    closeReadOnlyDb(connectionName);
+    return result;
+}
+
+QVector<QVariantMap> SqlOrmManager::getOrComputeInstabilityCurveDataByExperiment(int experimentId) {
+    QVector<QVariantMap> result;
+    Q_D(SqlOrmManager);
+
+    if (!d->initialized || experimentId <= 0) return result;
+
+    const QString connectionName = QString("SqlOrmInstabilityCompute_%1").arg(reinterpret_cast<quintptr>(this));
+    QString openError;
+    QSqlDatabase db = openReadOnlyDb(d->dbPath, connectionName, &openError);
+    if (!db.isOpen()) {
+        emit errorOccurred(openError);
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    QString schemaError;
+    if (!ensureInstabilityResultTable(db, &schemaError)) {
+        emit errorOccurred(schemaError);
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    int scanCount = 0;
+    int maxElapsedMs = -1;
+    {
+        QSqlQuery statsQuery(db);
+        statsQuery.prepare(
+            "SELECT COUNT(DISTINCT scan_id) AS scan_count, "
+            "COALESCE(MAX(scan_elapsed_ms), -1) AS max_elapsed_ms "
+            "FROM experiment_data WHERE experiment_id = ?");
+        statsQuery.addBindValue(experimentId);
+        if (!statsQuery.exec() || !statsQuery.next()) {
+            emit errorOccurred(statsQuery.lastError().text());
+            closeReadOnlyDb(connectionName);
+            return result;
+        }
+        scanCount = statsQuery.value("scan_count").toInt();
+        maxElapsedMs = statsQuery.value("max_elapsed_ms").toInt();
+    }
+
+    if (scanCount <= 0) {
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    bool reuseExisting = false;
+    {
+        QSqlQuery existingQuery(db);
+        existingQuery.prepare(
+            "SELECT COUNT(*) AS result_count, COALESCE(MAX(scan_elapsed_ms), -1) AS max_elapsed_ms "
+            "FROM instability_curve_data WHERE experiment_id = ?");
+        existingQuery.addBindValue(experimentId);
+        if (existingQuery.exec() && existingQuery.next()) {
+            reuseExisting = existingQuery.value("result_count").toInt() == scanCount
+                         && existingQuery.value("max_elapsed_ms").toInt() == maxElapsedMs;
+        }
+    }
+
+    closeReadOnlyDb(connectionName);
+    if (reuseExisting) {
+        return getInstabilityCurveDataByExperiment(experimentId);
+    }
+
+    const QString computeConnectionName = QString("SqlOrmInstabilityComputeData_%1").arg(reinterpret_cast<quintptr>(this));
+    QSqlDatabase computeDb = openReadOnlyDb(d->dbPath, computeConnectionName, &openError);
+    if (!computeDb.isOpen()) {
+        emit errorOccurred(openError);
+        closeReadOnlyDb(computeConnectionName);
+        return result;
+    }
+
+    QSqlQuery query(computeDb);
+    query.setForwardOnly(true);
+    query.prepare(
+        "SELECT scan_id, scan_elapsed_ms, height, backscatter_intensity, transmission_intensity "
+        "FROM experiment_data WHERE experiment_id = ? "
+        "ORDER BY scan_id ASC, height ASC, id ASC");
+    query.addBindValue(experimentId);
+
+    if (!query.exec()) {
+        emit errorOccurred(query.lastError().text());
+        closeReadOnlyDb(computeConnectionName);
+        return result;
+    }
+
+    QVector<QVariantMap> computedCurves;
+    QVector<InstabilityRowEx> referenceRows;
+    QVector<InstabilityRowEx> currentRows;
+    int currentScanId = std::numeric_limits<int>::min();
+    int currentElapsedMs = 0;
+
+    auto flushScan = [&](bool isReference) {
+        if (currentRows.isEmpty()) {
+            return;
+        }
+
+        QVariantMap row;
+        row["scan_id"] = currentScanId;
+        row["scan_elapsed_ms"] = currentElapsedMs;
+        if (isReference) {
+            row["channel_used"] = QStringLiteral("T");
+            row["instability_value"] = 0.0;
+            referenceRows = currentRows;
+        } else {
+            const bool useTransmission = averageTransmissionValue(currentRows) > 0.2;
+            row["channel_used"] = useTransmission ? QStringLiteral("T") : QStringLiteral("BS");
+            row["instability_value"] = computeInstabilityIntegral(referenceRows, currentRows, useTransmission);
+        }
+        computedCurves.append(row);
+    };
+
+    while (query.next()) {
+        const int scanId = query.value("scan_id").toInt();
+        if (currentScanId != std::numeric_limits<int>::min() && scanId != currentScanId) {
+            flushScan(referenceRows.isEmpty());
+            currentRows.clear();
+        }
+
+        currentScanId = scanId;
+        currentElapsedMs = query.value("scan_elapsed_ms").toInt();
+
+        InstabilityRowEx row;
+        row.heightMm = query.value("height").toDouble() / 1000.0;
+        row.backscatter = query.value("backscatter_intensity").toDouble();
+        row.transmission = query.value("transmission_intensity").toDouble();
+        currentRows.append(row);
+    }
+
+    if (currentScanId != std::numeric_limits<int>::min()) {
+        flushScan(referenceRows.isEmpty());
+    }
+
+    closeReadOnlyDb(computeConnectionName);
+
+    if (!replaceInstabilityCurveData(experimentId, computedCurves)) {
+        return QVector<QVariantMap>();
+    }
+
+    return getInstabilityCurveDataByExperiment(experimentId);
+}
+
+bool SqlOrmManager::deleteInstabilityCurveDataByExperiment(int experimentId) {
+    Q_D(SqlOrmManager);
+
+    if (!d->initialized || experimentId <= 0) return false;
+
+    const QString connectionName = QString("SqlOrmInstabilityCurveDelete_%1").arg(reinterpret_cast<quintptr>(this));
+    QString openError;
+    QSqlDatabase db = openReadOnlyDb(d->dbPath, connectionName, &openError);
+    if (!db.isOpen()) {
+        emit errorOccurred(openError);
+        closeReadOnlyDb(connectionName);
+        return false;
+    }
+
+    QString schemaError;
+    if (!ensureInstabilityResultTable(db, &schemaError)) {
+        emit errorOccurred(schemaError);
+        closeReadOnlyDb(connectionName);
+        return false;
+    }
+
+    QSqlQuery query(db);
+    query.prepare("DELETE FROM instability_curve_data WHERE experiment_id = ?");
+    query.addBindValue(experimentId);
+    const bool ok = query.exec();
+    if (!ok) {
+        emit errorOccurred(query.lastError().text());
+    }
+    closeReadOnlyDb(connectionName);
+    return ok;
+}
 
 bool SqlOrmManager::addOperationLog(const QVariantMap& logData) {
     Q_D(SqlOrmManager);

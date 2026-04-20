@@ -1,4 +1,4 @@
-#include "inc/Controller/data_ctrl.h"
+﻿#include "inc/Controller/data_ctrl.h"
 #include "SqlOrmManager.h"
 #include <QDebug>
 
@@ -109,34 +109,52 @@ bool dataCtrl::batchAddData(const QVector<QVariantMap>& dataList)
     return success;
 }
 
-QVector<QVariantMap> dataCtrl::getDataByExperiment(int experimentId)
+QVariantList dataCtrl::getDataByExperiment(int experimentId)
 {
     if (experimentId <= 0) {
         qWarning() << "[dataCtrl] 实验 ID 无效";
-        return QVector<QVariantMap>();
+        return QVariantList();
     }
-    
-    return m_dbManager->getExperimentDataByExperiment(experimentId);
+
+    const QVector<QVariantMap> rows = m_dbManager->getExperimentDataByExperiment(experimentId);
+    QVariantList result;
+    result.reserve(rows.size());
+    for (const QVariantMap &row : rows) {
+        result.append(row);
+    }
+    return result;
 }
 
-QVector<QVariantMap> dataCtrl::getDataByRange(int experimentId, int startTimestamp, int endTimestamp)
+QVariantList dataCtrl::getDataByRange(int experimentId, int startTimestamp, int endTimestamp)
 {
     if (experimentId <= 0) {
         qWarning() << "[dataCtrl] 实验 ID 无效";
-        return QVector<QVariantMap>();
+        return QVariantList();
     }
     
     if (startTimestamp > endTimestamp) {
         qWarning() << "[dataCtrl] 时间范围无效";
-        return QVector<QVariantMap>();
+        return QVariantList();
     }
-    
-    return m_dbManager->getExperimentDataByRange(experimentId, startTimestamp, endTimestamp);
+
+    const QVector<QVariantMap> rows = m_dbManager->getExperimentDataByRange(experimentId, startTimestamp, endTimestamp);
+    QVariantList result;
+    result.reserve(rows.size());
+    for (const QVariantMap &row : rows) {
+        result.append(row);
+    }
+    return result;
 }
 
-QVector<QVariantMap> dataCtrl::getAllData()
+QVariantList dataCtrl::getAllData()
 {
-    return m_dbManager->getAllExperimentData();
+    const QVector<QVariantMap> rows = m_dbManager->getAllExperimentData();
+    QVariantList result;
+    result.reserve(rows.size());
+    for (const QVariantMap &row : rows) {
+        result.append(row);
+    }
+    return result;
 }
 
 bool dataCtrl::deleteData(int dataId)
@@ -207,15 +225,84 @@ bool dataCtrl::updateExperimentStatus(int experimentId, int status)
     return success;
 }
 
-QVector<QVariantMap> dataCtrl::getExperimentsByStatus(int status)
+QVariantList dataCtrl::getExperimentsByStatus(int status)
 {
     if (status < 0 || status > 1) {
         qWarning() << "[dataCtrl] 实验状态无效";
-        return QVector<QVariantMap>();
+        return QVariantList();
     }
     
-    QVector<QVariantMap> result = m_dbManager->getExperimentsByStatus(status);
+    const QVector<QVariantMap> rows = m_dbManager->getExperimentsByStatus(status);
+    QVariantList result;
+    result.reserve(rows.size());
+    for (const QVariantMap &row : rows) {
+        result.append(row);
+    }
     qDebug() << "[dataCtrl] 查询实验状态成功，状态:" << status << "数量:" << result.size();
+    return result;
+}
+
+QVariantList dataCtrl::getLightIntensityCurves(int experimentId, int pointsPerCurve)
+{
+    if (experimentId <= 0) {
+        qWarning() << "[dataCtrl] invalid experiment id for light intensity curves";
+        return QVariantList();
+    }
+
+    const QVector<QVariantMap> rows = m_dbManager->getLightIntensityCurvesByExperiment(experimentId, pointsPerCurve);
+    QVariantList result;
+    result.reserve(rows.size());
+    for (const QVariantMap &row : rows) {
+        result.append(row);
+    }
+    return result;
+}
+
+QVariantList dataCtrl::getInstabilityCurveData(int experimentId)
+{
+    if (experimentId <= 0) {
+        qWarning() << "[dataCtrl] invalid experiment id for instability curve";
+        return QVariantList();
+    }
+
+    const QVector<QVariantMap> rows = m_dbManager->getOrComputeInstabilityCurveDataByExperiment(experimentId);
+    QVariantList result;
+    result.reserve(rows.size());
+    for (const QVariantMap &row : rows) {
+        result.append(row);
+    }
+    return result;
+}
+
+QVariantList dataCtrl::getUniformityIndices(int experimentId)
+{
+    if (experimentId <= 0) {
+        qWarning() << "[dataCtrl] invalid experiment id for uniformity indices";
+        return QVariantList();
+    }
+
+    const QVector<QVariantMap> rows = m_dbManager->getUniformityIndicesByExperiment(experimentId);
+    QVariantList result;
+    result.reserve(rows.size());
+    for (const QVariantMap &row : rows) {
+        result.append(row);
+    }
+    return result;
+}
+
+QVariantList dataCtrl::getLightIntensityAverages(int experimentId)
+{
+    if (experimentId <= 0) {
+        qWarning() << "[dataCtrl] invalid experiment id for light intensity averages";
+        return QVariantList();
+    }
+
+    const QVector<QVariantMap> rows = m_dbManager->getLightIntensityAveragesByExperiment(experimentId);
+    QVariantList result;
+    result.reserve(rows.size());
+    for (const QVariantMap &row : rows) {
+        result.append(row);
+    }
     return result;
 }
 

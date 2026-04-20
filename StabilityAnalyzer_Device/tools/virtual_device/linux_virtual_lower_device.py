@@ -30,6 +30,9 @@ IR_SIZE = 1200
 A_BASE = 0
 B_BASE = 500
 PAIR_COUNT = 250
+INTENSITY_SCALE = 10
+INTENSITY_MIN_PERCENT = 0.0
+INTENSITY_MAX_PERCENT = 100.0
 
 REG_START_FLAG = 0
 REG_RUN_STATUS = 1
@@ -69,6 +72,16 @@ def log(message):
     print("%s %s" % (timestamp, message), flush=True)
 
 
+def percent_to_reg(percent_value):
+    clamped = max(INTENSITY_MIN_PERCENT, min(INTENSITY_MAX_PERCENT, float(percent_value)))
+    return int(round(clamped * INTENSITY_SCALE))
+
+
+def smooth_transition(value, center, width):
+    width = max(0.001, float(width))
+    return 0.5 * (1.0 + math.tanh((float(value) - float(center)) / width))
+
+
 class DeviceState(object):
     def __init__(self, slave_id):
         self.slave_id = slave_id
@@ -76,6 +89,8 @@ class DeviceState(object):
         self.hr = [0] * HR_SIZE
         self.ir = [0] * IR_SIZE
         self.seq = 0
+        self.scan_cycle = 0
+        self.current_scan_index = 0
         self.next_area_is_a = True
         self.start_pulse_until = 0.0
         self.fill_complete_at = 0.0
@@ -92,8 +107,8 @@ class DeviceState(object):
         self.hr[REG_INTERVAL_TIME] = 1
         self.hr[REG_COVER_STATUS] = 1
         self.hr[REG_SAMPLE_STATUS] = 1
-        self.hr[REG_TRANSMISSION] = 1200
-        self.hr[REG_BACKSCATTER] = 800
+        self.hr[REG_TRANSMISSION] = percent_to_reg(68.0)
+        self.hr[REG_BACKSCATTER] = percent_to_reg(36.0)
         self.hr[REG_TEMP_CONTROL] = 0
         self.hr[REG_TARGET_TEMP] = 250
         self.hr[REG_CURRENT_TEMP] = 250
@@ -146,30 +161,84 @@ class DeviceState(object):
             current = start_pos + ((end_pos - start_pos) * scanned) // (total - 1)
         self._write_u32(REG_CURRENT_POS, current)
 
+    def _point_height_ratio(self, point_index):
+        total = max(1, int(self.hr[REG_TOTAL_REQUIRED]))
+        if total <= 1:
+            return 0.5
+        bounded = max(0, min(total - 1, int(point_index)))
+        return float(bounded) / float(total - 1)
+
+    def _build_profile_point(self, height_ratio, scan_index):
+        progress = max(0.0, min(1.0, float(scan_index) / 18.0))
+        channel_bias = (float(self.slave_id) - 2.5) * 0.9
+
+        # Stable analyzer data should evolve scan by scan:
+        # top becomes clearer, bottom forms a denser sediment layer,
+        # and the interface moves smoothly rather than oscillating.
+        clear_front = 0.93 - 0.60 * progress
+        sediment_front = 0.05 + 0.18 * progress
+        clarification = smooth_transition(height_ratio, clear_front, 0.045)
+        sedimentation = 1.0 - smooth_transition(height_ratio, sediment_front, 0.035)
+        interface_peak = math.exp(-((height_ratio - clear_front) / 0.040) ** 2)
+        texture = math.sin((height_ratio * 6.5) + (scan_index * 0.33) + self.slave_id) * 0.9
+
+        transmission = (
+            43.0
+            + channel_bias
+            + (2.5 * progress)
+            + (42.0 * clarification)
+            - (14.0 * sedimentation)
+            - (4.5 * interface_peak)
+            + texture
+        )
+        backscatter = (
+            57.0
+            - (0.8 * channel_bias)
+            - (1.5 * progress)
+            - (34.0 * clarification)
+            + (18.0 * sedimentation)
+            + (6.0 * interface_peak)
+            - (0.6 * texture)
+        )
+        return transmission, backscatter
+
     def _update_realtime_values(self):
-        x = self.seq / 12.0 + time.time() / 5.0
-        transmission = int(1200 + 120 * math.sin(x))
-        backscatter = int(800 + 90 * math.cos(x * 0.9))
+        current_point = int(self.hr[REG_SCANNED_COUNT])
+        if not self.scan_active:
+            current_point = max(0, int(self.hr[REG_TOTAL_REQUIRED]) // 2)
+        height_ratio = self._point_height_ratio(current_point)
+        transmission_pct, backscatter_pct = self._build_profile_point(height_ratio, self.current_scan_index)
+        wobble = math.sin(time.time() * 0.6 + self.slave_id) * 0.5
+        transmission = percent_to_reg(transmission_pct + wobble)
+        backscatter = percent_to_reg(backscatter_pct - wobble * 0.5)
         self.hr[REG_TRANSMISSION] = max(0, min(65535, transmission))
         self.hr[REG_BACKSCATTER] = max(0, min(65535, backscatter))
 
-    def _fill_area_pairs(self, base, seq_seed, pair_count):
+    def _fill_area_pairs(self, base, start_pair_index, pair_count):
+        last_transmission = percent_to_reg(50.0)
+        last_backscatter = percent_to_reg(50.0)
         for i in range(PAIR_COUNT):
-            x = (self.seq + seq_seed + i) / 20.0
-            transmission = int(1200 + 200 * math.sin(x))
-            backscatter = int(800 + 150 * math.cos(x * 0.8))
             p = base + i * 2
             if i < pair_count:
-                self.ir[p] = max(0, min(65535, transmission))
-                self.ir[p + 1] = max(0, min(65535, backscatter))
+                height_ratio = self._point_height_ratio(start_pair_index + i)
+                transmission_pct, backscatter_pct = self._build_profile_point(
+                    height_ratio, self.current_scan_index
+                )
+                last_transmission = max(0, min(65535, percent_to_reg(transmission_pct)))
+                last_backscatter = max(0, min(65535, percent_to_reg(backscatter_pct)))
+                self.ir[p] = last_transmission
+                self.ir[p + 1] = last_backscatter
             else:
-                self.ir[p] = 0
-                self.ir[p + 1] = 0
+                # Keep the tail continuous instead of hard-zeroing unused registers.
+                # This avoids accidental "sudden zero segments" if an upper layer
+                # reads beyond the readable pair count.
+                self.ir[p] = last_transmission
+                self.ir[p + 1] = last_backscatter
 
     def _clear_area_pairs(self, area_a):
         base = A_BASE if area_a else B_BASE
-        for i in range(PAIR_COUNT * 2):
-            self.ir[base + i] = 0
+        start_pair_index = 0 if area_a else PAIR_COUNT
+        self._fill_area_pairs(base, start_pair_index, PAIR_COUNT)
 
     def _set_area_state(self, area_a, state):
         self.hr[self._storage_state_index(area_a)] = state
@@ -188,10 +257,11 @@ class DeviceState(object):
     def _complete_fill_area(self, area_a):
         self.seq += 1
         pair_count = max(0, min(PAIR_COUNT, int(self.filling_pair_count)))
+        start_pair_index = int(self.hr[REG_SCANNED_COUNT])
         if area_a:
-            self._fill_area_pairs(A_BASE, 10, pair_count)
+            self._fill_area_pairs(A_BASE, start_pair_index, pair_count)
         else:
-            self._fill_area_pairs(B_BASE, 100, pair_count)
+            self._fill_area_pairs(B_BASE, start_pair_index, pair_count)
         self._set_area_readable_count(area_a, pair_count * 2)
         self._set_area_state(area_a, READY_STATE)
         self.hr[REG_SCANNED_COUNT] = min(65535, int(self.hr[REG_SCANNED_COUNT]) + pair_count)
@@ -235,6 +305,8 @@ class DeviceState(object):
     def _start_scan(self, now):
         self._refresh_total_required()
         self._reset_scan()
+        self.current_scan_index = self.scan_cycle
+        self.scan_cycle += 1
         self.start_pulse_until = now + 0.3
         self.scan_active = True
         self.hr[REG_START_FLAG] = 1
