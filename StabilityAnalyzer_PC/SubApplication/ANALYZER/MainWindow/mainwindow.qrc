@@ -21,6 +21,7 @@
         <file>qml/UserManagementPage.qml</file>
         <file>qml/ExperimentRecordPage.qml</file>
         <file>qml/ExperimentDetailPage.qml</file>
+        <file>qml/TrendChart.qml</file>
         <file>qml/component/Popup_button.qml</file>
         <file>qml/SelectChannelsPop.qml</file>
         <file>qml/CustomPop.qml</file>
