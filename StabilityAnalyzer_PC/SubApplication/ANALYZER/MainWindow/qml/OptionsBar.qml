@@ -11,10 +11,12 @@ Rectangle{
     property string activePage: "record"
     // 由首页接住这个信号，统一决定如何打开仪器检查界面。
     signal instrumentCheckRequested()
+    signal importRecordRequested()
     signal newExperimentRequested()
     signal experimentRecordRequested()
     signal userManagementRequested()
     signal instructionRequested()
+    signal recycleBinRequested()
     color: "transparent"
 
     function justClosed(menuId) {
@@ -130,7 +132,12 @@ Rectangle{
                             color: maE1.containsMouse ? "#EBF3FF" : "transparent"
                             radius: 4
                             Text { text: qsTr("导入记录"); font.pixelSize: 14; color: "#333333"; font.family: "Microsoft YaHei"; anchors.verticalCenter: parent.verticalCenter; x: 10 }
-                            MouseArea { id: maE1; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: { console.log("导入记录"); closeMenus() } }
+                            MouseArea { id: maE1; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor;
+                                onClicked: {
+                                    optionsBar.importRecordRequested()
+                                    closeMenus()
+                                }
+                            }
                         }
                         Rectangle {
                             width: parent.width; height: 36
@@ -531,7 +538,16 @@ Rectangle{
                             color: maH2.containsMouse ? "#EBF3FF" : "transparent"
                             radius: 4
                             Text { text: qsTr("回收站"); font.pixelSize: 14; color: "#333333"; font.family: "Microsoft YaHei"; anchors.verticalCenter: parent.verticalCenter; x: 10 }
-                            MouseArea { id: maH2; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: { console.log("回收站"); closeMenus() } }
+                            MouseArea {
+                                id: maH2
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    optionsBar.recycleBinRequested()
+                                    closeMenus()
+                                }
+                            }
                         }
                         Rectangle {
                             width: parent.width; height: 36

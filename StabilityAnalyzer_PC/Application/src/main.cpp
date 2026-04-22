@@ -99,6 +99,7 @@ int main(int argc, char *argv[])
 
     engine.rootContext()->setContextProperty("user_list_model", ctrl_manager->getUserListmodel());
     engine.rootContext()->setContextProperty("experiment_list_model", ctrl_manager->getExperimentListmodel());
+    engine.rootContext()->setContextProperty("recycle_experiment_list_model", ctrl_manager->getRecycleExperimentListmodel());
 
     // 直接加载 QML 界面
     engine.load(QUrl(QStringLiteral("qrc:/qml/Application.qml")));

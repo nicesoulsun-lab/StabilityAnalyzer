@@ -61,6 +61,7 @@ Popup {
                     else if (root.model === 1) return update_latestComponent
                     else if (root.model === 2) return delete_confirm_Component
                     else if (root.model === 3) return log_out_confirm_Component
+                    else if (root.model === 4) return hard_delete_confirm_Component
                     return null
                 }
             }
@@ -80,6 +81,7 @@ Popup {
                         else if (root.model === 1) return
                         else if (root.model === 2) console.log("取消删除记录")
                         else if (root.model === 3) console.log("取消注销登录")
+                        else if (root.model === 4) console.log("取消彻底删除记录")
                         close()
                     }
                 }
@@ -110,12 +112,29 @@ Popup {
                             if (success) {
                                 console.log("删除成功，刷新列表")
                                 experiment_list_model.reloadFromDb()
+                                recycle_experiment_list_model.reloadFromDb()
                             }
                         }
                         else if (root.model === 3) {
                             console.log("确认注销登录")
                             user_ctrl.logout()
                             mainStackView.backToLoginPage()
+                        }
+                        else if (root.model === 4) {
+                            console.log("确认彻底删除记录")
+                            var checkedRecycleIds = recycle_experiment_list_model.getCheckedExpIds()
+                            console.log("选中的实验ID:", checkedRecycleIds)
+
+                            if (checkedRecycleIds.length === 0) {
+                                console.log("没有选中任何实验")
+                                return
+                            }
+
+                            var hardDeleteSuccess = data_ctrl.hardDeleteExperiments(checkedRecycleIds)
+                            if (hardDeleteSuccess) {
+                                console.log("彻底删除成功，刷新列表")
+                                recycle_experiment_list_model.reloadFromDb()
+                            }
                         }
                         close()
                     }
@@ -174,6 +193,16 @@ Popup {
             lineHeight: 1.4
         }
     }
+
+    Component {
+        id: hard_delete_confirm_Component
+        Text {
+            text: qsTr("确认彻底删除勾选记录？")
+            font.pixelSize: 18
+            font.bold: true
+            color: "black"
+            verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter
+            lineHeight: 1.4
+        }
+    }
 }
-
-

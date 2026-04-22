@@ -4,6 +4,8 @@ import CustomComponents 1.0
 Item {
     id: root
 
+    // TrendChart 只提供统一的图表骨架和轻交互，
+    // 业务页负责准备数据点、坐标范围和标题。
     property var dataPoints: []
     property color lineColor: "#2F7CF6"
     property real lineWidth: 2
@@ -17,11 +19,11 @@ Item {
     property string xAxisTitle: ""
     property bool showXAxisLabels: true
     property bool showXAxisTitle: true
-    property int leftMargin: 58
+    property int leftMargin: 79
     property int rightMargin: 16
     property int topMargin: 16
     property int bottomMargin: showXAxisLabels || showXAxisTitle ? 45 : 12
-    property int yAxisTitleOffset: 50
+    property int yAxisTitleOffset: 71
     property int xAxisTitleOffset: 38
     property var formatXLabel: function(value) { return value }
     property bool zoomActive: false
@@ -37,6 +39,7 @@ Item {
     property point selectionEnd: Qt.point(0, 0)
 
     function syncVisibleRange() {
+        // 未缩放时，显示范围始终跟随业务层传入的完整坐标轴范围。
         if (!zoomActive) {
             visibleMinX = minXValue
             visibleMaxX = maxXValue
@@ -87,6 +90,7 @@ Item {
     }
 
     function clampToPlotArea(point) {
+        // 鼠标交互统一限制在绘图区内部，避免选区和十字线越过图表边框。
         return Qt.point(
             Math.max(0, Math.min(plotArea.width, point.x)),
             Math.max(0, Math.min(plotArea.height, point.y))
@@ -94,6 +98,7 @@ Item {
     }
 
     function xToPosition(value) {
+        // 业务坐标到像素坐标的换算，鼠标吸附/缩放/坐标轴都共用这套逻辑。
         return (value - visibleMinX) / Math.max(visibleMaxX - visibleMinX, 0.000001) * plotArea.width
     }
 
@@ -110,6 +115,7 @@ Item {
     }
 
     function resetView() {
+        // 双击恢复到完整视图，同时清除当前点击焦点。
         zoomActive = false
         cursorVisible = false
         syncVisibleRange()
@@ -137,6 +143,7 @@ Item {
     }
 
     function findNearestDataPoint(plotPoint) {
+        // 点击时按屏幕距离吸附最近可见点，保证十字线落在实际曲线上。
         if (!dataPoints || dataPoints.length === 0)
             return null
 
@@ -212,6 +219,7 @@ Item {
             anchors.fill: parent
             clip: true
 
+            // 只裁剪真正会缩放/移动的绘图层，轴标签仍留在外层正常显示。
             CurveItem {
                 anchors.fill: parent
                 lineColor: root.lineColor
@@ -300,6 +308,7 @@ Item {
                 onReleased: {
                     var releasePoint = root.clampToPlotArea(Qt.point(mouse.x, mouse.y))
                     if (dragTriggered && root.isSelecting) {
+                        // 左键框选后直接改 visible range，图表仍复用同一组数据点。
                         root.selectionEnd = releasePoint
                         var left = Math.min(root.selectionStart.x, root.selectionEnd.x)
                         var right = Math.max(root.selectionStart.x, root.selectionEnd.x)
@@ -316,6 +325,7 @@ Item {
                         }
                         root.isSelecting = false
                     } else {
+                        // 单击不做实时跟随，只在点击时锁定一个最近数据点。
                         var nearestPoint = root.findNearestDataPoint(releasePoint)
                         if (nearestPoint) {
                             root.focusedDataPoint = nearestPoint

@@ -113,11 +113,13 @@ Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 40
                     activePage: homepage.currentPageKey
+                    onImportRecordRequested: importRecordPop.open()
                     onInstrumentCheckRequested: instrumentCheckPop.open()
                     onNewExperimentRequested: newExperimentPop.open()
                     onExperimentRecordRequested: homepage.openContentPage("qrc:/qml/ExperimentRecordPage.qml", "record")
                     onUserManagementRequested: homepage.openContentPage("qrc:/qml/UserManagementPage.qml", "user")
                     onInstructionRequested: homepage.openInstructionPage()
+                    onRecycleBinRequested: homepage.openContentPage("qrc:/qml/RecycleBinPage.qml", "recycle")
                 }
 
                 Loader {
@@ -137,6 +139,16 @@ Item {
 
     InstrumentCheckPop {
         id: instrumentCheckPop
+    }
+
+    ImportRecordPop {
+        id: importRecordPop
+        onImportStarted: importProgressPop.open()
+        onImportFinished: importProgressPop.close()
+    }
+
+    ImportProgressPop {
+        id: importProgressPop
     }
 
     NewExperimentPop {

@@ -284,6 +284,7 @@ public:
      * @return 实验数据列表
      */
     QVector<QVariantMap> getExperimentsByStatus(int status);
+    QVector<QVariantMap> getDeletedExperiments();
     
     /**
      * @brief 删除实验
@@ -291,6 +292,8 @@ public:
      * @return 成功返回 true，失败返回 false
      */
     bool deleteExperiment(int experimentId);
+    bool restoreExperiment(int experimentId);
+    bool hardDeleteExperiment(int experimentId);
     
     // ========================================================================
     // 实验数据管理
@@ -326,12 +329,21 @@ public:
      */
     QVector<QVariantMap> getExperimentDataByExperiment(int experimentId);
     QVector<QVariantMap> getExperimentDataPreviewByExperiment(int experimentId, int limit);
+    // 为光强页返回按 scan 聚合且已降采样的整帧曲线。
     QVector<QVariantMap> getLightIntensityCurvesByExperiment(int experimentId, int pointsPerCurve);
+    // 按参比线和高度区间返回已处理的光强曲线，供光强页直接显示。
+    QVector<QVariantMap> getProcessedLightIntensityCurvesByExperiment(int experimentId, int pointsPerCurve, int referenceScanId,
+                                                                      double lowerMm, double upperMm, bool useReference);
     QVector<QVariantMap> getLightIntensityAveragesByExperiment(int experimentId);
     QVector<QVariantMap> getUniformityIndicesByExperiment(int experimentId);
+    // 计算并缓存三区分层厚度结果。
+    QVector<QVariantMap> getSeparationLayerDataByExperiment(int experimentId);
     bool replaceInstabilityCurveData(int experimentId, const QVector<QVariantMap>& curveList);
     QVector<QVariantMap> getInstabilityCurveDataByExperiment(int experimentId);
     QVector<QVariantMap> getOrComputeInstabilityCurveDataByExperiment(int experimentId);
+    // 针对指定高度区间计算不稳定性曲线，用于局部/自定义模式懒加载。
+    QVector<QVariantMap> getOrComputeInstabilityCurveDataByHeightRange(int experimentId, double lowerMm, double upperMm, const QString &segmentKey);
+    // 删除整体和分区缓存，保证实验重算时不会混入旧结果。
     bool deleteInstabilityCurveDataByExperiment(int experimentId);
     
     /**

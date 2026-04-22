@@ -22,8 +22,9 @@ public:
         , m_experimentCtrl(new ExperimentCtrl(this))
         , m_userListmodel(new user_sql_listmodel(this))
         , m_experimentListmodel(new experiment_listmodel(this))
+        , m_recycleExperimentListmodel(new experiment_listmodel(this))
     {
-
+        m_recycleExperimentListmodel->setDeletedOnly(true);
     }
 
     // 获取各个 Controller 实例
@@ -34,6 +35,7 @@ public:
 
     user_sql_listmodel * getUserListmodel() const { return m_userListmodel; }
     experiment_listmodel * getExperimentListmodel() const { return m_experimentListmodel; }
+    experiment_listmodel * getRecycleExperimentListmodel() const { return m_recycleExperimentListmodel; }
 
 private:
     systemSettingCtrl* m_sysSettingCtrl = nullptr;
@@ -42,6 +44,7 @@ private:
     ExperimentCtrl* m_experimentCtrl = nullptr;
     user_sql_listmodel* m_userListmodel = nullptr;
     experiment_listmodel* m_experimentListmodel = nullptr;
+    experiment_listmodel* m_recycleExperimentListmodel = nullptr;
 };
 
 #endif // CONTROLLERMANAGER_H

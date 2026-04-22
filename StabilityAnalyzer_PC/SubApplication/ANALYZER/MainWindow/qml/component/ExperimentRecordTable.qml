@@ -10,6 +10,7 @@ Column {
     property alias listView: listView
     property int currentIndex: -1
     property var experimentListModel: experiment_list_model
+    property string emptyText: qsTr("暂无实验记录")
     // Keep header labels in one place so the visual columns and data columns stay aligned.
     property var headerLabels: [qsTr("选择"), qsTr("序号"), qsTr("工程名称"), qsTr("实验名称")]
     // Split checkbox and sequence into two explicit columns to make batch selection clearer.

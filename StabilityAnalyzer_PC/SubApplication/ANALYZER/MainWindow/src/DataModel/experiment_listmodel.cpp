@@ -22,6 +22,20 @@ experiment_listmodel::experiment_listmodel(QObject* parent)
     reloadFromDb();
 }
 
+void experiment_listmodel::setDeletedOnly(bool deletedOnly)
+{
+    if (m_deletedOnly == deletedOnly)
+        return;
+
+    m_deletedOnly = deletedOnly;
+    reloadFromDb();
+}
+
+bool experiment_listmodel::deletedOnly() const
+{
+    return m_deletedOnly;
+}
+
 int experiment_listmodel::rowCount(const QModelIndex &parent) const
 {
     Q_UNUSED(parent);
@@ -136,7 +150,9 @@ void experiment_listmodel::setChecked(int row, bool checked)
 void experiment_listmodel::reloadFromDb()
 {
     try {
-        auto experiments = SQLORM->getAllExperiments();
+        auto experiments = m_deletedOnly
+                ? SQLORM->getDeletedExperiments()
+                : SQLORM->getAllExperiments();
 
         qDebug()<<"实验数据："<<experiments;
 

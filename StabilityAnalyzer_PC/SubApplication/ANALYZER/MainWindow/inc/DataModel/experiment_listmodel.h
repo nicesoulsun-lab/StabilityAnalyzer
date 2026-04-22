@@ -45,6 +45,8 @@ public:
     };
 
     explicit experiment_listmodel(QObject* parent = nullptr);
+    void setDeletedOnly(bool deletedOnly);
+    bool deletedOnly() const;
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     int columnCount(const QModelIndex &parent = QModelIndex()) const override;
@@ -102,6 +104,7 @@ signals:
 private:
     QVector<QVariantMap> m_experiments;
     QVector<bool> m_checkedStates;
+    bool m_deletedOnly = false;
 };
 
 #endif // EXPERIMENT_LISTMODEL_H

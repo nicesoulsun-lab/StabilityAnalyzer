@@ -242,6 +242,18 @@ QVariantList dataCtrl::getExperimentsByStatus(int status)
     return result;
 }
 
+QVariantList dataCtrl::getDeletedExperiments()
+{
+    const QVector<QVariantMap> rows = m_dbManager->getDeletedExperiments();
+    QVariantList result;
+    result.reserve(rows.size());
+    for (const QVariantMap &row : rows) {
+        result.append(row);
+    }
+    qDebug() << "[dataCtrl] 查询已删除实验成功，数量:" << result.size();
+    return result;
+}
+
 QVariantList dataCtrl::getLightIntensityCurves(int experimentId, int pointsPerCurve)
 {
     if (experimentId <= 0) {
@@ -249,7 +261,26 @@ QVariantList dataCtrl::getLightIntensityCurves(int experimentId, int pointsPerCu
         return QVariantList();
     }
 
+    // 这里直接透传数据库层的曲线聚合结果，QML 不再自己按 scan_id 分组。
     const QVector<QVariantMap> rows = m_dbManager->getLightIntensityCurvesByExperiment(experimentId, pointsPerCurve);
+    QVariantList result;
+    result.reserve(rows.size());
+    for (const QVariantMap &row : rows) {
+        result.append(row);
+    }
+    return result;
+}
+
+QVariantList dataCtrl::getProcessedLightIntensityCurves(int experimentId, int pointsPerCurve, int referenceScanId,
+                                                        double lowerMm, double upperMm, bool useReference)
+{
+    if (experimentId <= 0) {
+        qWarning() << "[dataCtrl] invalid experiment id for processed light intensity curves";
+        return QVariantList();
+    }
+
+    const QVector<QVariantMap> rows = m_dbManager->getProcessedLightIntensityCurvesByExperiment(
+                experimentId, pointsPerCurve, referenceScanId, lowerMm, upperMm, useReference);
     QVariantList result;
     result.reserve(rows.size());
     for (const QVariantMap &row : rows) {
@@ -265,7 +296,25 @@ QVariantList dataCtrl::getInstabilityCurveData(int experimentId)
         return QVariantList();
     }
 
+    // 整体曲线按“有缓存就复用、没有就计算”的方式提供给前端。
     const QVector<QVariantMap> rows = m_dbManager->getOrComputeInstabilityCurveDataByExperiment(experimentId);
+    QVariantList result;
+    result.reserve(rows.size());
+    for (const QVariantMap &row : rows) {
+        result.append(row);
+    }
+    return result;
+}
+
+QVariantList dataCtrl::getInstabilityCurveDataByHeightRange(int experimentId, double lowerMm, double upperMm, const QString& segmentKey)
+{
+    if (experimentId <= 0) {
+        qWarning() << "[dataCtrl] invalid experiment id for instability segment curve";
+        return QVariantList();
+    }
+
+    // 局部/自定义模式走同一套接口，真正的差别只在高度区间和缓存键。
+    const QVector<QVariantMap> rows = m_dbManager->getOrComputeInstabilityCurveDataByHeightRange(experimentId, lowerMm, upperMm, segmentKey);
     QVariantList result;
     result.reserve(rows.size());
     for (const QVariantMap &row : rows) {
@@ -306,6 +355,23 @@ QVariantList dataCtrl::getLightIntensityAverages(int experimentId)
     return result;
 }
 
+QVariantList dataCtrl::getSeparationLayerData(int experimentId)
+{
+    if (experimentId <= 0) {
+        qWarning() << "[dataCtrl] invalid experiment id for separation layer data";
+        return QVariantList();
+    }
+
+    // 分层厚度页直接消费三区结果，QML 无需再做区域划分计算。
+    const QVector<QVariantMap> rows = m_dbManager->getSeparationLayerDataByExperiment(experimentId);
+    QVariantList result;
+    result.reserve(rows.size());
+    for (const QVariantMap &row : rows) {
+        result.append(row);
+    }
+    return result;
+}
+
 bool dataCtrl::deleteExperiment(int experimentId)
 {
     if (experimentId <= 0) {
@@ -318,18 +384,72 @@ bool dataCtrl::deleteExperiment(int experimentId)
     
     if (success) {
         qDebug() << "[dataCtrl] 删除实验成功，ID:" << experimentId;
-        emit operationInfo(tr("已删除实验"));
+        emit operationInfo(tr("已移入回收站，7天后自动清理"));
 
         QVariantMap logData;
         logData["username"] = "";
         logData["user_id"] = -1;
-        logData["operation"] = QString("删除了实验 %1").arg(experimentId);
+        logData["operation"] = QString("将实验 %1 移入回收站").arg(experimentId);
         m_dbManager->addOperationLog(logData);
     } else {
         emit operationFailed("删除实验失败");
         qWarning() << "[dataCtrl] 删除实验失败，ID:" << experimentId;
     }
     
+    return success;
+}
+
+bool dataCtrl::restoreExperiment(int experimentId)
+{
+    if (experimentId <= 0) {
+        qWarning() << "[dataCtrl] 实验 ID 无效";
+        emit operationFailed("实验 ID 无效");
+        return false;
+    }
+
+    bool success = m_dbManager->restoreExperiment(experimentId);
+
+    if (success) {
+        qDebug() << "[dataCtrl] 恢复实验成功，ID:" << experimentId;
+        emit operationInfo(tr("已恢复实验"));
+
+        QVariantMap logData;
+        logData["username"] = "";
+        logData["user_id"] = -1;
+        logData["operation"] = QString("恢复了实验 %1").arg(experimentId);
+        m_dbManager->addOperationLog(logData);
+    } else {
+        emit operationFailed("恢复实验失败");
+        qWarning() << "[dataCtrl] 恢复实验失败，ID:" << experimentId;
+    }
+
+    return success;
+}
+
+bool dataCtrl::hardDeleteExperiment(int experimentId)
+{
+    if (experimentId <= 0) {
+        qWarning() << "[dataCtrl] 实验 ID 无效";
+        emit operationFailed("实验 ID 无效");
+        return false;
+    }
+
+    bool success = m_dbManager->hardDeleteExperiment(experimentId);
+
+    if (success) {
+        qDebug() << "[dataCtrl] 彻底删除实验成功，ID:" << experimentId;
+        emit operationInfo(tr("已彻底删除实验"));
+
+        QVariantMap logData;
+        logData["username"] = "";
+        logData["user_id"] = -1;
+        logData["operation"] = QString("彻底删除了实验 %1").arg(experimentId);
+        m_dbManager->addOperationLog(logData);
+    } else {
+        emit operationFailed("彻底删除实验失败");
+        qWarning() << "[dataCtrl] 彻底删除实验失败，ID:" << experimentId;
+    }
+
     return success;
 }
 
@@ -351,18 +471,52 @@ bool dataCtrl::deleteExperiments(const QVariantList& experimentIds)
     
     if (successCount > 0) {
         qDebug() << "[dataCtrl] 批量删除实验成功，数量:" << successCount;
-        emit operationInfo(tr("已删除 %1 个实验").arg(successCount));
+        emit operationInfo(tr("已移入回收站 %1 个实验，7天后自动清理").arg(successCount));
 
         QVariantMap logData;
         logData["username"] = "";
         logData["user_id"] = -1;
-        logData["operation"] = QString("批量删除了 %1 条实验").arg(successCount);
+        logData["operation"] = QString("批量将 %1 条实验移入回收站").arg(successCount);
         m_dbManager->addOperationLog(logData);
 
         return true;
     } else {
         emit operationFailed("删除实验失败");
         qWarning() << "[dataCtrl] 批量删除实验失败";
+        return false;
+    }
+}
+
+bool dataCtrl::hardDeleteExperiments(const QVariantList& experimentIds)
+{
+    if (experimentIds.isEmpty()) {
+        qWarning() << "[dataCtrl] 没有选择要彻底删除的实验";
+        emit operationFailed("请先选择要删除的实验");
+        return false;
+    }
+
+    int successCount = 0;
+    for (const auto& idVariant : experimentIds) {
+        int expId = idVariant.toInt();
+        if (expId > 0 && m_dbManager->hardDeleteExperiment(expId)) {
+            successCount++;
+        }
+    }
+
+    if (successCount > 0) {
+        qDebug() << "[dataCtrl] 批量彻底删除实验成功，数量:" << successCount;
+        emit operationInfo(tr("已彻底删除 %1 个实验").arg(successCount));
+
+        QVariantMap logData;
+        logData["username"] = "";
+        logData["user_id"] = -1;
+        logData["operation"] = QString("批量彻底删除了 %1 条实验").arg(successCount);
+        m_dbManager->addOperationLog(logData);
+
+        return true;
+    } else {
+        emit operationFailed("彻底删除实验失败");
+        qWarning() << "[dataCtrl] 批量彻底删除实验失败";
         return false;
     }
 }

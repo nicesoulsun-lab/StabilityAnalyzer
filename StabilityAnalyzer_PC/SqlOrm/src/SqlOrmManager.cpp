@@ -94,6 +94,9 @@ struct Experiment {
     int scan_step;             ///< 扫描步长
     int status;                ///< 实验状态：0-未导入，1-已导入（PC 端导入）
     QString created_at;        ///< 创建时间
+    int deleted_flag;          ///< 删除标记：0-正常，1-已删除
+    QString deleted_at;        ///< 删除时间
+    QString purge_after;       ///< 计划物理删除时间
 };
 
 /**
@@ -191,7 +194,10 @@ public:
                                        make_column("scan_range_end", &Experiment::scan_range_end),
                                        make_column("scan_step", &Experiment::scan_step),
                                        make_column("status", &Experiment::status),
-                                       make_column("created_at", &Experiment::created_at)
+                                       make_column("created_at", &Experiment::created_at),
+                                       make_column("deleted_flag", &Experiment::deleted_flag),
+                                       make_column("deleted_at", &Experiment::deleted_at),
+                                       make_column("purge_after", &Experiment::purge_after)
                                        ),
                             // ExperimentData 表 - 存储实验测量数据
                             make_table("experiment_data",
@@ -291,6 +297,31 @@ QVariantMap readExtendedExperimentDataRow(const QSqlQuery& query) {
     return data;
 }
 
+QVariantMap experimentToVariantMap(const Experiment &experiment)
+{
+    QVariantMap experimentData;
+    experimentData["id"] = experiment.id;
+    experimentData["project_id"] = experiment.project_id;
+    experimentData["sample_name"] = experiment.sample_name;
+    experimentData["operator_name"] = experiment.operator_name;
+    experimentData["description"] = experiment.description;
+    experimentData["creator_id"] = experiment.creator_id;
+    experimentData["duration"] = experiment.duration;
+    experimentData["interval"] = experiment.interval;
+    experimentData["count"] = experiment.count;
+    experimentData["temperature_control"] = experiment.temperature_control;
+    experimentData["target_temp"] = experiment.target_temp;
+    experimentData["scan_range_start"] = experiment.scan_range_start;
+    experimentData["scan_range_end"] = experiment.scan_range_end;
+    experimentData["scan_step"] = experiment.scan_step;
+    experimentData["status"] = experiment.status;
+    experimentData["created_at"] = experiment.created_at;
+    experimentData["deleted_flag"] = experiment.deleted_flag;
+    experimentData["deleted_at"] = experiment.deleted_at;
+    experimentData["purge_after"] = experiment.purge_after;
+    return experimentData;
+}
+
 struct LightCurveRowEx {
     double heightMm = 0.0;
     double backscatter = 0.0;
@@ -298,6 +329,12 @@ struct LightCurveRowEx {
 };
 
 struct InstabilityRowEx {
+    double heightMm = 0.0;
+    double backscatter = 0.0;
+    double transmission = 0.0;
+};
+
+struct SeparationRowEx {
     double heightMm = 0.0;
     double backscatter = 0.0;
     double transmission = 0.0;
@@ -383,6 +420,113 @@ QVariantList downsampleCurvePoints(const QVector<LightCurveRowEx> &rows, bool us
     return makePointList(sampled);
 }
 
+QVariantList downsamplePointSeries(const QVector<QPointF> &points, int maxPoints)
+{
+    if (points.isEmpty()) {
+        return QVariantList();
+    }
+
+    if (maxPoints <= 2 || points.size() <= maxPoints) {
+        return makePointList(points);
+    }
+
+    const int bucketCount = qMax(1, maxPoints / 2);
+    QVector<QPointF> sampled;
+    sampled.reserve(bucketCount * 2 + 2);
+    sampled.append(points.first());
+
+    const int innerCount = points.size() - 2;
+    for (int bucket = 0; bucket < bucketCount; ++bucket) {
+        const int startIndex = 1 + bucket * innerCount / bucketCount;
+        const int endIndex = 1 + (bucket + 1) * innerCount / bucketCount;
+        if (startIndex >= points.size() - 1) {
+            break;
+        }
+
+        const int safeEnd = qMax(startIndex + 1, qMin(endIndex, points.size() - 1));
+        int minIndex = startIndex;
+        int maxIndex = startIndex;
+        double minValue = points.at(startIndex).y();
+        double maxValue = minValue;
+
+        for (int i = startIndex + 1; i < safeEnd; ++i) {
+            const double value = points.at(i).y();
+            if (value < minValue) {
+                minValue = value;
+                minIndex = i;
+            }
+            if (value > maxValue) {
+                maxValue = value;
+                maxIndex = i;
+            }
+        }
+
+        if (minIndex <= maxIndex) {
+            sampled.append(points.at(minIndex));
+            if (maxIndex != minIndex) {
+                sampled.append(points.at(maxIndex));
+            }
+        } else {
+            sampled.append(points.at(maxIndex));
+            sampled.append(points.at(minIndex));
+        }
+    }
+
+    sampled.append(points.last());
+    std::sort(sampled.begin(), sampled.end(), [](const QPointF &a, const QPointF &b) {
+        if (qFuzzyCompare(a.x(), b.x())) {
+            return a.y() < b.y();
+        }
+        return a.x() < b.x();
+    });
+    return makePointList(sampled);
+}
+
+double lightCurveValueAtHeight(const QVector<LightCurveRowEx> &rows, bool useTransmission, double heightMm)
+{
+    if (rows.isEmpty()) {
+        return 0.0;
+    }
+    if (heightMm <= rows.first().heightMm) {
+        return useTransmission ? rows.first().transmission : rows.first().backscatter;
+    }
+    if (heightMm >= rows.last().heightMm) {
+        return useTransmission ? rows.last().transmission : rows.last().backscatter;
+    }
+
+    for (int i = 1; i < rows.size(); ++i) {
+        const LightCurveRowEx &left = rows.at(i - 1);
+        const LightCurveRowEx &right = rows.at(i);
+        if (heightMm > right.heightMm) {
+            continue;
+        }
+
+        const double x0 = left.heightMm;
+        const double x1 = right.heightMm;
+        const double y0 = useTransmission ? left.transmission : left.backscatter;
+        const double y1 = useTransmission ? right.transmission : right.backscatter;
+        if (qFuzzyCompare(x0, x1)) {
+            return y1;
+        }
+        const double ratio = (heightMm - x0) / (x1 - x0);
+        return y0 + (y1 - y0) * ratio;
+    }
+
+    return useTransmission ? rows.last().transmission : rows.last().backscatter;
+}
+
+QVector<LightCurveRowEx> filterLightCurveRowsByHeight(const QVector<LightCurveRowEx> &rows, double lowerMm, double upperMm)
+{
+    QVector<LightCurveRowEx> filtered;
+    filtered.reserve(rows.size());
+    for (const LightCurveRowEx &row : rows) {
+        if (row.heightMm >= lowerMm && row.heightMm <= upperMm) {
+            filtered.append(row);
+        }
+    }
+    return filtered;
+}
+
 double valueAtHeight(const QVector<InstabilityRowEx> &rows, bool useTransmission, double heightMm)
 {
     if (rows.isEmpty()) {
@@ -429,10 +573,118 @@ double averageTransmissionValue(const QVector<InstabilityRowEx> &rows)
     return sum / rows.size();
 }
 
+double averageTransmissionValue(const QVector<SeparationRowEx> &rows)
+{
+    if (rows.isEmpty()) {
+        return 0.0;
+    }
+
+    double sum = 0.0;
+    for (const SeparationRowEx &row : rows) {
+        sum += row.transmission;
+    }
+    return sum / rows.size();
+}
+
+QVector<double> smoothSeries(const QVector<double> &values, int windowSize)
+{
+    if (values.isEmpty() || windowSize <= 1) {
+        return values;
+    }
+
+    const int halfWindow = windowSize / 2;
+    QVector<double> smoothed;
+    smoothed.reserve(values.size());
+
+    for (int i = 0; i < values.size(); ++i) {
+        const int start = qMax(0, i - halfWindow);
+        const int end = qMin(values.size() - 1, i + halfWindow);
+        double sum = 0.0;
+        int count = 0;
+        for (int j = start; j <= end; ++j) {
+            sum += values.at(j);
+            ++count;
+        }
+        smoothed.append(count > 0 ? sum / count : values.at(i));
+    }
+
+    return smoothed;
+}
+
+double findBoundaryHeightForThreshold(const QVector<SeparationRowEx> &rows,
+                                      const QVector<double> &proxyValues,
+                                      double threshold,
+                                      bool fromBottom)
+{
+    if (rows.size() < 2 || rows.size() != proxyValues.size()) {
+        return rows.isEmpty() ? 0.0 : rows.first().heightMm;
+    }
+
+    int startIndex = fromBottom ? 1 : proxyValues.size() - 1;
+    int endIndex = fromBottom ? proxyValues.size() : 0;
+    int step = fromBottom ? 1 : -1;
+
+    for (int i = startIndex; i != endIndex; i += step) {
+        const int prevIndex = i - step;
+        const double leftProxy = proxyValues.at(prevIndex);
+        const double rightProxy = proxyValues.at(i);
+        const bool crossed = fromBottom
+            ? ((leftProxy >= threshold && rightProxy <= threshold) || (leftProxy <= threshold && rightProxy >= threshold))
+            : ((leftProxy <= threshold && rightProxy >= threshold) || (leftProxy >= threshold && rightProxy <= threshold));
+        if (!crossed) {
+            continue;
+        }
+
+        const double leftHeight = rows.at(prevIndex).heightMm;
+        const double rightHeight = rows.at(i).heightMm;
+        if (qFuzzyCompare(leftProxy, rightProxy)) {
+            return rightHeight;
+        }
+
+        const double ratio = (threshold - leftProxy) / (rightProxy - leftProxy);
+        return leftHeight + ratio * (rightHeight - leftHeight);
+    }
+
+    return fromBottom ? rows.last().heightMm : rows.first().heightMm;
+}
+
+bool ensureSeparationLayerResultTable(QSqlDatabase &db, QString *errorMessage = nullptr)
+{
+    if (!db.isOpen()) {
+        if (errorMessage) {
+            *errorMessage = QStringLiteral("database is not open");
+        }
+        return false;
+    }
+
+    QSqlQuery query(db);
+    const QString sql =
+        "CREATE TABLE IF NOT EXISTS separation_layer_data ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "experiment_id INTEGER NOT NULL, "
+        "scan_id INTEGER DEFAULT 0, "
+        "scan_elapsed_ms INTEGER DEFAULT 0, "
+        "channel_used TEXT, "
+        "clarification_boundary_mm REAL DEFAULT 0, "
+        "sediment_boundary_mm REAL DEFAULT 0, "
+        "clarification_thickness_mm REAL DEFAULT 0, "
+        "concentrated_phase_thickness_mm REAL DEFAULT 0, "
+        "sediment_thickness_mm REAL DEFAULT 0, "
+        "confidence REAL DEFAULT 0, "
+        "created_at TEXT)";
+    const bool ok = query.exec(sql);
+    if (!ok && errorMessage) {
+        *errorMessage = query.lastError().text();
+    }
+    return ok;
+}
+
 double computeInstabilityIntegral(const QVector<InstabilityRowEx> &referenceRows,
                                   const QVector<InstabilityRowEx> &currentRows,
                                   bool useTransmission)
 {
+    // 以首帧为参考，沿高度方向积分当前帧和参考帧的差值，
+    // 得到不稳定性曲线里每个时间点的 Ius 值。
     if (referenceRows.size() < 2 || currentRows.size() < 2) {
         return 0.0;
     }
@@ -501,6 +753,36 @@ bool ensureInstabilityResultTable(QSqlDatabase &db, QString *errorMessage = null
     return ok;
 }
 
+bool ensureInstabilitySegmentResultTable(QSqlDatabase &db, QString *errorMessage = nullptr)
+{
+    // 分区不稳定性结果单独落库，避免整体/局部/自定义互相覆盖缓存。
+    if (!db.isOpen()) {
+        if (errorMessage) {
+            *errorMessage = QStringLiteral("database is not open");
+        }
+        return false;
+    }
+
+    QSqlQuery query(db);
+    const QString sql =
+        "CREATE TABLE IF NOT EXISTS instability_segment_curve_data ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "experiment_id INTEGER NOT NULL, "
+        "segment_key TEXT NOT NULL, "
+        "height_lower_mm REAL DEFAULT 0, "
+        "height_upper_mm REAL DEFAULT 0, "
+        "scan_id INTEGER DEFAULT 0, "
+        "scan_elapsed_ms INTEGER DEFAULT 0, "
+        "channel_used TEXT, "
+        "instability_value REAL DEFAULT 0, "
+        "created_at TEXT)";
+    const bool ok = query.exec(sql);
+    if (!ok && errorMessage) {
+        *errorMessage = query.lastError().text();
+    }
+    return ok;
+}
+
 bool ensureExperimentDataColumns(QSqlDatabase &db, QString *errorMessage = nullptr)
 {
     if (!db.isOpen()) {
@@ -540,6 +822,263 @@ bool ensureExperimentDataColumns(QSqlDatabase &db, QString *errorMessage = nullp
             }
             return false;
         }
+    }
+
+    return true;
+}
+
+bool ensureExperimentSoftDeleteColumns(QSqlDatabase &db, QString *errorMessage = nullptr)
+{
+    if (!db.isOpen()) {
+        if (errorMessage) {
+            *errorMessage = QStringLiteral("database is not open");
+        }
+        return false;
+    }
+
+    QSet<QString> columns;
+    QSqlQuery pragmaQuery(db);
+    if (!pragmaQuery.exec("PRAGMA table_info(experiments)")) {
+        if (errorMessage) {
+            *errorMessage = pragmaQuery.lastError().text();
+        }
+        return false;
+    }
+
+    while (pragmaQuery.next()) {
+        columns.insert(pragmaQuery.value("name").toString());
+    }
+
+    QSqlQuery alterQuery(db);
+    if (!columns.contains("deleted_flag")) {
+        if (!alterQuery.exec("ALTER TABLE experiments ADD COLUMN deleted_flag INTEGER DEFAULT 0")) {
+            if (errorMessage) {
+                *errorMessage = alterQuery.lastError().text();
+            }
+            return false;
+        }
+    }
+
+    if (!columns.contains("deleted_at")) {
+        if (!alterQuery.exec("ALTER TABLE experiments ADD COLUMN deleted_at TEXT DEFAULT ''")) {
+            if (errorMessage) {
+                *errorMessage = alterQuery.lastError().text();
+            }
+            return false;
+        }
+    }
+
+    if (!columns.contains("purge_after")) {
+        if (!alterQuery.exec("ALTER TABLE experiments ADD COLUMN purge_after TEXT DEFAULT ''")) {
+            if (errorMessage) {
+                *errorMessage = alterQuery.lastError().text();
+            }
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool purgeExpiredDeletedExperiments(QSqlDatabase &db, QString *errorMessage = nullptr)
+{
+    if (!db.isOpen()) {
+        if (errorMessage) {
+            *errorMessage = QStringLiteral("database is not open");
+        }
+        return false;
+    }
+
+    if (!ensureSeparationLayerResultTable(db, errorMessage)
+        || !ensureInstabilityResultTable(db, errorMessage)
+        || !ensureInstabilitySegmentResultTable(db, errorMessage)) {
+        return false;
+    }
+
+    const QString now = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
+    QVector<int> expiredExperimentIds;
+
+    QSqlQuery query(db);
+    query.prepare(
+        "SELECT id FROM experiments "
+        "WHERE deleted_flag = 1 "
+        "AND purge_after IS NOT NULL "
+        "AND purge_after != '' "
+        "AND purge_after <= ?");
+    query.addBindValue(now);
+    if (!query.exec()) {
+        if (errorMessage) {
+            *errorMessage = query.lastError().text();
+        }
+        return false;
+    }
+
+    while (query.next()) {
+        expiredExperimentIds.append(query.value(0).toInt());
+    }
+
+    if (expiredExperimentIds.isEmpty()) {
+        return true;
+    }
+
+    if (!db.transaction()) {
+        if (errorMessage) {
+            *errorMessage = db.lastError().text();
+        }
+        return false;
+    }
+
+    QSqlQuery deleteExperimentDataQuery(db);
+    deleteExperimentDataQuery.prepare("DELETE FROM experiment_data WHERE experiment_id = ?");
+    QSqlQuery deleteSeparationQuery(db);
+    deleteSeparationQuery.prepare("DELETE FROM separation_layer_data WHERE experiment_id = ?");
+    QSqlQuery deleteInstabilityQuery(db);
+    deleteInstabilityQuery.prepare("DELETE FROM instability_curve_data WHERE experiment_id = ?");
+    QSqlQuery deleteInstabilitySegmentQuery(db);
+    deleteInstabilitySegmentQuery.prepare("DELETE FROM instability_segment_curve_data WHERE experiment_id = ?");
+    QSqlQuery deleteExperimentQuery(db);
+    deleteExperimentQuery.prepare("DELETE FROM experiments WHERE id = ?");
+
+    for (int experimentId : expiredExperimentIds) {
+        deleteExperimentDataQuery.bindValue(0, experimentId);
+        if (!deleteExperimentDataQuery.exec()) {
+            if (errorMessage) {
+                *errorMessage = deleteExperimentDataQuery.lastError().text();
+            }
+            db.rollback();
+            return false;
+        }
+
+        deleteSeparationQuery.bindValue(0, experimentId);
+        if (!deleteSeparationQuery.exec()) {
+            if (errorMessage) {
+                *errorMessage = deleteSeparationQuery.lastError().text();
+            }
+            db.rollback();
+            return false;
+        }
+
+        deleteInstabilityQuery.bindValue(0, experimentId);
+        if (!deleteInstabilityQuery.exec()) {
+            if (errorMessage) {
+                *errorMessage = deleteInstabilityQuery.lastError().text();
+            }
+            db.rollback();
+            return false;
+        }
+
+        deleteInstabilitySegmentQuery.bindValue(0, experimentId);
+        if (!deleteInstabilitySegmentQuery.exec()) {
+            if (errorMessage) {
+                *errorMessage = deleteInstabilitySegmentQuery.lastError().text();
+            }
+            db.rollback();
+            return false;
+        }
+
+        deleteExperimentQuery.bindValue(0, experimentId);
+        if (!deleteExperimentQuery.exec()) {
+            if (errorMessage) {
+                *errorMessage = deleteExperimentQuery.lastError().text();
+            }
+            db.rollback();
+            return false;
+        }
+    }
+
+    if (!db.commit()) {
+        if (errorMessage) {
+            *errorMessage = db.lastError().text();
+        }
+        return false;
+    }
+
+    qDebug() << "[SqlOrmManager] 已物理清理过期删除实验，数量:" << expiredExperimentIds.size();
+    return true;
+}
+
+bool hardDeleteExperimentInternal(QSqlDatabase &db, int experimentId, QString *errorMessage = nullptr)
+{
+    if (!db.isOpen()) {
+        if (errorMessage) {
+            *errorMessage = QStringLiteral("database is not open");
+        }
+        return false;
+    }
+
+    if (!ensureSeparationLayerResultTable(db, errorMessage)
+        || !ensureInstabilityResultTable(db, errorMessage)
+        || !ensureInstabilitySegmentResultTable(db, errorMessage)) {
+        return false;
+    }
+
+    if (!db.transaction()) {
+        if (errorMessage) {
+            *errorMessage = db.lastError().text();
+        }
+        return false;
+    }
+
+    QSqlQuery deleteExperimentDataQuery(db);
+    deleteExperimentDataQuery.prepare("DELETE FROM experiment_data WHERE experiment_id = ?");
+    deleteExperimentDataQuery.addBindValue(experimentId);
+    if (!deleteExperimentDataQuery.exec()) {
+        if (errorMessage) {
+            *errorMessage = deleteExperimentDataQuery.lastError().text();
+        }
+        db.rollback();
+        return false;
+    }
+
+    QSqlQuery deleteSeparationQuery(db);
+    deleteSeparationQuery.prepare("DELETE FROM separation_layer_data WHERE experiment_id = ?");
+    deleteSeparationQuery.addBindValue(experimentId);
+    if (!deleteSeparationQuery.exec()) {
+        if (errorMessage) {
+            *errorMessage = deleteSeparationQuery.lastError().text();
+        }
+        db.rollback();
+        return false;
+    }
+
+    QSqlQuery deleteInstabilityQuery(db);
+    deleteInstabilityQuery.prepare("DELETE FROM instability_curve_data WHERE experiment_id = ?");
+    deleteInstabilityQuery.addBindValue(experimentId);
+    if (!deleteInstabilityQuery.exec()) {
+        if (errorMessage) {
+            *errorMessage = deleteInstabilityQuery.lastError().text();
+        }
+        db.rollback();
+        return false;
+    }
+
+    QSqlQuery deleteInstabilitySegmentQuery(db);
+    deleteInstabilitySegmentQuery.prepare("DELETE FROM instability_segment_curve_data WHERE experiment_id = ?");
+    deleteInstabilitySegmentQuery.addBindValue(experimentId);
+    if (!deleteInstabilitySegmentQuery.exec()) {
+        if (errorMessage) {
+            *errorMessage = deleteInstabilitySegmentQuery.lastError().text();
+        }
+        db.rollback();
+        return false;
+    }
+
+    QSqlQuery deleteExperimentQuery(db);
+    deleteExperimentQuery.prepare("DELETE FROM experiments WHERE id = ?");
+    deleteExperimentQuery.addBindValue(experimentId);
+    if (!deleteExperimentQuery.exec()) {
+        if (errorMessage) {
+            *errorMessage = deleteExperimentQuery.lastError().text();
+        }
+        db.rollback();
+        return false;
+    }
+
+    if (!db.commit()) {
+        if (errorMessage) {
+            *errorMessage = db.lastError().text();
+        }
+        return false;
     }
 
     return true;
@@ -680,6 +1219,12 @@ void SqlOrmManager::initialize() {
         } else {
             if (!ensureExperimentDataColumns(migrationDb, &migrationError)) {
                 qWarning() << "[SqlOrmManager] 补齐 experiment_data 列失败:" << migrationError;
+            }
+            if (!ensureExperimentSoftDeleteColumns(migrationDb, &migrationError)) {
+                qWarning() << "[SqlOrmManager] 补齐 experiments 软删除列失败:" << migrationError;
+            }
+            if (!purgeExpiredDeletedExperiments(migrationDb, &migrationError)) {
+                qWarning() << "[SqlOrmManager] 清理过期已删除实验失败:" << migrationError;
             }
             closeReadOnlyDb(QStringLiteral("sqlorm_migration"));
             QSqlDatabase::removeDatabase(QStringLiteral("sqlorm_migration"));
@@ -1181,6 +1726,9 @@ bool SqlOrmManager::addExperiment(const QVariantMap& experimentData) {
         experiment.scan_step = experimentData.value("scan_step", 0.0).toInt();
         experiment.status = experimentData.value("status", 0).toInt();
         experiment.created_at = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
+        experiment.deleted_flag = 0;
+        experiment.deleted_at.clear();
+        experiment.purge_after.clear();
         
         d->storage->insert(experiment);
         qDebug() << "[SqlOrmManager] 实验添加成功：" << experiment.sample_name;
@@ -1199,7 +1747,7 @@ bool SqlOrmManager::updateExperiment(int experimentId, const QVariantMap& experi
     
     try {
         auto experiments = d->storage->get_all<Experiment>(
-                    where(c(&Experiment::id) == experimentId)
+                    where(c(&Experiment::id) == experimentId and c(&Experiment::deleted_flag) == 0)
                     );
         
         if (experiments.empty()) {
@@ -1259,7 +1807,7 @@ bool SqlOrmManager::updateExperimentStatus(int experimentId, int status) {
     
     try {
         auto experiments = d->storage->get_all<Experiment>(
-                    where(c(&Experiment::id) == experimentId)
+                    where(c(&Experiment::id) == experimentId and c(&Experiment::deleted_flag) == 0)
                     );
         
         if (experiments.empty()) {
@@ -1287,28 +1835,22 @@ QVariantMap SqlOrmManager::getExperimentById(int experimentId) {
     if (!d->initialized) return result;
     
     try {
+        QString purgeError;
+        QSqlDatabase purgeDb = openReadOnlyDb(d->dbPath,
+                                              QString("SqlOrmGetExperimentById_%1").arg(reinterpret_cast<quintptr>(this)),
+                                              &purgeError);
+        if (purgeDb.isOpen()) {
+            purgeExpiredDeletedExperiments(purgeDb, &purgeError);
+            closeReadOnlyDb(QString("SqlOrmGetExperimentById_%1").arg(reinterpret_cast<quintptr>(this)));
+        }
+
         auto experiments = d->storage->get_all<Experiment>(
-                    where(c(&Experiment::id) == experimentId)
+                    where(c(&Experiment::id) == experimentId and c(&Experiment::deleted_flag) == 0)
                     );
         
         if (!experiments.empty()) {
             const Experiment& experiment = experiments[0];
-            result["id"] = experiment.id;
-            result["project_id"] = experiment.project_id;
-            result["sample_name"] = experiment.sample_name;
-            result["operator_name"] = experiment.operator_name;
-            result["description"] = experiment.description;
-            result["creator_id"] = experiment.creator_id;
-            result["duration"] = experiment.duration;
-            result["interval"] = experiment.interval;
-            result["count"] = experiment.count;
-            result["temperature_control"] = experiment.temperature_control;
-            result["target_temp"] = experiment.target_temp;
-            result["scan_range_start"] = experiment.scan_range_start;
-            result["scan_range_end"] = experiment.scan_range_end;
-            result["scan_step"] = experiment.scan_step;
-            result["status"] = experiment.status;
-            result["created_at"] = experiment.created_at;
+            result = experimentToVariantMap(experiment);
         }
     } catch (const std::exception& e) {
         qWarning() << "[SqlOrmManager] 查询实验失败：" << QString::fromStdString(e.what());
@@ -1325,26 +1867,20 @@ QVector<QVariantMap> SqlOrmManager::getAllExperiments() {
     if (!d->initialized) return result;
     
     try {
-        auto experiments = d->storage->get_all<Experiment>();
+        QString purgeError;
+        const QString connectionName = QString("SqlOrmGetAllExperiments_%1").arg(reinterpret_cast<quintptr>(this));
+        QSqlDatabase purgeDb = openReadOnlyDb(d->dbPath, connectionName, &purgeError);
+        if (purgeDb.isOpen()) {
+            purgeExpiredDeletedExperiments(purgeDb, &purgeError);
+            closeReadOnlyDb(connectionName);
+        }
+
+        auto experiments = d->storage->get_all<Experiment>(
+                    where(c(&Experiment::deleted_flag) == 0)
+                    );
         
         for (const auto& experiment : experiments) {
-            QVariantMap experimentData;
-            experimentData["id"] = experiment.id;
-            experimentData["project_id"] = experiment.project_id;
-            experimentData["sample_name"] = experiment.sample_name;
-            experimentData["operator_name"] = experiment.operator_name;
-            experimentData["description"] = experiment.description;
-            experimentData["creator_id"] = experiment.creator_id;
-            experimentData["duration"] = experiment.duration;
-            experimentData["interval"] = experiment.interval;
-            experimentData["count"] = experiment.count;
-            experimentData["temperature_control"] = experiment.temperature_control;
-            experimentData["target_temp"] = experiment.target_temp;
-            experimentData["scan_range_start"] = experiment.scan_range_start;
-            experimentData["scan_range_end"] = experiment.scan_range_end;
-            experimentData["scan_step"] = experiment.scan_step;
-            experimentData["status"] = experiment.status;
-            experimentData["created_at"] = experiment.created_at;
+            QVariantMap experimentData = experimentToVariantMap(experiment);
             
             // 通过 project_id 查询项目名称
             QVariantMap projectData = getProjectById(experiment.project_id);
@@ -1367,32 +1903,24 @@ QVector<QVariantMap> SqlOrmManager::getExperimentsByProject(int projectId) {
     if (!d->initialized) return result;
     
     try {
+        QString purgeError;
+        const QString connectionName = QString("SqlOrmGetExperimentsByProject_%1").arg(reinterpret_cast<quintptr>(this));
+        QSqlDatabase purgeDb = openReadOnlyDb(d->dbPath, connectionName, &purgeError);
+        if (purgeDb.isOpen()) {
+            purgeExpiredDeletedExperiments(purgeDb, &purgeError);
+            closeReadOnlyDb(connectionName);
+        }
+
         // 先获取项目名称
         QVariantMap projectData = getProjectById(projectId);
         QString projectName = projectData["project_name"].toString();
         
         auto experiments = d->storage->get_all<Experiment>(
-                    where(c(&Experiment::project_id) == projectId)
+                    where(c(&Experiment::project_id) == projectId and c(&Experiment::deleted_flag) == 0)
                     );
         
         for (const auto& experiment : experiments) {
-            QVariantMap experimentData;
-            experimentData["id"] = experiment.id;
-            experimentData["project_id"] = experiment.project_id;
-            experimentData["sample_name"] = experiment.sample_name;
-            experimentData["operator_name"] = experiment.operator_name;
-            experimentData["description"] = experiment.description;
-            experimentData["creator_id"] = experiment.creator_id;
-            experimentData["duration"] = experiment.duration;
-            experimentData["interval"] = experiment.interval;
-            experimentData["count"] = experiment.count;
-            experimentData["temperature_control"] = experiment.temperature_control;
-            experimentData["target_temp"] = experiment.target_temp;
-            experimentData["scan_range_start"] = experiment.scan_range_start;
-            experimentData["scan_range_end"] = experiment.scan_range_end;
-            experimentData["scan_step"] = experiment.scan_step;
-            experimentData["status"] = experiment.status;
-            experimentData["created_at"] = experiment.created_at;
+            QVariantMap experimentData = experimentToVariantMap(experiment);
             experimentData["project_name"] = projectName;
             result.append(experimentData);
         }
@@ -1412,27 +1940,11 @@ QVector<QVariantMap> SqlOrmManager::getExperimentsByUser(const QString& operator
     
     try {
         auto experiments = d->storage->get_all<Experiment>(
-                    where(c(&Experiment::operator_name) == operatorName.toStdString())
+                    where(c(&Experiment::operator_name) == operatorName.toStdString() and c(&Experiment::deleted_flag) == 0)
                     );
         
         for (const auto& experiment : experiments) {
-            QVariantMap experimentData;
-            experimentData["id"] = experiment.id;
-            experimentData["project_id"] = experiment.project_id;
-            experimentData["sample_name"] = experiment.sample_name;
-            experimentData["operator_name"] = experiment.operator_name;
-            experimentData["description"] = experiment.description;
-            experimentData["creator_id"] = experiment.creator_id;
-            experimentData["duration"] = experiment.duration;
-            experimentData["interval"] = experiment.interval;
-            experimentData["count"] = experiment.count;
-            experimentData["temperature_control"] = experiment.temperature_control;
-            experimentData["target_temp"] = experiment.target_temp;
-            experimentData["scan_range_start"] = experiment.scan_range_start;
-            experimentData["scan_range_end"] = experiment.scan_range_end;
-            experimentData["scan_step"] = experiment.scan_step;
-            experimentData["status"] = experiment.status;
-            experimentData["created_at"] = experiment.created_at;
+            QVariantMap experimentData = experimentToVariantMap(experiment);
             
             // 通过 project_id 查询项目名称
             QVariantMap projectData = getProjectById(experiment.project_id);
@@ -1461,28 +1973,20 @@ QVector<QVariantMap> SqlOrmManager::getExperimentsByStatus(int status) {
     if (!d->initialized) return result;
     
     try {
+        QString purgeError;
+        const QString connectionName = QString("SqlOrmGetExperimentsByStatus_%1").arg(reinterpret_cast<quintptr>(this));
+        QSqlDatabase purgeDb = openReadOnlyDb(d->dbPath, connectionName, &purgeError);
+        if (purgeDb.isOpen()) {
+            purgeExpiredDeletedExperiments(purgeDb, &purgeError);
+            closeReadOnlyDb(connectionName);
+        }
+
         auto experiments = d->storage->get_all<Experiment>(
-                    where(c(&Experiment::status) == status)
+                    where(c(&Experiment::status) == status and c(&Experiment::deleted_flag) == 0)
                     );
         
         for (const auto& experiment : experiments) {
-            QVariantMap experimentData;
-            experimentData["id"] = experiment.id;
-            experimentData["project_id"] = experiment.project_id;
-            experimentData["sample_name"] = experiment.sample_name;
-            experimentData["operator_name"] = experiment.operator_name;
-            experimentData["description"] = experiment.description;
-            experimentData["creator_id"] = experiment.creator_id;
-            experimentData["duration"] = experiment.duration;
-            experimentData["interval"] = experiment.interval;
-            experimentData["count"] = experiment.count;
-            experimentData["temperature_control"] = experiment.temperature_control;
-            experimentData["target_temp"] = experiment.target_temp;
-            experimentData["scan_range_start"] = experiment.scan_range_start;
-            experimentData["scan_range_end"] = experiment.scan_range_end;
-            experimentData["scan_step"] = experiment.scan_step;
-            experimentData["status"] = experiment.status;
-            experimentData["created_at"] = experiment.created_at;
+            QVariantMap experimentData = experimentToVariantMap(experiment);
             
             // 通过 project_id 查询项目名称
             QVariantMap projectData = getProjectById(experiment.project_id);
@@ -1498,16 +2002,70 @@ QVector<QVariantMap> SqlOrmManager::getExperimentsByStatus(int status) {
     return result;
 }
 
+QVector<QVariantMap> SqlOrmManager::getDeletedExperiments()
+{
+    QVector<QVariantMap> result;
+    Q_D(SqlOrmManager);
+
+    if (!d->initialized) return result;
+
+    try {
+        QString purgeError;
+        const QString connectionName = QString("SqlOrmGetDeletedExperiments_%1").arg(reinterpret_cast<quintptr>(this));
+        QSqlDatabase purgeDb = openReadOnlyDb(d->dbPath, connectionName, &purgeError);
+        if (purgeDb.isOpen()) {
+            purgeExpiredDeletedExperiments(purgeDb, &purgeError);
+            closeReadOnlyDb(connectionName);
+        }
+
+        auto experiments = d->storage->get_all<Experiment>(
+                    where(c(&Experiment::deleted_flag) == 1),
+                    order_by(&Experiment::deleted_at).desc()
+                    );
+
+        for (const auto& experiment : experiments) {
+            QVariantMap experimentData = experimentToVariantMap(experiment);
+
+            QVariantMap projectData = getProjectById(experiment.project_id);
+            experimentData["project_name"] = projectData["project_name"].toString();
+
+            result.append(experimentData);
+        }
+    } catch (const std::exception& e) {
+        qWarning() << "[SqlOrmManager] 查询已删除实验失败：" << QString::fromStdString(e.what());
+        emit errorOccurred(QString::fromStdString(e.what()));
+    }
+
+    return result;
+}
+
 bool SqlOrmManager::deleteExperiment(int experimentId) {
     Q_D(SqlOrmManager);
     
     if (!d->initialized) return false;
     
     try {
-        d->storage->remove_all<Experiment>(
+        auto experiments = d->storage->get_all<Experiment>(
                     where(c(&Experiment::id) == experimentId)
                     );
-        qDebug() << "[SqlOrmManager] 实验删除成功：" << experimentId;
+        if (experiments.empty()) {
+            qWarning() << "[SqlOrmManager] 实验不存在：" << experimentId;
+            return false;
+        }
+
+        Experiment &experiment = experiments[0];
+        if (experiment.deleted_flag == 1) {
+            qDebug() << "[SqlOrmManager] 实验已在回收状态，跳过重复删除：" << experimentId;
+            return true;
+        }
+
+        const QDateTime now = QDateTime::currentDateTime();
+        experiment.deleted_flag = 1;
+        experiment.deleted_at = now.toString("yyyy-MM-dd hh:mm:ss");
+        experiment.purge_after = now.addDays(7).toString("yyyy-MM-dd hh:mm:ss");
+
+        d->storage->update(experiment);
+        qDebug() << "[SqlOrmManager] 实验已标记删除：" << experimentId << "计划清理时间:" << experiment.purge_after;
         return true;
     } catch (const std::exception& e) {
         qWarning() << "[SqlOrmManager] 删除实验失败：" << QString::fromStdString(e.what());
@@ -1516,13 +2074,68 @@ bool SqlOrmManager::deleteExperiment(int experimentId) {
     }
 }
 
+bool SqlOrmManager::restoreExperiment(int experimentId)
+{
+    Q_D(SqlOrmManager);
+
+    if (!d->initialized) return false;
+
+    try {
+        auto experiments = d->storage->get_all<Experiment>(
+                    where(c(&Experiment::id) == experimentId and c(&Experiment::deleted_flag) == 1)
+                    );
+        if (experiments.empty()) {
+            qWarning() << "[SqlOrmManager] 已删除实验不存在：" << experimentId;
+            return false;
+        }
+
+        Experiment &experiment = experiments[0];
+        experiment.deleted_flag = 0;
+        experiment.deleted_at.clear();
+        experiment.purge_after.clear();
+
+        d->storage->update(experiment);
+        qDebug() << "[SqlOrmManager] 实验已恢复：" << experimentId;
+        return true;
+    } catch (const std::exception& e) {
+        qWarning() << "[SqlOrmManager] 恢复实验失败：" << QString::fromStdString(e.what());
+        emit errorOccurred(QString::fromStdString(e.what()));
+        return false;
+    }
+}
+
+bool SqlOrmManager::hardDeleteExperiment(int experimentId)
+{
+    Q_D(SqlOrmManager);
+
+    if (!d->initialized || experimentId <= 0) return false;
+
+    const QString connectionName = QString("SqlOrmHardDeleteExperiment_%1").arg(reinterpret_cast<quintptr>(this));
+    QString openError;
+    QSqlDatabase db = openReadOnlyDb(d->dbPath, connectionName, &openError);
+    if (!db.isOpen()) {
+        emit errorOccurred(openError);
+        closeReadOnlyDb(connectionName);
+        return false;
+    }
+
+    QString errorMessage;
+    const bool ok = hardDeleteExperimentInternal(db, experimentId, &errorMessage);
+    if (!ok && !errorMessage.isEmpty()) {
+        emit errorOccurred(errorMessage);
+    }
+
+    closeReadOnlyDb(connectionName);
+    return ok;
+}
+
 // ==================== 实验数据管理 ====================
 
 bool SqlOrmManager::addExperimentData(const QVariantMap& data) {
     Q_D(SqlOrmManager);
-    
+
     if (!d->initialized) return false;
-    
+
     try {
         ExperimentData expData;
         expData.experiment_id = data.value("experiment_id", 0).toInt();
@@ -2048,6 +2661,460 @@ QVector<QVariantMap> SqlOrmManager::getLightIntensityCurvesByExperiment(int expe
     return result;
 }
 
+QVector<QVariantMap> SqlOrmManager::getProcessedLightIntensityCurvesByExperiment(int experimentId, int pointsPerCurve, int referenceScanId,
+                                                                                 double lowerMm, double upperMm, bool useReference)
+{
+    QVector<QVariantMap> result;
+    Q_D(SqlOrmManager);
+
+    if (!d->initialized || experimentId <= 0) return result;
+
+    const QString connectionName = QString("SqlOrmProcessedLightCurves_%1").arg(reinterpret_cast<quintptr>(this));
+    QString openError;
+    QSqlDatabase db = openReadOnlyDb(d->dbPath, connectionName, &openError);
+    if (!db.isOpen()) {
+        emit errorOccurred(openError);
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    struct CurveSummary {
+        int scanId = 0;
+        int timestamp = 0;
+        int elapsedMs = 0;
+        int pointCount = 0;
+        double minHeightMm = 0.0;
+        double maxHeightMm = 0.0;
+    };
+
+    QSqlQuery summaryQuery(db);
+    summaryQuery.prepare(
+        "SELECT scan_id, MIN(timestamp) AS timestamp, MAX(scan_elapsed_ms) AS scan_elapsed_ms, "
+        "COUNT(*) AS point_count, MIN(height) / 1000.0 AS min_height_mm, MAX(height) / 1000.0 AS max_height_mm "
+        "FROM experiment_data WHERE experiment_id = ? "
+        "GROUP BY scan_id ORDER BY scan_id ASC");
+    summaryQuery.addBindValue(experimentId);
+
+    if (!summaryQuery.exec()) {
+        emit errorOccurred(summaryQuery.lastError().text());
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    QVector<CurveSummary> summaries;
+    double globalMinHeight = std::numeric_limits<double>::max();
+    double globalMaxHeight = std::numeric_limits<double>::lowest();
+    while (summaryQuery.next()) {
+        CurveSummary summary;
+        summary.scanId = summaryQuery.value("scan_id").toInt();
+        summary.timestamp = summaryQuery.value("timestamp").toInt();
+        summary.elapsedMs = summaryQuery.value("scan_elapsed_ms").toInt();
+        summary.pointCount = summaryQuery.value("point_count").toInt();
+        summary.minHeightMm = summaryQuery.value("min_height_mm").toDouble();
+        summary.maxHeightMm = summaryQuery.value("max_height_mm").toDouble();
+        summaries.append(summary);
+        globalMinHeight = qMin(globalMinHeight, summary.minHeightMm);
+        globalMaxHeight = qMax(globalMaxHeight, summary.maxHeightMm);
+    }
+
+    if (summaries.isEmpty()) {
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    const double safeLower = qMax(globalMinHeight, qMin(lowerMm, upperMm));
+    const double safeUpper = qMin(globalMaxHeight, qMax(lowerMm, upperMm));
+    if (safeUpper - safeLower <= 1e-6) {
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    const int totalPointBudgetPerChannel = 12000;
+    const int effectivePointsPerCurve = qMax(64, qMin(pointsPerCurve > 0 ? pointsPerCurve : 640,
+                                                      qMax(64, totalPointBudgetPerChannel / qMax(1, summaries.size()))));
+
+    QSqlQuery query(db);
+    query.setForwardOnly(true);
+    query.prepare(
+        "SELECT scan_id, height, backscatter_intensity, transmission_intensity "
+        "FROM experiment_data WHERE experiment_id = ? "
+        "ORDER BY scan_id ASC, height ASC, id ASC");
+    query.addBindValue(experimentId);
+
+    if (!query.exec()) {
+        emit errorOccurred(query.lastError().text());
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    QHash<int, QVector<LightCurveRowEx>> rowsByScanId;
+    while (query.next()) {
+        const int scanId = query.value("scan_id").toInt();
+        LightCurveRowEx row;
+        row.heightMm = query.value("height").toDouble() / 1000.0;
+        row.backscatter = query.value("backscatter_intensity").toDouble();
+        row.transmission = query.value("transmission_intensity").toDouble();
+        rowsByScanId[scanId].append(row);
+    }
+
+    const int safeReferenceScanId = rowsByScanId.contains(referenceScanId) ? referenceScanId : summaries.first().scanId;
+    const QVector<LightCurveRowEx> referenceRows = filterLightCurveRowsByHeight(rowsByScanId.value(safeReferenceScanId), safeLower, safeUpper);
+
+    for (const CurveSummary &summary : summaries) {
+        const QVector<LightCurveRowEx> filteredRows = filterLightCurveRowsByHeight(rowsByScanId.value(summary.scanId), safeLower, safeUpper);
+        if (filteredRows.isEmpty()) {
+            continue;
+        }
+
+        QVector<QPointF> backscatterPoints;
+        QVector<QPointF> transmissionPoints;
+        backscatterPoints.reserve(filteredRows.size());
+        transmissionPoints.reserve(filteredRows.size());
+
+        double minBackscatter = std::numeric_limits<double>::max();
+        double maxBackscatter = std::numeric_limits<double>::lowest();
+        double minTransmission = std::numeric_limits<double>::max();
+        double maxTransmission = std::numeric_limits<double>::lowest();
+
+        for (const LightCurveRowEx &row : filteredRows) {
+            double backscatterValue = row.backscatter;
+            double transmissionValue = row.transmission;
+            if (useReference && !referenceRows.isEmpty()) {
+                backscatterValue -= lightCurveValueAtHeight(referenceRows, false, row.heightMm);
+                transmissionValue -= lightCurveValueAtHeight(referenceRows, true, row.heightMm);
+            }
+
+            backscatterPoints.append(QPointF(row.heightMm, backscatterValue));
+            transmissionPoints.append(QPointF(row.heightMm, transmissionValue));
+            minBackscatter = qMin(minBackscatter, backscatterValue);
+            maxBackscatter = qMax(maxBackscatter, backscatterValue);
+            minTransmission = qMin(minTransmission, transmissionValue);
+            maxTransmission = qMax(maxTransmission, transmissionValue);
+        }
+
+        QVariantMap curve;
+        curve["scan_id"] = summary.scanId;
+        curve["timestamp"] = summary.timestamp;
+        curve["scan_elapsed_ms"] = summary.elapsedMs;
+        curve["point_count"] = filteredRows.size();
+        curve["min_height_mm"] = safeLower;
+        curve["max_height_mm"] = safeUpper;
+        curve["min_backscatter"] = minBackscatter;
+        curve["max_backscatter"] = maxBackscatter;
+        curve["min_transmission"] = minTransmission;
+        curve["max_transmission"] = maxTransmission;
+        curve["reference_scan_id"] = safeReferenceScanId;
+        curve["use_reference"] = useReference;
+        curve["backscatter_points"] = downsamplePointSeries(backscatterPoints, effectivePointsPerCurve);
+        curve["transmission_points"] = downsamplePointSeries(transmissionPoints, effectivePointsPerCurve);
+        result.append(curve);
+    }
+
+    closeReadOnlyDb(connectionName);
+    return result;
+}
+
+QVector<QVariantMap> SqlOrmManager::getSeparationLayerDataByExperiment(int experimentId)
+{
+    // 分层厚度采用“按实验惰性计算并缓存”的策略：
+    // 已有完整结果时直接读取，没有则从 experiment_data 重建三区厚度。
+    QVector<QVariantMap> result;
+    Q_D(SqlOrmManager);
+
+    if (!d->initialized || experimentId <= 0) return result;
+
+    const QString connectionName = QString("SqlOrmSeparationLayer_%1").arg(reinterpret_cast<quintptr>(this));
+    QString openError;
+    QSqlDatabase db = openReadOnlyDb(d->dbPath, connectionName, &openError);
+    if (!db.isOpen()) {
+        emit errorOccurred(openError);
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    QString schemaError;
+    if (!ensureSeparationLayerResultTable(db, &schemaError)) {
+        emit errorOccurred(schemaError);
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    int scanCount = 0;
+    int maxElapsedMs = -1;
+    {
+        QSqlQuery statsQuery(db);
+        statsQuery.prepare(
+            "SELECT COUNT(DISTINCT scan_id) AS scan_count, "
+            "COALESCE(MAX(scan_elapsed_ms), -1) AS max_elapsed_ms "
+            "FROM experiment_data WHERE experiment_id = ?");
+        statsQuery.addBindValue(experimentId);
+        if (!statsQuery.exec() || !statsQuery.next()) {
+            emit errorOccurred(statsQuery.lastError().text());
+            closeReadOnlyDb(connectionName);
+            return result;
+        }
+        scanCount = statsQuery.value("scan_count").toInt();
+        maxElapsedMs = statsQuery.value("max_elapsed_ms").toInt();
+    }
+
+    if (scanCount <= 0) {
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    bool reuseExisting = false;
+    {
+        QSqlQuery existingQuery(db);
+        existingQuery.prepare(
+            "SELECT COUNT(*) AS result_count, COALESCE(MAX(scan_elapsed_ms), -1) AS max_elapsed_ms "
+            "FROM separation_layer_data WHERE experiment_id = ?");
+        existingQuery.addBindValue(experimentId);
+        if (existingQuery.exec() && existingQuery.next()) {
+            reuseExisting = existingQuery.value("result_count").toInt() == scanCount
+                         && existingQuery.value("max_elapsed_ms").toInt() == maxElapsedMs;
+        }
+    }
+
+    if (reuseExisting) {
+        QSqlQuery query(db);
+        query.prepare(
+            "SELECT id, experiment_id, scan_id, scan_elapsed_ms, channel_used, "
+            "clarification_boundary_mm, sediment_boundary_mm, "
+            "clarification_thickness_mm, concentrated_phase_thickness_mm, sediment_thickness_mm, "
+            "confidence, created_at "
+            "FROM separation_layer_data WHERE experiment_id = ? "
+            "ORDER BY scan_elapsed_ms ASC, scan_id ASC, id ASC");
+        query.addBindValue(experimentId);
+        if (!query.exec()) {
+            emit errorOccurred(query.lastError().text());
+            closeReadOnlyDb(connectionName);
+            return result;
+        }
+
+        while (query.next()) {
+            QVariantMap row;
+            row["id"] = query.value("id");
+            row["experiment_id"] = query.value("experiment_id");
+            row["scan_id"] = query.value("scan_id");
+            row["scan_elapsed_ms"] = query.value("scan_elapsed_ms");
+            row["channel_used"] = query.value("channel_used");
+            row["clarification_boundary_mm"] = query.value("clarification_boundary_mm");
+            row["sediment_boundary_mm"] = query.value("sediment_boundary_mm");
+            row["clarification_thickness_mm"] = query.value("clarification_thickness_mm");
+            row["concentrated_phase_thickness_mm"] = query.value("concentrated_phase_thickness_mm");
+            row["sediment_thickness_mm"] = query.value("sediment_thickness_mm");
+            row["confidence"] = query.value("confidence");
+            row["created_at"] = query.value("created_at");
+            result.append(row);
+        }
+
+        closeReadOnlyDb(connectionName);
+        return result;
+    }
+
+    closeReadOnlyDb(connectionName);
+
+    const QString computeConnectionName = QString("SqlOrmSeparationLayerCompute_%1").arg(reinterpret_cast<quintptr>(this));
+    QSqlDatabase computeDb = openReadOnlyDb(d->dbPath, computeConnectionName, &openError);
+    if (!computeDb.isOpen()) {
+        emit errorOccurred(openError);
+        closeReadOnlyDb(computeConnectionName);
+        return result;
+    }
+
+    QSqlQuery query(computeDb);
+    query.setForwardOnly(true);
+    query.prepare(
+        "SELECT scan_id, scan_elapsed_ms, height, backscatter_intensity, transmission_intensity "
+        "FROM experiment_data WHERE experiment_id = ? "
+        "ORDER BY scan_id ASC, height ASC, id ASC");
+    query.addBindValue(experimentId);
+
+    if (!query.exec()) {
+        emit errorOccurred(query.lastError().text());
+        closeReadOnlyDb(computeConnectionName);
+        return result;
+    }
+
+    QVector<QVariantMap> computedRows;
+    QVector<SeparationRowEx> currentRows;
+    int currentScanId = std::numeric_limits<int>::min();
+    int currentElapsedMs = 0;
+
+    auto flushScan = [&]() {
+        if (currentRows.isEmpty()) {
+            return;
+        }
+
+        if (currentRows.size() < 4) {
+            const double minHeight = currentRows.first().heightMm;
+            const double maxHeight = currentRows.last().heightMm;
+            QVariantMap coarseRow;
+            coarseRow["scan_id"] = currentScanId;
+            coarseRow["scan_elapsed_ms"] = currentElapsedMs;
+            coarseRow["channel_used"] = QStringLiteral("BS");
+            coarseRow["clarification_boundary_mm"] = maxHeight;
+            coarseRow["sediment_boundary_mm"] = minHeight;
+            coarseRow["clarification_thickness_mm"] = 0.0;
+            coarseRow["concentrated_phase_thickness_mm"] = qMax(0.0, maxHeight - minHeight);
+            coarseRow["sediment_thickness_mm"] = 0.0;
+            coarseRow["confidence"] = 0.0;
+            computedRows.append(coarseRow);
+            return;
+        }
+
+        const bool useTransmission = averageTransmissionValue(currentRows) > 0.2;
+        QVector<double> proxyValues;
+        proxyValues.reserve(currentRows.size());
+
+        double minSignal = std::numeric_limits<double>::max();
+        double maxSignal = std::numeric_limits<double>::lowest();
+        for (const SeparationRowEx &row : currentRows) {
+            const double signal = useTransmission ? row.transmission : row.backscatter;
+            minSignal = qMin(minSignal, signal);
+            maxSignal = qMax(maxSignal, signal);
+        }
+
+        const double range = maxSignal - minSignal;
+        if (range < 1e-6) {
+            QVariantMap flatRow;
+            flatRow["scan_id"] = currentScanId;
+            flatRow["scan_elapsed_ms"] = currentElapsedMs;
+            flatRow["channel_used"] = useTransmission ? QStringLiteral("T") : QStringLiteral("BS");
+            flatRow["clarification_boundary_mm"] = currentRows.last().heightMm;
+            flatRow["sediment_boundary_mm"] = currentRows.first().heightMm;
+            flatRow["clarification_thickness_mm"] = 0.0;
+            flatRow["concentrated_phase_thickness_mm"] = currentRows.last().heightMm - currentRows.first().heightMm;
+            flatRow["sediment_thickness_mm"] = 0.0;
+            flatRow["confidence"] = 0.0;
+            computedRows.append(flatRow);
+            return;
+        }
+
+        for (const SeparationRowEx &row : currentRows) {
+            const double signal = useTransmission ? row.transmission : row.backscatter;
+            double normalized = (signal - minSignal) / range;
+            double proxy = useTransmission ? (1.0 - normalized) : normalized;
+            proxyValues.append(qBound(0.0, proxy, 1.0));
+        }
+
+        proxyValues = smoothSeries(proxyValues, 5);
+        const double sedimentBoundary = findBoundaryHeightForThreshold(currentRows, proxyValues, 0.8, true);
+        const double clarificationBoundary = findBoundaryHeightForThreshold(currentRows, proxyValues, 0.2, true);
+        const double minHeight = currentRows.first().heightMm;
+        const double maxHeight = currentRows.last().heightMm;
+
+        const double sedimentThickness = qBound(0.0, sedimentBoundary - minHeight, maxHeight - minHeight);
+        const double clarificationThickness = qBound(0.0, maxHeight - clarificationBoundary, maxHeight - minHeight);
+        const double concentratedThickness = qBound(0.0, clarificationBoundary - sedimentBoundary, maxHeight - minHeight);
+        const double confidence = qBound(0.0, range / 30.0, 1.0);
+
+        QVariantMap row;
+        row["scan_id"] = currentScanId;
+        row["scan_elapsed_ms"] = currentElapsedMs;
+        row["channel_used"] = useTransmission ? QStringLiteral("T") : QStringLiteral("BS");
+        row["clarification_boundary_mm"] = qBound(minHeight, clarificationBoundary, maxHeight);
+        row["sediment_boundary_mm"] = qBound(minHeight, sedimentBoundary, maxHeight);
+        row["clarification_thickness_mm"] = clarificationThickness;
+        row["concentrated_phase_thickness_mm"] = concentratedThickness;
+        row["sediment_thickness_mm"] = sedimentThickness;
+        row["confidence"] = confidence;
+        computedRows.append(row);
+    };
+
+    while (query.next()) {
+        const int scanId = query.value("scan_id").toInt();
+        if (currentScanId != std::numeric_limits<int>::min() && scanId != currentScanId) {
+            flushScan();
+            currentRows.clear();
+        }
+
+        currentScanId = scanId;
+        currentElapsedMs = query.value("scan_elapsed_ms").toInt();
+
+        SeparationRowEx row;
+        row.heightMm = query.value("height").toDouble() / 1000.0;
+        row.backscatter = query.value("backscatter_intensity").toDouble();
+        row.transmission = query.value("transmission_intensity").toDouble();
+        currentRows.append(row);
+    }
+
+    if (currentScanId != std::numeric_limits<int>::min()) {
+        flushScan();
+    }
+
+    closeReadOnlyDb(computeConnectionName);
+
+    const QString writeConnectionName = QString("SqlOrmSeparationLayerWrite_%1").arg(reinterpret_cast<quintptr>(this));
+    QSqlDatabase writeDb = openReadOnlyDb(d->dbPath, writeConnectionName, &openError);
+    if (!writeDb.isOpen()) {
+        emit errorOccurred(openError);
+        closeReadOnlyDb(writeConnectionName);
+        return result;
+    }
+
+    if (!ensureSeparationLayerResultTable(writeDb, &schemaError)) {
+        emit errorOccurred(schemaError);
+        closeReadOnlyDb(writeConnectionName);
+        return result;
+    }
+
+    if (!writeDb.transaction()) {
+        emit errorOccurred(writeDb.lastError().text());
+        closeReadOnlyDb(writeConnectionName);
+        return result;
+    }
+
+    QSqlQuery deleteQuery(writeDb);
+    deleteQuery.prepare("DELETE FROM separation_layer_data WHERE experiment_id = ?");
+    deleteQuery.addBindValue(experimentId);
+    if (!deleteQuery.exec()) {
+        emit errorOccurred(deleteQuery.lastError().text());
+        writeDb.rollback();
+        closeReadOnlyDb(writeConnectionName);
+        return result;
+    }
+
+    QSqlQuery insertQuery(writeDb);
+    insertQuery.prepare(
+        "INSERT INTO separation_layer_data "
+        "(experiment_id, scan_id, scan_elapsed_ms, channel_used, "
+        "clarification_boundary_mm, sediment_boundary_mm, "
+        "clarification_thickness_mm, concentrated_phase_thickness_mm, sediment_thickness_mm, "
+        "confidence, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    const QString now = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
+
+    for (const QVariantMap &row : computedRows) {
+        insertQuery.bindValue(0, experimentId);
+        insertQuery.bindValue(1, row.value("scan_id", 0).toInt());
+        insertQuery.bindValue(2, row.value("scan_elapsed_ms", 0).toInt());
+        insertQuery.bindValue(3, row.value("channel_used").toString());
+        insertQuery.bindValue(4, row.value("clarification_boundary_mm", 0.0).toDouble());
+        insertQuery.bindValue(5, row.value("sediment_boundary_mm", 0.0).toDouble());
+        insertQuery.bindValue(6, row.value("clarification_thickness_mm", 0.0).toDouble());
+        insertQuery.bindValue(7, row.value("concentrated_phase_thickness_mm", 0.0).toDouble());
+        insertQuery.bindValue(8, row.value("sediment_thickness_mm", 0.0).toDouble());
+        insertQuery.bindValue(9, row.value("confidence", 0.0).toDouble());
+        insertQuery.bindValue(10, row.value("created_at", now).toString());
+        if (!insertQuery.exec()) {
+            emit errorOccurred(insertQuery.lastError().text());
+            writeDb.rollback();
+            closeReadOnlyDb(writeConnectionName);
+            return result;
+        }
+    }
+
+    if (!writeDb.commit()) {
+        emit errorOccurred(writeDb.lastError().text());
+        closeReadOnlyDb(writeConnectionName);
+        return result;
+    }
+
+    closeReadOnlyDb(writeConnectionName);
+    return getSeparationLayerDataByExperiment(experimentId);
+}
+
 bool SqlOrmManager::replaceInstabilityCurveData(int experimentId, const QVector<QVariantMap>& curveList) {
     Q_D(SqlOrmManager);
 
@@ -2311,9 +3378,300 @@ QVector<QVariantMap> SqlOrmManager::getOrComputeInstabilityCurveDataByExperiment
     return getInstabilityCurveDataByExperiment(experimentId);
 }
 
+QVector<QVariantMap> SqlOrmManager::getOrComputeInstabilityCurveDataByHeightRange(int experimentId, double lowerMm, double upperMm, const QString &segmentKey)
+{
+    // 这是不稳定性页卡顿优化的核心接口：
+    // 只按当前需要的高度区间计算，并把结果缓存到独立结果表中。
+    QVector<QVariantMap> result;
+    Q_D(SqlOrmManager);
+
+    if (!d->initialized || experimentId <= 0) return result;
+
+    const double safeLower = qMin(lowerMm, upperMm);
+    const double safeUpper = qMax(lowerMm, upperMm);
+    if (safeUpper - safeLower <= 1e-6) {
+        return result;
+    }
+
+    const QString normalizedSegmentKey = segmentKey.trimmed().isEmpty()
+        ? QStringLiteral("custom")
+        : segmentKey.trimmed();
+
+    const QString readConnectionName = QString("SqlOrmInstabilitySegmentRead_%1").arg(reinterpret_cast<quintptr>(this));
+    QString openError;
+    QSqlDatabase readDb = openReadOnlyDb(d->dbPath, readConnectionName, &openError);
+    if (!readDb.isOpen()) {
+        emit errorOccurred(openError);
+        closeReadOnlyDb(readConnectionName);
+        return result;
+    }
+
+    QString schemaError;
+    if (!ensureInstabilitySegmentResultTable(readDb, &schemaError)) {
+        emit errorOccurred(schemaError);
+        closeReadOnlyDb(readConnectionName);
+        return result;
+    }
+
+    int scanCount = 0;
+    int maxElapsedMs = -1;
+    {
+        QSqlQuery statsQuery(readDb);
+        statsQuery.prepare(
+            "SELECT COUNT(DISTINCT scan_id) AS scan_count, "
+            "COALESCE(MAX(scan_elapsed_ms), -1) AS max_elapsed_ms "
+            "FROM experiment_data WHERE experiment_id = ?");
+        statsQuery.addBindValue(experimentId);
+        if (!statsQuery.exec() || !statsQuery.next()) {
+            emit errorOccurred(statsQuery.lastError().text());
+            closeReadOnlyDb(readConnectionName);
+            return result;
+        }
+        scanCount = statsQuery.value("scan_count").toInt();
+        maxElapsedMs = statsQuery.value("max_elapsed_ms").toInt();
+    }
+
+    if (scanCount <= 0) {
+        closeReadOnlyDb(readConnectionName);
+        return result;
+    }
+
+    bool reuseExisting = false;
+    {
+        QSqlQuery existingQuery(readDb);
+        existingQuery.prepare(
+            "SELECT COUNT(*) AS result_count, COALESCE(MAX(scan_elapsed_ms), -1) AS max_elapsed_ms "
+            "FROM instability_segment_curve_data "
+            "WHERE experiment_id = ? AND segment_key = ? "
+            "AND ABS(height_lower_mm - ?) < 0.000001 "
+            "AND ABS(height_upper_mm - ?) < 0.000001");
+        existingQuery.addBindValue(experimentId);
+        existingQuery.addBindValue(normalizedSegmentKey);
+        existingQuery.addBindValue(safeLower);
+        existingQuery.addBindValue(safeUpper);
+        if (existingQuery.exec() && existingQuery.next()) {
+            reuseExisting = existingQuery.value("result_count").toInt() == scanCount
+                         && existingQuery.value("max_elapsed_ms").toInt() == maxElapsedMs;
+        }
+    }
+
+    auto readExistingRows = [&](QSqlDatabase &db) {
+        // 读缓存时统一按时间顺序返回，前端不再重复排序。
+        QVector<QVariantMap> rows;
+        QSqlQuery query(db);
+        query.prepare(
+            "SELECT id, experiment_id, segment_key, height_lower_mm, height_upper_mm, "
+            "scan_id, scan_elapsed_ms, channel_used, instability_value, created_at "
+            "FROM instability_segment_curve_data "
+            "WHERE experiment_id = ? AND segment_key = ? "
+            "AND ABS(height_lower_mm - ?) < 0.000001 "
+            "AND ABS(height_upper_mm - ?) < 0.000001 "
+            "ORDER BY scan_elapsed_ms ASC, scan_id ASC, id ASC");
+        query.addBindValue(experimentId);
+        query.addBindValue(normalizedSegmentKey);
+        query.addBindValue(safeLower);
+        query.addBindValue(safeUpper);
+        if (!query.exec()) {
+            emit errorOccurred(query.lastError().text());
+            return rows;
+        }
+
+        while (query.next()) {
+            QVariantMap row;
+            row["id"] = query.value("id");
+            row["experiment_id"] = query.value("experiment_id");
+            row["segment_key"] = query.value("segment_key");
+            row["height_lower_mm"] = query.value("height_lower_mm");
+            row["height_upper_mm"] = query.value("height_upper_mm");
+            row["scan_id"] = query.value("scan_id");
+            row["scan_elapsed_ms"] = query.value("scan_elapsed_ms");
+            row["channel_used"] = query.value("channel_used");
+            row["instability_value"] = query.value("instability_value");
+            row["created_at"] = query.value("created_at");
+            rows.append(row);
+        }
+        return rows;
+    };
+
+    if (reuseExisting) {
+        result = readExistingRows(readDb);
+        closeReadOnlyDb(readConnectionName);
+        return result;
+    }
+
+    closeReadOnlyDb(readConnectionName);
+
+    const QString computeConnectionName = QString("SqlOrmInstabilitySegmentCompute_%1").arg(reinterpret_cast<quintptr>(this));
+    QSqlDatabase computeDb = openReadOnlyDb(d->dbPath, computeConnectionName, &openError);
+    if (!computeDb.isOpen()) {
+        emit errorOccurred(openError);
+        closeReadOnlyDb(computeConnectionName);
+        return result;
+    }
+
+    QSqlQuery query(computeDb);
+    query.setForwardOnly(true);
+    query.prepare(
+        "SELECT scan_id, scan_elapsed_ms, height, backscatter_intensity, transmission_intensity "
+        "FROM experiment_data WHERE experiment_id = ? "
+        "ORDER BY scan_id ASC, height ASC, id ASC");
+    query.addBindValue(experimentId);
+
+    if (!query.exec()) {
+        emit errorOccurred(query.lastError().text());
+        closeReadOnlyDb(computeConnectionName);
+        return result;
+    }
+
+    QVector<QVariantMap> computedCurves;
+    QVector<InstabilityRowEx> referenceRows;
+    QVector<InstabilityRowEx> currentRows;
+    int currentScanId = std::numeric_limits<int>::min();
+    int currentElapsedMs = 0;
+
+    auto filterRowsByHeight = [&](const QVector<InstabilityRowEx> &rows) {
+        QVector<InstabilityRowEx> filtered;
+        filtered.reserve(rows.size());
+        for (const InstabilityRowEx &row : rows) {
+            if (row.heightMm >= safeLower && row.heightMm <= safeUpper) {
+                filtered.append(row);
+            }
+        }
+        return filtered;
+    };
+
+    auto flushScan = [&](bool isReference) {
+        // 每凑齐一帧就立即计算一次当前区间的 Ius，
+        // 首帧作为参考帧，后续各帧与它比较。
+        if (currentRows.isEmpty()) {
+            return;
+        }
+
+        const QVector<InstabilityRowEx> filteredRows = filterRowsByHeight(currentRows);
+        if (filteredRows.size() < 2) {
+            return;
+        }
+
+        QVariantMap row;
+        row["segment_key"] = normalizedSegmentKey;
+        row["height_lower_mm"] = safeLower;
+        row["height_upper_mm"] = safeUpper;
+        row["scan_id"] = currentScanId;
+        row["scan_elapsed_ms"] = currentElapsedMs;
+        if (isReference || referenceRows.isEmpty()) {
+            row["channel_used"] = QStringLiteral("T");
+            row["instability_value"] = 0.0;
+            referenceRows = filteredRows;
+        } else {
+            const bool useTransmission = averageTransmissionValue(filteredRows) > 0.2;
+            row["channel_used"] = useTransmission ? QStringLiteral("T") : QStringLiteral("BS");
+            row["instability_value"] = computeInstabilityIntegral(referenceRows, filteredRows, useTransmission);
+        }
+        computedCurves.append(row);
+    };
+
+    while (query.next()) {
+        const int scanId = query.value("scan_id").toInt();
+        if (currentScanId != std::numeric_limits<int>::min() && scanId != currentScanId) {
+            flushScan(referenceRows.isEmpty());
+            currentRows.clear();
+        }
+
+        currentScanId = scanId;
+        currentElapsedMs = query.value("scan_elapsed_ms").toInt();
+
+        InstabilityRowEx row;
+        row.heightMm = query.value("height").toDouble() / 1000.0;
+        row.backscatter = query.value("backscatter_intensity").toDouble();
+        row.transmission = query.value("transmission_intensity").toDouble();
+        currentRows.append(row);
+    }
+
+    if (currentScanId != std::numeric_limits<int>::min()) {
+        flushScan(referenceRows.isEmpty());
+    }
+
+    closeReadOnlyDb(computeConnectionName);
+
+    const QString writeConnectionName = QString("SqlOrmInstabilitySegmentWrite_%1").arg(reinterpret_cast<quintptr>(this));
+    QSqlDatabase writeDb = openReadOnlyDb(d->dbPath, writeConnectionName, &openError);
+    if (!writeDb.isOpen()) {
+        emit errorOccurred(openError);
+        closeReadOnlyDb(writeConnectionName);
+        return result;
+    }
+
+    if (!ensureInstabilitySegmentResultTable(writeDb, &schemaError)) {
+        emit errorOccurred(schemaError);
+        closeReadOnlyDb(writeConnectionName);
+        return result;
+    }
+
+    if (!writeDb.transaction()) {
+        emit errorOccurred(writeDb.lastError().text());
+        closeReadOnlyDb(writeConnectionName);
+        return result;
+    }
+
+    QSqlQuery deleteQuery(writeDb);
+    deleteQuery.prepare(
+        "DELETE FROM instability_segment_curve_data "
+        "WHERE experiment_id = ? AND segment_key = ? "
+        "AND ABS(height_lower_mm - ?) < 0.000001 "
+        "AND ABS(height_upper_mm - ?) < 0.000001");
+    deleteQuery.addBindValue(experimentId);
+    deleteQuery.addBindValue(normalizedSegmentKey);
+    deleteQuery.addBindValue(safeLower);
+    deleteQuery.addBindValue(safeUpper);
+    if (!deleteQuery.exec()) {
+        emit errorOccurred(deleteQuery.lastError().text());
+        writeDb.rollback();
+        closeReadOnlyDb(writeConnectionName);
+        return result;
+    }
+
+    if (!computedCurves.isEmpty()) {
+        QSqlQuery insertQuery(writeDb);
+        insertQuery.prepare(
+            "INSERT INTO instability_segment_curve_data "
+            "(experiment_id, segment_key, height_lower_mm, height_upper_mm, scan_id, scan_elapsed_ms, channel_used, instability_value, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        const QString now = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
+
+        for (const QVariantMap &curve : computedCurves) {
+            insertQuery.bindValue(0, experimentId);
+            insertQuery.bindValue(1, curve.value("segment_key", normalizedSegmentKey).toString());
+            insertQuery.bindValue(2, curve.value("height_lower_mm", safeLower).toDouble());
+            insertQuery.bindValue(3, curve.value("height_upper_mm", safeUpper).toDouble());
+            insertQuery.bindValue(4, curve.value("scan_id", 0).toInt());
+            insertQuery.bindValue(5, curve.value("scan_elapsed_ms", 0).toInt());
+            insertQuery.bindValue(6, curve.value("channel_used").toString());
+            insertQuery.bindValue(7, curve.value("instability_value", 0.0).toDouble());
+            insertQuery.bindValue(8, curve.value("created_at", now).toString());
+            if (!insertQuery.exec()) {
+                emit errorOccurred(insertQuery.lastError().text());
+                writeDb.rollback();
+                closeReadOnlyDb(writeConnectionName);
+                return result;
+            }
+        }
+    }
+
+    if (!writeDb.commit()) {
+        emit errorOccurred(writeDb.lastError().text());
+        closeReadOnlyDb(writeConnectionName);
+        return result;
+    }
+
+    result = readExistingRows(writeDb);
+    closeReadOnlyDb(writeConnectionName);
+    return result;
+}
+
 bool SqlOrmManager::deleteInstabilityCurveDataByExperiment(int experimentId) {
     Q_D(SqlOrmManager);
 
+    // 整体结果和分区结果必须一起删，否则切换模式时可能读到旧缓存。
     if (!d->initialized || experimentId <= 0) return false;
 
     const QString connectionName = QString("SqlOrmInstabilityCurveDelete_%1").arg(reinterpret_cast<quintptr>(this));
@@ -2326,8 +3684,14 @@ bool SqlOrmManager::deleteInstabilityCurveDataByExperiment(int experimentId) {
     }
 
     QString schemaError;
-    if (!ensureInstabilityResultTable(db, &schemaError)) {
+    if (!ensureInstabilityResultTable(db, &schemaError) || !ensureInstabilitySegmentResultTable(db, &schemaError)) {
         emit errorOccurred(schemaError);
+        closeReadOnlyDb(connectionName);
+        return false;
+    }
+
+    if (!db.transaction()) {
+        emit errorOccurred(db.lastError().text());
         closeReadOnlyDb(connectionName);
         return false;
     }
@@ -2335,10 +3699,28 @@ bool SqlOrmManager::deleteInstabilityCurveDataByExperiment(int experimentId) {
     QSqlQuery query(db);
     query.prepare("DELETE FROM instability_curve_data WHERE experiment_id = ?");
     query.addBindValue(experimentId);
-    const bool ok = query.exec();
-    if (!ok) {
+    if (!query.exec()) {
         emit errorOccurred(query.lastError().text());
+        db.rollback();
+        closeReadOnlyDb(connectionName);
+        return false;
     }
+
+    QSqlQuery segmentQuery(db);
+    segmentQuery.prepare("DELETE FROM instability_segment_curve_data WHERE experiment_id = ?");
+    segmentQuery.addBindValue(experimentId);
+    if (!segmentQuery.exec()) {
+        emit errorOccurred(segmentQuery.lastError().text());
+        db.rollback();
+        closeReadOnlyDb(connectionName);
+        return false;
+    }
+
+    const bool ok = db.commit();
+    if (!ok) {
+        emit errorOccurred(db.lastError().text());
+    }
+
     closeReadOnlyDb(connectionName);
     return ok;
 }
