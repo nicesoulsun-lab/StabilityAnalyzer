@@ -1,13 +1,14 @@
-﻿import QtQuick 2.12
+import QtQuick 2.12
 import QtQuick.Controls 2.12
 
 Rectangle {
     id: root
 
     property string title: qsTr("A通道")
-    property bool isRunning: true
-    property bool hasSample: true
-    property bool isCovered: true
+    property bool isRunning: false
+    property bool hasSample: false
+    property bool isCovered: false
+    //property string remainingTimeText: qsTr("剩余时间：--:--:--")
 
     color: "transparent"
     radius: 20
@@ -140,5 +141,24 @@ Rectangle {
                 font.family: "Microsoft YaHei"
             }
         }
+
+//        Rectangle {
+//            anchors.horizontalCenter: parent.horizontalCenter
+//            width: Math.min(parent.width, 70)
+//            height: 1
+//            color: "#9EC7F1"
+//            opacity: 0.9
+//        }
+
+//        Text {
+//            anchors.horizontalCenter: parent.horizontalCenter
+//            width: Math.max(0, parent.width - 12)
+//            text: root.remainingTimeText
+//            font.pixelSize: 11
+//            color: "#335F8A"
+//            font.family: "Microsoft YaHei"
+//            horizontalAlignment: Text.AlignHCenter
+//            wrapMode: Text.WrapAnywhere
+//        }
     }
 }

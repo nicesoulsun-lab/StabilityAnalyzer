@@ -175,27 +175,11 @@ ExperimentCtrl::ExperimentCtrl(QObject *parent)
         }
     }
 
-    // 程序启动即初始化调度器，确保首页每秒轮询任务从启动阶段即可执行。
-    const QString bootConfigPath = defaultConfigDirPath();
-    if (!initializeScheduler(bootConfigPath)) {
-        qWarning() << "[ExperimentCtrl][Boot] scheduler init failed at startup, configPath=" << bootConfigPath;
-    } else {
-        qDebug() << "[ExperimentCtrl][Boot] scheduler init success at startup";
-    }
-
-    // 每个通道独立状态轮询，并进行错峰启动，避免四通道同步阻塞导致长排队。
-    for (int i = 0; i < kChannelCount; ++i) {
-        const Channel ch = static_cast<Channel>(i);
-        if (!m_statusPollTimers.value(ch)) {
-            continue;
-        }
-        m_statusPollTimers[ch]->setInterval(1000);
-        QTimer::singleShot(i * 250, this, [this, ch]() {
-            if (m_statusPollTimers.value(ch)) {
-                m_statusPollTimers[ch]->start();
-            }
-        });
-    }
+    // 启动阶段先让界面起来，再在事件循环空闲后初始化调度器与轮询，避免首帧卡顿。
+    QTimer::singleShot(0, this, [this]() {
+        initializeSchedulerAfterStartup();
+        startDeferredStatusPolling();
+    });
 
     qDebug() << "[ExperimentCtrl] initialized";
 }
@@ -274,6 +258,33 @@ void ExperimentCtrl::generateDefaultConfig(const QString& configDirPath)
         configDirPath,
         [this](int ch) { return m_stateStore->serialConfig(ch); },
         [this](int ch) { return m_stateStore->slaveId(ch, ch + 1); });
+}
+
+void ExperimentCtrl::initializeSchedulerAfterStartup()
+{
+    const QString bootConfigPath = defaultConfigDirPath();
+    if (!initializeScheduler(bootConfigPath)) {
+        qWarning() << "[ExperimentCtrl][Boot] scheduler init failed after startup, configPath=" << bootConfigPath;
+    } else {
+        qDebug() << "[ExperimentCtrl][Boot] scheduler init success after startup";
+    }
+}
+
+void ExperimentCtrl::startDeferredStatusPolling()
+{
+    for (int i = 0; i < kChannelCount; ++i) {
+        const Channel ch = static_cast<Channel>(i);
+        if (!m_statusPollTimers.value(ch)) {
+            continue;
+        }
+
+        m_statusPollTimers[ch]->setInterval(1000);
+        QTimer::singleShot(300 + i * 250, this, [this, ch]() {
+            if (m_statusPollTimers.value(ch)) {
+                m_statusPollTimers[ch]->start();
+            }
+        });
+    }
 }
 
 QString ExperimentCtrl::getDeviceId(int channel) const

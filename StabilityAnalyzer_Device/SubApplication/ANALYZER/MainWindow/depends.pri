@@ -10,7 +10,7 @@ win32:CONFIG(release, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lQCuteLogger
 else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lQCuteLoggerd
 else:unix:LIBS += -L$$PWD/$$DESTDIR/ -lQCuteLogger
 
-# moudbutrtu 通信模块
+# Modbus RTU 通信模块
 include(../../../QModbusRTUUnit/QModbusRTUUnit_inc.pri)
 win32:CONFIG(release, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lQModbusRTUUnit
 else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lQModbusRTUUnitd
@@ -21,6 +21,12 @@ include(../../../SqlOrm/SqlOrm_inc.pri)
 win32:CONFIG(release, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lSqlOrm
 else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lSqlOrmd
 else:unix:LIBS += -L$$PWD/$$DESTDIR/ -lSqlOrm
+
+# DataTransmit 通信模块
+include(../../../DataTransmit/DataTransmit_inc.pri)
+win32:CONFIG(release, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lDataTransmit
+else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lDataTransmitd
+else:unix:LIBS += -L$$PWD/$$DESTDIR/ -lDataTransmit
 
 # 任务调度器模块
 include(../../../TaskScheduler/TaskScheduler_inc.pri)

@@ -9,6 +9,22 @@ Rectangle {
 
     property Window targetWindow
     property bool showNavigation: false
+    readonly property string deviceUiState: data_transmit_ctrl ? data_transmit_ctrl.deviceUiConnectionStateText : "Disconnected"
+    readonly property string deviceStatusText: {
+        if (!data_transmit_ctrl) {
+            return qsTr("设备未连接")
+        }
+        if (deviceUiState === "Connected") {
+            return qsTr("设备已连接")
+        }
+        if (deviceUiState === "Connecting") {
+            return qsTr("设备连接中")
+        }
+        return qsTr("设备未连接")
+    }
+    readonly property color deviceStatusColor: deviceUiState === "Connected"
+                                               ? "#2FA36B"
+                                               : (deviceUiState === "Connecting" ? "#E3A008" : "#8B8C8F")
 
     color: "#d6e8f7"
 
@@ -105,6 +121,27 @@ Rectangle {
                     height: parent.height
                     layoutDirection: Qt.LeftToRight
                     Layout.alignment: Qt.AlignVCenter
+
+                    Row {
+                        spacing: 8
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        Rectangle {
+                            width: 10
+                            height: 10
+                            radius: 5
+                            color: titleBar.deviceStatusColor
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        Text {
+                            text: titleBar.deviceStatusText
+                            color: titleBar.deviceStatusColor
+                            font.pixelSize: 12
+                            font.family: "Microsoft YaHei"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
 
                     Text {
                         id: timeText

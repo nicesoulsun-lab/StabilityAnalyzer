@@ -1,32 +1,50 @@
 # ------------------------------------------------- #
 # @file          DataTransmit.pro
-# @brief         数据转发功能模块
-# 为了减少模块之间的耦合性，这个模块专门负责数据转发，包括原始数据、计算之后的数据、数据库读取的数据等等
+# @brief         Device 侧 USB RNDIS + TCP 通信模块
+#                该模块负责启动 RNDIS 脚本、监听三路 TCP 服务，
+#                并向上层暴露统一的通信控制器。
 # ------------------------------------------------- #
-QT += quick
 
-CONFIG += c++11
+QT += core network
 
-# You can make your code fail to compile if it uses deprecated APIs.
-# In order to do so, uncomment the following line.
-#DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
+CONFIG += c++14
+CONFIG += depend_includepath
 
-SOURCES += \
-        datatransmitcontroller.cpp \
-        main.cpp
+TARGET = DataTransmit
+TEMPLATE = lib
 
-HEADERS += \
-        datatransmitcontroller.h
+DEFINES += DATATRANSMIT_LIBRARY
 
-RESOURCES += qml.qrc
+include(./DataTransmit_src.pri)
 
-# Additional import path used to resolve QML modules in Qt Creator's code model
-QML_IMPORT_PATH =
+{
+    CONFIG += debug_and_release build_all
+    CONFIG(release, debug|release) {
+        target_path = ./build_/dist
+    } else {
+        target_path = ./build_/debug
+        TARGET = $$member(TARGET, 0)d
+    }
 
-# Additional import path used to resolve QML modules just for Qt Quick Designer
-QML_DESIGNER_IMPORT_PATH =
+    msvc {
+        DESTDIR = ../bin-msvc
+    } else {
+        DESTDIR = ../bin-mingw
+    }
 
-# Default rules for deployment.
-qnx: target.path = /tmp/$${TARGET}/bin
-else: unix:!android: target.path = /opt/$${TARGET}/bin
-!isEmpty(target.path): INSTALLS += target
+    MOC_DIR = $$target_path/moc
+    OBJECTS_DIR = $$target_path/obj
+}
+
+msvc {
+    QMAKE_CFLAGS += /utf-8
+    QMAKE_CXXFLAGS += /utf-8
+}
+
+mingw {
+    QMAKE_CFLAGS_RELEASE += -g
+    QMAKE_CXXFLAGS_RELEASE += -g
+    QMAKE_CFLAGS_RELEASE -= -O2
+    QMAKE_CXXFLAGS_RELEASE -= -O2
+    QMAKE_LFLAGS_RELEASE += -mthreads
+}

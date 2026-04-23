@@ -9,6 +9,7 @@ Rectangle{
     property int _lastClosedMenu: 0
     property double _lastClosedTs: 0
     property string activePage: "record"
+    property bool deviceAvailable: true
     // 由首页接住这个信号，统一决定如何打开仪器检查界面。
     signal instrumentCheckRequested()
     signal importRecordRequested()
@@ -30,6 +31,20 @@ Rectangle{
         helpPopup.close()
         _activeMenu = 0
         _langSubOpen = false
+    }
+
+    function showDeviceUnavailableTip() {
+        // 实验和仪器操作依赖设备在线；离线时只提示，不进入业务页面。
+        if (typeof info_pop !== "undefined") {
+            info_pop.openDialog(qsTr("设备已断开，请检查连接状态后再使用该功能。"))
+        }
+    }
+
+    onDeviceAvailableChanged: {
+        if (!deviceAvailable) {
+            // 设备断开后主动收起菜单，避免用户继续点击已不可用的二级入口。
+            closeMenus()
+        }
     }
 
     Image{
@@ -61,14 +76,14 @@ Rectangle{
                     id: txtExp
                     text: qsTr("实验")
                     font.pixelSize: 14
-                    color: _activeMenu === 1 ? "#336FFF" : "#444444"
+                    color: !optionsBar.deviceAvailable ? "#A8A8A8" : (_activeMenu === 1 ? "#336FFF" : "#444444")
                     font.family: "Microsoft YaHei"
                     anchors.verticalCenter: parent.verticalCenter
                 }
                 Text {
                     text: _activeMenu === 1 ? "\u2227" : "\u2228"
                     font.pixelSize: 10
-                    color: "#999999"
+                    color: optionsBar.deviceAvailable ? "#999999" : "#C0C0C0"
                     anchors.verticalCenter: parent.verticalCenter
                 }
             }
@@ -77,6 +92,10 @@ Rectangle{
                 anchors.fill: parent
                 hoverEnabled: true
                 onClicked: {
+                    if (!optionsBar.deviceAvailable) {
+                        optionsBar.showDeviceUnavailableTip()
+                        return
+                    }
                     if (justClosed(1)) { return }
                     if (_activeMenu === 1 && experimentPopup.visible) {
                         closeMenus()
@@ -228,14 +247,14 @@ Rectangle{
                     id: txtInst
                     text: qsTr("仪器")
                     font.pixelSize: 14
-                    color: _activeMenu === 3 ? "#336FFF" : "#444444"
+                    color: !optionsBar.deviceAvailable ? "#A8A8A8" : (_activeMenu === 3 ? "#336FFF" : "#444444")
                     font.family: "Microsoft YaHei"
                     anchors.verticalCenter: parent.verticalCenter
                 }
                 Text {
                     text: _activeMenu === 3 ? "\u2227" : "\u2228"
                     font.pixelSize: 10
-                    color: "#999999"
+                    color: optionsBar.deviceAvailable ? "#999999" : "#C0C0C0"
                     anchors.verticalCenter: parent.verticalCenter
                 }
             }
@@ -244,6 +263,10 @@ Rectangle{
                 anchors.fill: parent
                 hoverEnabled: true
                 onClicked: {
+                    if (!optionsBar.deviceAvailable) {
+                        optionsBar.showDeviceUnavailableTip()
+                        return
+                    }
                     if (justClosed(3)) { return }
                     if (_activeMenu === 3 && instrumentPopup.visible) {
                         closeMenus()
@@ -586,6 +609,7 @@ Rectangle{
         }
 
         Item { Layout.fillWidth: true }
+
     }
 
 }

@@ -2,6 +2,7 @@
 #define CONTROLLERMANAGER_H
 
 #include <QObject>
+#include "datatransmitcontroller.h"
 #include "systemsetting_ctrl.h"
 #include "user_ctrl.h"
 #include "data_ctrl.h"
@@ -16,6 +17,7 @@ class MAINWINDOW_EXPORT CtrllerManager : public QObject
 public:
     explicit CtrllerManager(QObject *parent = nullptr)
         : QObject(parent)
+        , m_dataTransmitCtrl(new DataTransmitController(this))
         , m_sysSettingCtrl(new systemSettingCtrl(this))
         , m_userCtrl(new userCtrl(this))
         , m_dataCtrl(new dataCtrl(this))
@@ -28,6 +30,7 @@ public:
     }
 
     // 获取各个 Controller 实例
+    DataTransmitController* getDataTransmitCtrl() const { return m_dataTransmitCtrl; }
     systemSettingCtrl* getSystemSettingCtrl() const { return m_sysSettingCtrl; }
     userCtrl* getUserCtrl() const { return m_userCtrl; }
     dataCtrl* getDataCtrl() const { return m_dataCtrl; }
@@ -38,6 +41,7 @@ public:
     experiment_listmodel * getRecycleExperimentListmodel() const { return m_recycleExperimentListmodel; }
 
 private:
+    DataTransmitController* m_dataTransmitCtrl = nullptr;
     systemSettingCtrl* m_sysSettingCtrl = nullptr;
     userCtrl* m_userCtrl = nullptr;
     dataCtrl* m_dataCtrl = nullptr;

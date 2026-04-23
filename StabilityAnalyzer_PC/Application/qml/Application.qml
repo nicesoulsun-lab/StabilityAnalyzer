@@ -90,6 +90,14 @@ ApplicationWindow {
         }
     }
 
+    Connections {
+        target: data_transmit_ctrl
+        onDeviceUnavailablePromptRequested: {
+            // 该信号由通信层专门发出，避免普通状态变化导致误弹。
+            info_pop.openDialog(qsTr("设备已断开，请检查连接状态、USB连接和设备电源。"))
+        }
+    }
+
     InfoPop{
         id: info_pop
     }

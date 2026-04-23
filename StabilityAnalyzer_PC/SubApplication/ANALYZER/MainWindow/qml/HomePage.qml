@@ -11,6 +11,30 @@ Item {
     property string contentPageKey: ""
     property string currentPageKey: ""
 
+    function channelStatus(index) {
+        if (!data_transmit_ctrl || !data_transmit_ctrl.experimentChannels || index < 0 || index >= data_transmit_ctrl.experimentChannels.length) {
+            return ({ running: false, hasSample: false, isCovered: false, remainingSeconds: 0 })
+        }
+        return data_transmit_ctrl.experimentChannels[index]
+    }
+
+    function formatRemainingTime(seconds) {
+        if (seconds === undefined || seconds === null || seconds <= 0) {
+            return qsTr("剩余时间：00:00:00")
+        }
+
+        var total = Math.floor(seconds)
+        var hours = Math.floor(total / 3600)
+        var minutes = Math.floor((total % 3600) / 60)
+        var remainSeconds = total % 60
+
+        function pad(value) {
+            return value < 10 ? "0" + value : "" + value
+        }
+
+        return qsTr("剩余时间：") + pad(hours) + ":" + pad(minutes) + ":" + pad(remainSeconds)
+    }
+
     function openPage(pageUrl, pageKey) {
         if (pageKey !== undefined && pageKey !== "") {
             currentPageKey = pageKey
@@ -56,37 +80,45 @@ Item {
                 ChannelPanel {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 150
+                    property var statusData: homepage.channelStatus(0)
                     title: qsTr("A通道")
-                    isRunning: true
-                    hasSample: true
-                    isCovered: true
+                    isRunning: !!statusData.running
+                    hasSample: !!statusData.hasSample
+                    isCovered: !!statusData.isCovered
+                    //remainingTimeText: homepage.formatRemainingTime(statusData.remainingSeconds || 0)
                 }
 
                 ChannelPanel {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 150
+                    property var statusData: homepage.channelStatus(1)
                     title: qsTr("B通道")
-                    isRunning: true
-                    hasSample: true
-                    isCovered: false
+                    isRunning: !!statusData.running
+                    hasSample: !!statusData.hasSample
+                    isCovered: !!statusData.isCovered
+                    //remainingTimeText: homepage.formatRemainingTime(statusData.remainingSeconds || 0)
                 }
 
                 ChannelPanel {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 150
+                    property var statusData: homepage.channelStatus(2)
                     title: qsTr("C通道")
-                    isRunning: false
-                    hasSample: false
-                    isCovered: true
+                    isRunning: !!statusData.running
+                    hasSample: !!statusData.hasSample
+                    isCovered: !!statusData.isCovered
+                    //remainingTimeText: homepage.formatRemainingTime(statusData.remainingSeconds || 0)
                 }
 
                 ChannelPanel {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 150
+                    property var statusData: homepage.channelStatus(3)
                     title: qsTr("D通道")
-                    isRunning: false
-                    hasSample: false
-                    isCovered: false
+                    isRunning: !!statusData.running
+                    hasSample: !!statusData.hasSample
+                    isCovered: !!statusData.isCovered
+                    //remainingTimeText: homepage.formatRemainingTime(statusData.remainingSeconds || 0)
                 }
 
                 Item { Layout.fillHeight: true }
@@ -113,6 +145,8 @@ Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 40
                     activePage: homepage.currentPageKey
+                    deviceAvailable: data_transmit_ctrl
+                                     && data_transmit_ctrl.deviceUiConnectionStateText === "Connected"
                     onImportRecordRequested: importRecordPop.open()
                     onInstrumentCheckRequested: instrumentCheckPop.open()
                     onNewExperimentRequested: newExperimentPop.open()

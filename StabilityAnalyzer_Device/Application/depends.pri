@@ -1,5 +1,4 @@
-
-###### 独立库模块 1.引入头文件依赖 2.添加导入库######
+# 独立库模块依赖
 
 # 日志模块
 include(../QCuteLogger/QCuteLogger_inc.pri)
@@ -19,20 +18,11 @@ win32:CONFIG(release, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lCommonData
 else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lCommonDatad
 else:unix: LIBS += -L$$PWD/$$DESTDIR/ -lCommonData
 
-# moudbutrtu 通信模块
+# Modbus RTU 通信模块
 include(../QModbusRTUUnit/QModbusRTUUnit_inc.pri)
 win32:CONFIG(release, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lQModbusRTUUnit
 else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lQModbusRTUUnitd
 else:unix:LIBS += -L$$PWD/$$DESTDIR/ -lQModbusRTUUnit
-
-# 解压缩
-#include(../Quazip/Quazip_inc.pri)
-#win32:CONFIG(release, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lQuazip
-#else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lQuazipd
-#else:unix: LIBS += -L$$PWD/$$DESTDIR/ -lQuazip
-
-# 曲线,暂时不需要了，直接使用mainwindow后面写的曲线界面就行
-#include(../plot/plot.pri)
 
 # 任务调度器模块
 include(../TaskScheduler/TaskScheduler_inc.pri)
@@ -46,7 +36,13 @@ win32:CONFIG(release, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lSqlOrm
 else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lSqlOrmd
 else:unix: LIBS += -L$$PWD/$$DESTDIR/ -lSqlOrm
 
-# 主窗口 可以根据不同项目加载不同主窗口,qml项目可以使用qml.qrc里面添加对应的界面实现
+# DataTransmit 通信模块
+include(../DataTransmit/DataTransmit_inc.pri)
+win32:CONFIG(release, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lDataTransmit
+else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lDataTransmitd
+else:unix: LIBS += -L$$PWD/$$DESTDIR/ -lDataTransmit
+
+# 主窗口模块
 include(../SubApplication/ANALYZER/MainWindow/MainWindow_inc.pri)
 win32:CONFIG(release, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lMainWindow
 else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lMainWindowd

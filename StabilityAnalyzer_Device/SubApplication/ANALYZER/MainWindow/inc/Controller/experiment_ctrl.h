@@ -209,6 +209,8 @@ private:
      */
     QVariantMap readRealtimeStatus(int channel);
     void pollChannelStatus(int channel);
+    void initializeSchedulerAfterStartup();
+    void startDeferredStatusPolling();
 
     /**
      * @brief 根据存储区状态尝试取数（A/B区）

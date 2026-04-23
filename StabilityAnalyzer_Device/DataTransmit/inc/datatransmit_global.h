@@ -1,0 +1,12 @@
+#ifndef DATATRANSMIT_GLOBAL_H
+#define DATATRANSMIT_GLOBAL_H
+
+#include <QtCore/qglobal.h>
+
+#if defined(DATATRANSMIT_LIBRARY)
+#define DATATRANSMIT_EXPORT Q_DECL_EXPORT
+#else
+#define DATATRANSMIT_EXPORT Q_DECL_IMPORT
+#endif
+
+#endif // DATATRANSMIT_GLOBAL_H
