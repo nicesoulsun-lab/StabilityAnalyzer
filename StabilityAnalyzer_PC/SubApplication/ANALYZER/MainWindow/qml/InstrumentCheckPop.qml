@@ -265,6 +265,7 @@ Popup {
                         text: "×"
                         font.pixelSize: 24
                         color: closeButton.down ? "#2B2B2B" : "#5D6775"
+                        font.family: "Microsoft YaHei"
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
@@ -298,7 +299,7 @@ Popup {
                             text: qsTr("检查参数")
                             font.pixelSize: 18
                             color: "#4A4A4A"
-                            font.bold: true
+                            //font.bold: true
                             font.family: "Microsoft YaHei"
                         }
                     }
@@ -375,6 +376,7 @@ Popup {
                                 text: "°C"
                                 font.pixelSize: 16
                                 color: "#333333"
+                                font.family: "Microsoft YaHei"
                             }
                         }
 
@@ -445,6 +447,7 @@ Popup {
                                 text: "mm ~"
                                 font.pixelSize: 15
                                 color: "#333333"
+                                font.family: "Microsoft YaHei"
                             }
 
                             UiComboBox {
@@ -463,6 +466,7 @@ Popup {
                                 text: "mm"
                                 font.pixelSize: 15
                                 color: "#333333"
+                                font.family: "Microsoft YaHei"
                             }
                         }
                     }
@@ -502,7 +506,7 @@ Popup {
                                     horizontalAlignment: Text.AlignHCenter
                                     font.pixelSize: 16
                                     color: "#333333"
-                                    font.bold: true
+                                    //font.bold: true
                                     font.family: "Microsoft YaHei"
                                 }
                             }
@@ -513,7 +517,7 @@ Popup {
                                 horizontalAlignment: Text.AlignHCenter
                                 font.pixelSize: 16
                                 color: "#333333"
-                                font.bold: true
+                                //font.bold: true
                                 font.family: "Microsoft YaHei"
                             }
 

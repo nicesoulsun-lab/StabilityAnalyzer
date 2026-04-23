@@ -1,6 +1,7 @@
 import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Layouts 1.12
+import "component"
 
 Item {
     id: detailPage
@@ -94,37 +95,6 @@ Item {
             labels.push(formatNumber(minNumber + range * ratio, digits === undefined ? 1 : digits))
         }
         return labels
-    }
-
-    function paddedMin(value, maxValue, minPadding) {
-        var minNumber = toNumber(value, 0)
-        var maxNumber = toNumber(maxValue, minNumber)
-        var range = maxNumber - minNumber
-        var padding = Math.max(Math.abs(range) * 0.08, minPadding === undefined ? 1 : minPadding)
-        if (Math.abs(range) < 0.000001)
-            padding = Math.max(Math.abs(maxNumber) * 0.1, minPadding === undefined ? 1 : minPadding)
-        return minNumber - padding
-    }
-
-    function paddedMax(value, minValue, minPadding) {
-        var maxNumber = toNumber(value, 0)
-        var minNumber = toNumber(minValue, maxNumber)
-        var range = maxNumber - minNumber
-        var padding = Math.max(Math.abs(range) * 0.08, minPadding === undefined ? 1 : minPadding)
-        if (Math.abs(range) < 0.000001)
-            padding = Math.max(Math.abs(maxNumber) * 0.1, minPadding === undefined ? 1 : minPadding)
-        return maxNumber + padding
-    }
-
-    function xAxisTicks() {
-        var ticks = []
-        var start = floorToStep(minHeightValue, 10)
-        var end = ceilToStep(maxHeightValue, 10)
-        if (end <= start)
-            end = start + 10
-        for (var value = start; value <= end + 0.0001; value += 10)
-            ticks.push(value)
-        return ticks
     }
 
     function buildTimeTicks(minValue, maxValue, count) {
@@ -229,6 +199,8 @@ Item {
             return "curve/LightIntensityAveragePage.qml"
         if (currentTabIndex === 5)
             return "curve/SeparationLayerPage.qml"
+        if (currentTabIndex === 6)
+            return "curve/AdvancedCalculationPage.qml"
         if (currentTabIndex === 0)
             return "curve/LightIntensityCurvePage.qml"
         return "curve/PlaceholderPage.qml"
@@ -312,7 +284,7 @@ Item {
 
                     Item { Layout.fillWidth: true }
 
-                    Button {
+                    IconButton {
                         id: backButton
                         Layout.preferredWidth: 100
                         Layout.preferredHeight: 28

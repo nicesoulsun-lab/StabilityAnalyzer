@@ -23,11 +23,39 @@ Rectangle {
     property real chartMaxY: 1
     property var xAxisTickValues: [0, 1]
     property var yAxisLabels: detailPage ? detailPage.makeAxisLabels(chartMinY, chartMaxY, 6, 1) : [0, 1]
+    readonly property var latestRow: rows.length > 0 ? rows[rows.length - 1] : null
 
     color: "#FFFFFF"
 
+    function formatLayerRange(lowerValue, upperValue) {
+        if (!detailPage)
+            return "--"
+
+        var lower = detailPage.toNumber(lowerValue, Number.NaN)
+        var upper = detailPage.toNumber(upperValue, Number.NaN)
+        if (isNaN(lower) || isNaN(upper))
+            return "--"
+
+        return detailPage.formatNumber(lower, 1) + " - " + detailPage.formatNumber(upper, 1) + " mm"
+    }
+
+    function layerRangeSummary() {
+        if (!detailPage || !latestRow)
+            return qsTr("高度范围：--")
+
+        var minHeight = detailPage.toNumber(detailPage.minHeightValue, 0)
+        var maxHeight = detailPage.toNumber(detailPage.maxHeightValue, 0)
+        var sedimentBoundary = detailPage.toNumber(latestRow.sediment_boundary_mm, minHeight)
+        var clarificationBoundary = detailPage.toNumber(latestRow.clarification_boundary_mm, maxHeight)
+
+        return qsTr("当前高度范围：澄清层 %1；浓相层 %2；沉淀层 %3")
+                .arg(formatLayerRange(clarificationBoundary, maxHeight))
+                .arg(formatLayerRange(sedimentBoundary, clarificationBoundary))
+                .arg(formatLayerRange(minHeight, sedimentBoundary))
+    }
+
     function loadSeparationData() {
-        // 数据库层已经输出每次扫描的三层厚度，这里只做排序和折线点转换。
+        // 三层厚度的排序、折线点和坐标轴由后端统一生成。
         rows = []
         clarificationPoints = []
         concentratedPoints = []
@@ -35,50 +63,20 @@ Rectangle {
         if (!detailPage || !experimentData || experimentData.id === undefined || !data_ctrl)
             return
 
-        var source = data_ctrl.getSeparationLayerData(Number(experimentData.id))
-        if (!source || source.length === 0)
+        var chartData = data_ctrl.getSeparationLayerChartData(Number(experimentData.id))
+        if (!chartData || !chartData.rows || chartData.rows.length === 0)
             return
 
-        var sorted = source.slice(0)
-        sorted.sort(function(a, b) {
-            var elapsedDiff = detailPage.toNumber(a.scan_elapsed_ms, 0) - detailPage.toNumber(b.scan_elapsed_ms, 0)
-            if (elapsedDiff !== 0)
-                return elapsedDiff
-            return detailPage.toNumber(a.scan_id, 0) - detailPage.toNumber(b.scan_id, 0)
-        })
-
-        var localClarification = []
-        var localConcentrated = []
-        var localSediment = []
-        var minY = Number.POSITIVE_INFINITY
-        var maxY = Number.NEGATIVE_INFINITY
-
-        for (var i = 0; i < sorted.length; ++i) {
-            var xValue = detailPage.toNumber(sorted[i].scan_elapsed_ms, 0) / 60000.0
-            var clarificationValue = detailPage.toNumber(sorted[i].clarification_thickness_mm, 0)
-            var concentratedValue = detailPage.toNumber(sorted[i].concentrated_phase_thickness_mm, 0)
-            var sedimentValue = detailPage.toNumber(sorted[i].sediment_thickness_mm, 0)
-
-            localClarification.push({ x: xValue, y: clarificationValue })
-            localConcentrated.push({ x: xValue, y: concentratedValue })
-            localSediment.push({ x: xValue, y: sedimentValue })
-
-            minY = Math.min(minY, clarificationValue, concentratedValue, sedimentValue)
-            maxY = Math.max(maxY, clarificationValue, concentratedValue, sedimentValue)
-        }
-
-        rows = sorted
-        clarificationPoints = localClarification
-        concentratedPoints = localConcentrated
-        sedimentPoints = localSediment
-        chartMinX = localClarification.length > 0 ? localClarification[0].x : 0
-        chartMaxX = localClarification.length > 1 ? localClarification[localClarification.length - 1].x : chartMinX + 1
-        if (chartMaxX <= chartMinX)
-            chartMaxX = chartMinX + 1
-        chartMinY = 0
-        chartMaxY = isFinite(maxY) ? detailPage.paddedMax(maxY, minY, 1) : 1
-        xAxisTickValues = detailPage.buildTimeTicks(chartMinX, chartMaxX, 6)
-        yAxisLabels = detailPage.makeAxisLabels(chartMinY, chartMaxY, 6, 1)
+        rows = chartData.rows
+        clarificationPoints = chartData.clarificationPoints
+        concentratedPoints = chartData.concentratedPoints
+        sedimentPoints = chartData.sedimentPoints
+        chartMinX = detailPage.toNumber(chartData.chartMinX, 0)
+        chartMaxX = detailPage.toNumber(chartData.chartMaxX, 1)
+        chartMinY = detailPage.toNumber(chartData.chartMinY, 0)
+        chartMaxY = detailPage.toNumber(chartData.chartMaxY, 1)
+        xAxisTickValues = chartData.xAxisTickValues || [0, 1]
+        yAxisLabels = chartData.yAxisLabels || detailPage.makeAxisLabels(chartMinY, chartMaxY, 6, 1)
     }
 
     onDetailPageChanged: loadSeparationData()
@@ -121,6 +119,16 @@ Rectangle {
                     }
                 }
             }
+        }
+
+        Text {
+            Layout.fillWidth: true
+            visible: separationPanel.rows.length > 0
+            text: separationPanel.layerRangeSummary()
+            wrapMode: Text.Wrap
+            font.pixelSize: 12
+            font.family: "Microsoft YaHei"
+            color: "#5B6B7F"
         }
 
         Rectangle {

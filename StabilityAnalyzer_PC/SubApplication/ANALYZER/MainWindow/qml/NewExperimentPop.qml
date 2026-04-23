@@ -208,6 +208,7 @@ Popup {
                     text: "×"
                     font.pixelSize: 22
                     color: closeButton.down ? "#2B2B2B" : "#5D6775"
+                    font.family: "Microsoft YaHei"
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                 }
@@ -258,6 +259,7 @@ Popup {
                             border.color: "#82C1F2"
                             radius: 4
                         }
+                        text_color: "#333333"
                     }
 
                     Text { text: qsTr("选择工程"); font.pixelSize: 16; color: "#333333"; font.family: "Microsoft YaHei" }
@@ -270,6 +272,7 @@ Popup {
                             border.color: "#82C1F2"
                             radius: 4
                         }
+                        text_color: "#333333"
                     }
                 }
             }
@@ -298,6 +301,7 @@ Popup {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 36
                         font.pixelSize: 16
+                        color: "#333333"
                     }
 
                     Text { text: qsTr("测试者"); font.pixelSize: 16; color: "#333333"; font.family: "Microsoft YaHei" }
@@ -306,6 +310,7 @@ Popup {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 36
                         font.pixelSize: 16
+                        color: "#333333"
                     }
 
                     Text {
@@ -322,6 +327,7 @@ Popup {
                         multiLine: true
                         maxLines: 4
                         font.pixelSize: 16
+                        font.family: "Microsoft YaHei"
                     }
                 }
             }
@@ -384,7 +390,7 @@ Popup {
                             text: "25"
                             horizontalAlignment: Text.AlignHCenter
                         }
-                        Text { text: "°C"; font.pixelSize: 16; color: "#333333" }
+                        Text { text: "°C"; font.pixelSize: 16; color: "#333333"; font.family: "Microsoft YaHei" }
                     }
 
                     Text { text: qsTr("扫描区间"); font.pixelSize: 16; color: "#333333"; font.family: "Microsoft YaHei" }
@@ -400,7 +406,7 @@ Popup {
                                 radius: 4
                             }
                         }
-                        Text { text: "mm ~"; font.pixelSize: 16; color: "#333333" }
+                        Text { text: "mm ~"; font.pixelSize: 16; color: "#333333"; font.family: "Microsoft YaHei" }
                         UiComboBox {
                             id: scanEndCombo
                             Layout.preferredWidth: 100
@@ -411,7 +417,7 @@ Popup {
                                 radius: 4
                             }
                         }
-                        Text { text: "mm"; font.pixelSize: 16; color: "#333333" }
+                        Text { text: "mm"; font.pixelSize: 16; color: "#333333"; font.family: "Microsoft YaHei" }
                     }
 
                     Text { text: qsTr("扫描间隔"); font.pixelSize: 16; color: "#333333"; font.family: "Microsoft YaHei" }
@@ -429,7 +435,7 @@ Popup {
                                 radius: 4
                             }
                         }
-                        Text { text: "um"; font.pixelSize: 16; color: "#333333" }
+                        Text { text: "µm"; font.pixelSize: 16; color: "#333333"; font.family: "Microsoft YaHei" }
                     }
                 }
             }
@@ -456,24 +462,24 @@ Popup {
                     RowLayout {
                         spacing: 8
                         LineEdit { id: durationDayEdit; Layout.preferredWidth: 64; Layout.preferredHeight: 36; text: "0"; horizontalAlignment: Text.AlignHCenter; input_rules: IntValidator { bottom: 0; top: 999 } onTextChangedEx: root.calculateScanCount() }
-                        Text { text: "d"; font.pixelSize: 16; color: "#333333" }
+                        Text { text: "d"; font.pixelSize: 16; color: "#333333"; font.family: "Microsoft YaHei" }
                         LineEdit { id: durationHourEdit; Layout.preferredWidth: 64; Layout.preferredHeight: 36; text: "0"; horizontalAlignment: Text.AlignHCenter; input_rules: IntValidator { bottom: 0; top: 999 } onTextChangedEx: root.calculateScanCount() }
-                        Text { text: "h"; font.pixelSize: 16; color: "#333333" }
+                        Text { text: "h"; font.pixelSize: 16; color: "#333333"; font.family: "Microsoft YaHei" }
                         LineEdit { id: durationMinuteEdit; Layout.preferredWidth: 64; Layout.preferredHeight: 36; text: "0"; horizontalAlignment: Text.AlignHCenter; input_rules: IntValidator { bottom: 0; top: 999 } onTextChangedEx: root.calculateScanCount() }
-                        Text { text: "min"; font.pixelSize: 16; color: "#333333" }
+                        Text { text: "min"; font.pixelSize: 16; color: "#333333"; font.family: "Microsoft YaHei" }
                         LineEdit { id: durationSecondEdit; Layout.preferredWidth: 64; Layout.preferredHeight: 36; text: "0"; horizontalAlignment: Text.AlignHCenter; input_rules: IntValidator { bottom: 0; top: 999 } onTextChangedEx: root.calculateScanCount() }
-                        Text { text: "s"; font.pixelSize: 16; color: "#333333" }
+                        Text { text: "s"; font.pixelSize: 16; color: "#333333"; font.family: "Microsoft YaHei" }
                     }
 
                     Text { text: qsTr("间隔时间"); font.pixelSize: 16; color: "#333333"; font.family: "Microsoft YaHei" }
                     RowLayout {
                         spacing: 8
                         LineEdit { id: intervalHourEdit; Layout.preferredWidth: 64; Layout.preferredHeight: 36; text: "0"; horizontalAlignment: Text.AlignHCenter; input_rules: IntValidator { bottom: 0; top: 999 } onTextChangedEx: root.calculateScanCount() }
-                        Text { text: "h"; font.pixelSize: 16; color: "#333333" }
+                        Text { text: "h"; font.pixelSize: 16; color: "#333333"; font.family: "Microsoft YaHei" }
                         LineEdit { id: intervalMinuteEdit; Layout.preferredWidth: 64; Layout.preferredHeight: 36; text: "0"; horizontalAlignment: Text.AlignHCenter; input_rules: IntValidator { bottom: 0; top: 999 } onTextChangedEx: root.calculateScanCount() }
-                        Text { text: "min"; font.pixelSize: 16; color: "#333333" }
+                        Text { text: "min"; font.pixelSize: 16; color: "#333333"; font.family: "Microsoft YaHei" }
                         LineEdit { id: intervalSecondEdit; Layout.preferredWidth: 64; Layout.preferredHeight: 36; text: "0"; horizontalAlignment: Text.AlignHCenter; input_rules: IntValidator { bottom: 0; top: 999 } onTextChangedEx: root.calculateScanCount() }
-                        Text { text: "s"; font.pixelSize: 16; color: "#333333" }
+                        Text { text: "s"; font.pixelSize: 16; color: "#333333"; font.family: "Microsoft YaHei" }
                     }
 
                     Text { text: qsTr("扫描次数"); font.pixelSize: 16; color: "#333333"; font.family: "Microsoft YaHei" }

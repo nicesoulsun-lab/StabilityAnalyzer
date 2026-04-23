@@ -16,7 +16,7 @@ Popup {
 
     property int pixelSize: 16
     property color text_color: "#242426"
-    //property string family: notoSansSCRegular.name
+    property string family: "Microsoft YaHei"
 
 
     background: Rectangle {

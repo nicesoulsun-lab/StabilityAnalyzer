@@ -2,6 +2,7 @@ import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Layouts 1.12
 import CustomComponents 1.0
+import "../component"
 
 
 //光强曲线
@@ -20,7 +21,6 @@ Rectangle {
     property real heightLowerBound: detailPage ? detailPage.floorToStep(detailPage.minHeightValue, 1) : 0
     property real heightUpperBound: detailPage ? detailPage.ceilToStep(detailPage.maxHeightValue, 1) : 55
     property var displayedCurves: []
-    property var processedCurveCache: ({})
     readonly property int displayedCurveCount: displayedCurves ? displayedCurves.length : 0
 
     readonly property real safeHeightLowerBound: {
@@ -79,20 +79,20 @@ Rectangle {
         var normalizedCurves = []
         for (var i = 0; i < curves.length; ++i) {
             normalizedCurves.push({
-                scan_id: curves[i].scan_id,
-                timestamp: curves[i].timestamp,
-                scan_elapsed_ms: curves[i].scan_elapsed_ms,
-                point_count: curves[i].point_count,
-                backscatter_points: curves[i].backscatter_points || [],
-                transmission_points: curves[i].transmission_points || [],
-                min_backscatter: curves[i].min_backscatter,
-                max_backscatter: curves[i].max_backscatter,
-                min_transmission: curves[i].min_transmission,
-                max_transmission: curves[i].max_transmission,
-                reference_scan_id: curves[i].reference_scan_id !== undefined ? curves[i].reference_scan_id : curves[i].scan_id,
-                color: detailPage.curveColor(i, curves.length),
-                legend_text: detailPage.formatElapsedTime(curves[i].scan_elapsed_ms)
-            })
+                                      scan_id: curves[i].scan_id,
+                                      timestamp: curves[i].timestamp,
+                                      scan_elapsed_ms: curves[i].scan_elapsed_ms,
+                                      point_count: curves[i].point_count,
+                                      backscatter_points: curves[i].backscatter_points || [],
+                                      transmission_points: curves[i].transmission_points || [],
+                                      min_backscatter: curves[i].min_backscatter,
+                                      max_backscatter: curves[i].max_backscatter,
+                                      min_transmission: curves[i].min_transmission,
+                                      max_transmission: curves[i].max_transmission,
+                                      reference_scan_id: curves[i].reference_scan_id !== undefined ? curves[i].reference_scan_id : curves[i].scan_id,
+                                      color: detailPage.curveColor(i, curves.length),
+                                      legend_text: detailPage.formatElapsedTime(curves[i].scan_elapsed_ms)
+                                  })
         }
         return normalizedCurves
     }
@@ -102,17 +102,6 @@ Rectangle {
             return false
         return Math.abs(safeHeightLowerBound - detailPage.minHeightValue) < 0.000001
                 && Math.abs(safeHeightUpperBound - detailPage.maxHeightValue) < 0.000001
-    }
-
-    function processedCacheKey(pointsPerCurve) {
-        return [
-            Number(detailPage.experimentData.id),
-            pointsPerCurve,
-            referenceCurveIndex,
-            safeHeightLowerBound.toFixed(3),
-            safeHeightUpperBound.toFixed(3),
-            currentDataModeIndex
-        ].join("|")
     }
 
     function paddedRange(minValue, maxValue) {
@@ -143,8 +132,8 @@ Rectangle {
 
         if (!isFinite(minValue) || !isFinite(maxValue))
             return currentDataModeIndex === 0
-                ? { minValue: 0, maxValue: 100 }
-                : { minValue: -5, maxValue: 5 }
+                    ? { minValue: 0, maxValue: 100 }
+        : { minValue: -5, maxValue: 5 }
 
         if (currentDataModeIndex === 0)
             return { minValue: 0, maxValue: paddedRange(Math.max(0, minValue), Math.min(100, maxValue)).maxValue }
@@ -174,13 +163,8 @@ Rectangle {
             return
         }
 
+        // 其余情况统一走 data_ctrl，由后端分析层完成裁剪/参比处理。
         var pointsPerCurve = Math.max(480, Math.round((lightIntensityPanel.width > 0 ? lightIntensityPanel.width : 1000) * 1.1))
-        var cacheKey = processedCacheKey(pointsPerCurve)
-        if (processedCurveCache[cacheKey] !== undefined) {
-            displayedCurves = normalizeCurves(processedCurveCache[cacheKey])
-            return
-        }
-
         var curves = data_ctrl.getProcessedLightIntensityCurves(
                     Number(detailPage.experimentData.id),
                     pointsPerCurve,
@@ -191,7 +175,6 @@ Rectangle {
         if (!curves || curves.length === 0)
             return
 
-        processedCurveCache[cacheKey] = curves
         var normalizedCurves = normalizeCurves(curves)
         displayedCurves = normalizedCurves
         if (normalizedCurves.length > 0) {
@@ -208,7 +191,6 @@ Rectangle {
     function resetAnalysisDefaults() {
         if (!detailPage)
             return
-        processedCurveCache = ({})
         applyAnalysisSettings(0,
                               detailPage.floorToStep(detailPage.minHeightValue, 1),
                               detailPage.ceilToStep(detailPage.maxHeightValue, 1))
@@ -299,7 +281,7 @@ Rectangle {
 
             Item { Layout.fillWidth: true }
 
-            Button {
+            IconButton {
                 Layout.preferredWidth: 110
                 Layout.preferredHeight: 28
                 text: qsTr("设置分析参数")
@@ -792,7 +774,8 @@ Rectangle {
                     color: "#2F3A4A"
                 }
 
-                Button {
+                IconButton {
+                    id: closeButton
                     anchors.right: parent.right
                     anchors.rightMargin: 12
                     anchors.verticalCenter: parent.verticalCenter
@@ -809,7 +792,10 @@ Rectangle {
                         verticalAlignment: Text.AlignVCenter
                     }
 
-                    background: Item {}
+                    background: Rectangle {
+                        radius: 14
+                        color: closeButton.hovered ? "#E8EDF4" : "transparent"
+                    }
                 }
             }
 
@@ -828,7 +814,7 @@ Rectangle {
                         text: qsTr("参比线")
                         font.pixelSize: 13
                         font.family: "Microsoft YaHei"
-                        font.bold: true
+                        //font.bold: true
                         color: "#2F3A4A"
                     }
 
@@ -838,17 +824,32 @@ Rectangle {
                         height: 38
                         model: lightIntensityPanel.displayedCurves.length > 0 ? lightIntensityPanel.displayedCurves.map(function(curve) { return curve.legend_text }) : []
                         currentIndex: lightIntensityPanel.clampReferenceIndex(lightIntensityPanel.referenceCurveIndex)
+
+                        background: Rectangle {
+                            radius: 4
+                            color: "#FFFFFF"
+                            border.color: "#82C1F2"
+                            border.width: 1
+                        }
+
+                        contentItem: Text {
+                            text: referenceCombo.displayText
+                            leftPadding: 12
+                            verticalAlignment: Text.AlignVCenter
+                            font.family: "Microsoft YaHei"
+                            color: "#333333"
+                        }
                     }
                 }
 
                 Rectangle {
-                    width: parent.width - 8
+                    width: analysisPopup.width - 48
                     height: 1
                     color: "#E6EDF5"
                 }
 
                 Row {
-                    spacing: 10
+                    spacing: 18
 
                     Text {
                         width: 78
@@ -856,14 +857,15 @@ Rectangle {
                         text: qsTr("高度区间")
                         font.pixelSize: 13
                         font.family: "Microsoft YaHei"
-                        font.bold: true
+                        //font.bold: true
                         color: "#2F3A4A"
                     }
 
-                    TextField {
+                    LineEdit {
                         id: lowerBoundField
-                        width: 50
+                        width: 60
                         height: 38
+                        font.pixelSize: 14
                         horizontalAlignment: Text.AlignHCenter
                         validator: IntValidator {
                             bottom: detailPage ? Math.floor(detailPage.minHeightValue) : 0
@@ -887,10 +889,11 @@ Rectangle {
                         color: "#2F3A4A"
                     }
 
-                    TextField {
+                    LineEdit {
                         id: upperBoundField
-                        width: 50
+                        width: 60
                         height: 38
+                        font.pixelSize: 14
                         horizontalAlignment: Text.AlignHCenter
                         validator: IntValidator {
                             bottom: detailPage ? Math.floor(detailPage.minHeightValue) : 0
@@ -907,11 +910,35 @@ Rectangle {
                     }
                 }
 
-                Button {
+                Rectangle {
+                    width: analysisPopup.width - 48
+                    height: 1
+                    color: "#E6EDF5"
+                }
+
+                Row {
+                    spacing: 2
+
+                    CheckBox {
+                        id: heightCheckBox
+                        scale: 0.65
+                    }
+
+                    Text {
+                        width: 78
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: qsTr("自定义高度分段")
+                        font.pixelSize: 13
+                        font.family: "Microsoft YaHei"
+                        color: "#2F3A4A"
+                    }
+                }
+
+                IconButton {
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: 108
                     height: 40
-                    text: qsTr("确认")
+                    button_text: qsTr("确认")
                     onClicked: {
                         var lowerValue = lightIntensityPanel.detailPage.toNumber(lowerBoundField.text, lightIntensityPanel.heightLowerBound)
                         var upperValue = lightIntensityPanel.detailPage.toNumber(upperBoundField.text, lightIntensityPanel.heightUpperBound)
@@ -928,20 +955,8 @@ Rectangle {
                         analysisPopup.close()
                     }
 
-                    contentItem: Text {
-                        text: parent.text
-                        font.pixelSize: 13
-                        font.family: "Microsoft YaHei"
-                        font.bold: true
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                        color: "#FFFFFF"
-                    }
-
-                    background: Rectangle {
-                        radius: 4
-                        color: "#4A89DC"
-                    }
+                    button_color: "#4A89DC"
+                    text_color: "#FFFFFF"
                 }
             }
         }

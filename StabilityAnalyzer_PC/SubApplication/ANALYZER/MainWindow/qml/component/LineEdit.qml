@@ -26,7 +26,7 @@ TextField {
     color: "#000000";
     font.pixelSize: 14;
 
-    //font.family: notoSansSCRegular.name
+    font.family: "Microsoft YaHei"
 
     selectByMouse: true;
     selectionColor: palette.highlight;

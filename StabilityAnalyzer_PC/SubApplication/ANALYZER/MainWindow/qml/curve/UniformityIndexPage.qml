@@ -25,41 +25,26 @@ Rectangle {
     color: "#FFFFFF"
 
     function loadUniformityData() {
-        // 这里不再复算业务指标，只做时间排序和折线点整理。
+        // 曲线点和坐标轴都交由后端整理，页面只做模式切换。
         rows = []
         bsPoints = []
         tPoints = []
         if (!detailPage || !experimentData || experimentData.id === undefined || !data_ctrl)
             return
 
-        var source = data_ctrl.getUniformityIndices(Number(experimentData.id))
-        if (!source || source.length === 0)
+        var chartData = data_ctrl.getUniformityChartData(Number(experimentData.id))
+        if (!chartData || !chartData.rows || chartData.rows.length === 0)
             return
 
-        var sorted = source.slice(0)
-        sorted.sort(function(a, b) {
-            return detailPage.toNumber(a.scan_elapsed_ms, 0) - detailPage.toNumber(b.scan_elapsed_ms, 0)
-        })
-
-        var localBs = []
-        var localT = []
-        for (var i = 0; i < sorted.length; ++i) {
-            var xValue = detailPage.toNumber(sorted[i].scan_elapsed_ms, 0) / 60000.0
-            localBs.push({ x: xValue, y: detailPage.toNumber(sorted[i].ui_backscatter, 0) })
-            localT.push({ x: xValue, y: detailPage.toNumber(sorted[i].ui_transmission, 0) })
-        }
-
-        rows = sorted
-        bsPoints = localBs
-        tPoints = localT
-        chartMinX = localBs.length > 0 ? localBs[0].x : 0
-        chartMaxX = localBs.length > 1 ? localBs[localBs.length - 1].x : chartMinX + 1
-        if (chartMaxX <= chartMinX)
-            chartMaxX = chartMinX + 1
-        chartMinY = 0
-        chartMaxY = 1
-        xAxisTickValues = detailPage.buildTimeTicks(chartMinX, chartMaxX, 6)
-        yAxisLabels = detailPage.makeAxisLabels(0, 1, 6, 2)
+        rows = chartData.rows
+        bsPoints = chartData.bsPoints
+        tPoints = chartData.tPoints
+        chartMinX = detailPage.toNumber(chartData.chartMinX, 0)
+        chartMaxX = detailPage.toNumber(chartData.chartMaxX, 1)
+        chartMinY = detailPage.toNumber(chartData.chartMinY, 0)
+        chartMaxY = detailPage.toNumber(chartData.chartMaxY, 1)
+        xAxisTickValues = chartData.xAxisTickValues || [0, 1]
+        yAxisLabels = chartData.yAxisLabels || detailPage.makeAxisLabels(0, 1, 6, 2)
     }
 
     onDetailPageChanged: loadUniformityData()

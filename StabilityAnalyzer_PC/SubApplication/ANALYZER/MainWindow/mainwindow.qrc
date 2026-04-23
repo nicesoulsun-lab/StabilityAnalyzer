@@ -49,5 +49,6 @@
         <file>qml/TitleBar.qml</file>
         <file>qml/FramelessBorder.qml</file>
         <file>qml/OptionsBar.qml</file>
+        <file>qml/curve/AdvancedCalculationPage.qml</file>
     </qresource>
 </RCC>

@@ -2,6 +2,10 @@
 INCLUDEPATH += $$PWD/inc/ \
 
 HEADERS += \
+        $$PWD/inc/Analysis/AdvancedCalculationEngine.h \
+        $$PWD/inc/Analysis/CurveChartAnalysisEngine.h \
+        $$PWD/inc/Analysis/LightCurveAnalysisCache.h \
+        $$PWD/inc/Analysis/LightCurveAnalysisEngine.h \
         $$PWD/inc/Common/systemdata.h \
         $$PWD/inc/Common/update_apk.h \
         $$PWD/inc/Controller/controllerManager.h \
@@ -16,6 +20,10 @@ HEADERS += \
         $$PWD/inc/CurveItem.h \
         $$PWD/inc/CurveDataModel.h
 SOURCES += \
+        $$PWD/src/Analysis/AdvancedCalculationEngine.cpp \
+        $$PWD/src/Analysis/CurveChartAnalysisEngine.cpp \
+        $$PWD/src/Analysis/LightCurveAnalysisCache.cpp \
+        $$PWD/src/Analysis/LightCurveAnalysisEngine.cpp \
         $$PWD/src/Common/systemdata.cpp \
         $$PWD/src/Common/update_apk.cpp \
         $$PWD/src/Controller/experiment_ctrl.cpp \

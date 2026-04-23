@@ -115,7 +115,6 @@ public:
      * @brief 检查是否在事务中
      * @return 在事务中返回 true，否则返回 false
      */
-    bool isInTransaction() const;
     
     // ========================================================================
     // 用户管理
@@ -188,14 +187,12 @@ public:
      * @param projectData 要更新的数据
      * @return 成功返回 true，失败返回 false
      */
-    bool updateProject(int projectId, const QVariantMap& projectData);
     
     /**
      * @brief 根据 ID 查询项目
      * @param projectId 项目 ID
      * @return 项目数据，不存在返回空 QVariantMap
      */
-    QVariantMap getProjectById(int projectId);
     
     /**
      * @brief 获取所有项目
@@ -208,14 +205,12 @@ public:
      * @param creatorId 创建者 ID
      * @return 项目数据列表
      */
-    QVector<QVariantMap> getProjectsByCreator(int creatorId);
     
     /**
      * @brief 删除项目
      * @param projectId 项目 ID
      * @return 成功返回 true，失败返回 false
      */
-    bool deleteProject(int projectId);
     
     // ========================================================================
     // 实验管理
@@ -234,7 +229,6 @@ public:
      * @param experimentData 要更新的数据
      * @return 成功返回 true，失败返回 false
      */
-    bool updateExperiment(int experimentId, const QVariantMap& experimentData);
     
     /**
      * @brief 更新实验状态
@@ -262,21 +256,18 @@ public:
      * @param operatorName 操作者姓名
      * @return 实验数据列表
      */
-    QVector<QVariantMap> getExperimentsByUser(const QString& operatorName);
     
     /**
      * @brief 根据项目 ID 查询实验
      * @param projectId 项目 ID
      * @return 实验数据列表
      */
-    QVector<QVariantMap> getExperimentsByProject(int projectId);
     
     /**
      * @brief 根据创建者 ID 查询实验
      * @param creatorId 创建者 ID
      * @return 实验数据列表
      */
-    QVector<QVariantMap> getExperimentsByCreator(int creatorId);
     
     /**
      * @brief 根据状态查询实验
@@ -320,7 +311,6 @@ public:
      * @param dataId 数据 ID
      * @return 实验数据，不存在返回空 QVariantMap
      */
-    QVariantMap getExperimentDataById(int dataId);
     
     /**
      * @brief 根据实验 ID 查询实验数据
@@ -328,23 +318,16 @@ public:
      * @return 实验数据列表
      */
     QVector<QVariantMap> getExperimentDataByExperiment(int experimentId);
-    QVector<QVariantMap> getExperimentDataPreviewByExperiment(int experimentId, int limit);
     // 为光强页返回按 scan 聚合且已降采样的整帧曲线。
     QVector<QVariantMap> getLightIntensityCurvesByExperiment(int experimentId, int pointsPerCurve);
-    // 按参比线和高度区间返回已处理的光强曲线，供光强页直接显示。
-    QVector<QVariantMap> getProcessedLightIntensityCurvesByExperiment(int experimentId, int pointsPerCurve, int referenceScanId,
-                                                                      double lowerMm, double upperMm, bool useReference);
     QVector<QVariantMap> getLightIntensityAveragesByExperiment(int experimentId);
     QVector<QVariantMap> getUniformityIndicesByExperiment(int experimentId);
     // 计算并缓存三区分层厚度结果。
     QVector<QVariantMap> getSeparationLayerDataByExperiment(int experimentId);
-    bool replaceInstabilityCurveData(int experimentId, const QVector<QVariantMap>& curveList);
-    QVector<QVariantMap> getInstabilityCurveDataByExperiment(int experimentId);
     QVector<QVariantMap> getOrComputeInstabilityCurveDataByExperiment(int experimentId);
     // 针对指定高度区间计算不稳定性曲线，用于局部/自定义模式懒加载。
     QVector<QVariantMap> getOrComputeInstabilityCurveDataByHeightRange(int experimentId, double lowerMm, double upperMm, const QString &segmentKey);
     // 删除整体和分区缓存，保证实验重算时不会混入旧结果。
-    bool deleteInstabilityCurveDataByExperiment(int experimentId);
     
     /**
      * @brief 根据时间范围查询实验数据
@@ -367,7 +350,6 @@ public:
      * @param data 要更新的数据
      * @return 成功返回 true，失败返回 false
      */
-    bool updateExperimentData(int dataId, const QVariantMap& data);
     
     /**
      * @brief 删除实验数据
@@ -412,7 +394,6 @@ public:
      * @param operation 操作类型
      * @return 操作日志列表
      */
-    QVector<QVariantMap> getOperationLogsByType(const QString& operation);
     
     /**
      * @brief 根据时间范围查询日志
@@ -420,14 +401,12 @@ public:
      * @param endTime 结束时间
      * @return 操作日志列表
      */
-    QVector<QVariantMap> getOperationLogsByTimeRange(const QString& startTime, const QString& endTime);
     
     /**
      * @brief 删除指定时间之前的旧日志
      * @param beforeTime 时间阈值
      * @return 删除的记录数
      */
-    int deleteOldOperationLogs(const QString& beforeTime);
 
     // ========================================================================
     // 数据库操作
@@ -460,6 +439,12 @@ signals:
     void errorOccurred(const QString& error);
 
 private:
+    // 这几项只服务于 SqlOrmManager 内部的辅助链路，不再对外暴露。
+    QVariantMap getProjectById(int projectId);
+    bool replaceInstabilityCurveData(int experimentId, const QVector<QVariantMap>& curveList);
+    QVector<QVariantMap> getInstabilityCurveDataByExperiment(int experimentId);
+    bool deleteInstabilityCurveDataByExperiment(int experimentId);
+
     explicit SqlOrmManager(QObject *parent = nullptr);
     ~SqlOrmManager();
     

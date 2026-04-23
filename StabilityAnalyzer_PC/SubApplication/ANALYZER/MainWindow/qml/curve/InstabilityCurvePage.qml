@@ -78,8 +78,11 @@ Rectangle {
         if (!detailPage || !experimentData || experimentData.id === undefined || !data_ctrl)
             return
 
-        var rows = data_ctrl.getInstabilityCurveData(Number(experimentData.id))
-        overallSeries = buildInstabilitySeriesFromRows(qsTr("整体"), rows, detailPage.minHeightValue, detailPage.maxHeightValue)
+        overallSeries = data_ctrl.getInstabilitySeriesChartData(Number(experimentData.id),
+                                                                detailPage.minHeightValue,
+                                                                detailPage.maxHeightValue,
+                                                                "overall",
+                                                                qsTr("整体"))
         overallLoaded = true
     }
 
@@ -94,13 +97,9 @@ Rectangle {
         var firstSplit = totalMinHeight + sectionHeight
         var secondSplit = totalMinHeight + sectionHeight * 2
 
-        var bottomRows = data_ctrl.getInstabilityCurveDataByHeightRange(Number(experimentData.id), totalMinHeight, firstSplit, "bottom")
-        var middleRows = data_ctrl.getInstabilityCurveDataByHeightRange(Number(experimentData.id), firstSplit, secondSplit, "middle")
-        var topRows = data_ctrl.getInstabilityCurveDataByHeightRange(Number(experimentData.id), secondSplit, totalMaxHeight, "top")
-
-        bottomSeries = buildInstabilitySeriesFromRows(qsTr("底部"), bottomRows, totalMinHeight, firstSplit)
-        middleSeries = buildInstabilitySeriesFromRows(qsTr("中部"), middleRows, firstSplit, secondSplit)
-        topSeries = buildInstabilitySeriesFromRows(qsTr("顶部"), topRows, secondSplit, totalMaxHeight)
+        bottomSeries = data_ctrl.getInstabilitySeriesChartData(Number(experimentData.id), totalMinHeight, firstSplit, "bottom", qsTr("底部"))
+        middleSeries = data_ctrl.getInstabilitySeriesChartData(Number(experimentData.id), firstSplit, secondSplit, "middle", qsTr("中部"))
+        topSeries = data_ctrl.getInstabilitySeriesChartData(Number(experimentData.id), secondSplit, totalMaxHeight, "top", qsTr("顶部"))
         localLoaded = true
         buildRadarOverview()
     }
@@ -112,8 +111,11 @@ Rectangle {
 
         customLowerBound = Math.max(detailPage.minHeightValue, Math.min(customLowerBound, detailPage.maxHeightValue))
         customUpperBound = Math.max(detailPage.minHeightValue, Math.min(customUpperBound, detailPage.maxHeightValue))
-        var rows = data_ctrl.getInstabilityCurveDataByHeightRange(Number(experimentData.id), customLowerBound, customUpperBound, "custom")
-        customSeries = buildInstabilitySeriesFromRows(qsTr("自定义"), rows, customLowerBound, customUpperBound)
+        customSeries = data_ctrl.getInstabilitySeriesChartData(Number(experimentData.id),
+                                                               customLowerBound,
+                                                               customUpperBound,
+                                                               "custom",
+                                                               qsTr("自定义"))
         customLoaded = true
     }
 
@@ -148,33 +150,12 @@ Rectangle {
         // 因此这里按时间索引把整体/底部/中部/顶部拼成一组 polygon。
         radarPolygons = []
         radarMaxValue = 1
-
-        var pointCount = Math.min(overallSeries.points ? overallSeries.points.length : 0,
-                                  bottomSeries.points ? bottomSeries.points.length : 0,
-                                  middleSeries.points ? middleSeries.points.length : 0,
-                                  topSeries.points ? topSeries.points.length : 0)
-        if (pointCount <= 0)
+        if (!detailPage || !experimentData || experimentData.id === undefined || !data_ctrl)
             return
 
-        var polygons = []
-        var maxValue = 0
-        for (var i = 0; i < pointCount; ++i) {
-            var values = [
-                detailPage.toNumber(overallSeries.points[i].y, 0),
-                detailPage.toNumber(bottomSeries.points[i].y, 0),
-                detailPage.toNumber(middleSeries.points[i].y, 0),
-                detailPage.toNumber(topSeries.points[i].y, 0)
-            ]
-            maxValue = Math.max(maxValue, values[0], values[1], values[2], values[3])
-            polygons.push({
-                values: values,
-                label: detailPage.formatElapsedTime(detailPage.toNumber(overallSeries.points[i].x, 0) * 60000),
-                color: radarColor(i, pointCount)
-            })
-        }
-
-        radarPolygons = polygons
-        radarMaxValue = Math.max(1, Math.ceil(maxValue))
+        var radarData = data_ctrl.getInstabilityRadarChartData(Number(experimentData.id))
+        radarPolygons = radarData && radarData.polygons ? radarData.polygons : []
+        radarMaxValue = radarData ? detailPage.toNumber(radarData.maxValue, 1) : 1
     }
 
     function applyCustomRange() {

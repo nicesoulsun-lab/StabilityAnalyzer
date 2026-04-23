@@ -237,7 +237,7 @@ public:
  */
 class SqlOrmManagerPrivate {
 public:
-    SqlOrmManagerPrivate(SqlOrmManager *q) : q_ptr(q) {}
+    SqlOrmManagerPrivate() {}
     
     /// 数据库存储类型（使用 decltype 推导 sqlite_orm 的复杂模板类型）
     using StorageType = decltype(DatabaseStorage::initStorage(QString()));
@@ -246,9 +246,6 @@ public:
     QString dbPath;                         ///< 数据库文件路径
     bool initialized = false;               ///< 初始化状态标志
     bool inTransaction = false;             ///< 事务状态标志
-    
-    SqlOrmManager *q_ptr;                   ///< 指向公共类的指针
-    Q_DECLARE_PUBLIC(SqlOrmManager)
 };
 
 // ============================================================================
@@ -282,19 +279,6 @@ void closeReadOnlyDb(const QString& connectionName) {
     if (db.isValid()) {
         db.close();
     }
-}
-
-QVariantMap readExtendedExperimentDataRow(const QSqlQuery& query) {
-    QVariantMap data;
-    data["id"] = query.value("id");
-    data["experiment_id"] = query.value("experiment_id");
-    data["timestamp"] = query.value("timestamp");
-    data["scan_id"] = query.value("scan_id");
-    data["scan_elapsed_ms"] = query.value("scan_elapsed_ms");
-    data["height"] = query.value("height");
-    data["backscatter_intensity"] = query.value("backscatter_intensity");
-    data["transmission_intensity"] = query.value("transmission_intensity");
-    return data;
 }
 
 QVariantMap experimentToVariantMap(const Experiment &experiment)
@@ -418,113 +402,6 @@ QVariantList downsampleCurvePoints(const QVector<LightCurveRowEx> &rows, bool us
         return a.x() < b.x();
     });
     return makePointList(sampled);
-}
-
-QVariantList downsamplePointSeries(const QVector<QPointF> &points, int maxPoints)
-{
-    if (points.isEmpty()) {
-        return QVariantList();
-    }
-
-    if (maxPoints <= 2 || points.size() <= maxPoints) {
-        return makePointList(points);
-    }
-
-    const int bucketCount = qMax(1, maxPoints / 2);
-    QVector<QPointF> sampled;
-    sampled.reserve(bucketCount * 2 + 2);
-    sampled.append(points.first());
-
-    const int innerCount = points.size() - 2;
-    for (int bucket = 0; bucket < bucketCount; ++bucket) {
-        const int startIndex = 1 + bucket * innerCount / bucketCount;
-        const int endIndex = 1 + (bucket + 1) * innerCount / bucketCount;
-        if (startIndex >= points.size() - 1) {
-            break;
-        }
-
-        const int safeEnd = qMax(startIndex + 1, qMin(endIndex, points.size() - 1));
-        int minIndex = startIndex;
-        int maxIndex = startIndex;
-        double minValue = points.at(startIndex).y();
-        double maxValue = minValue;
-
-        for (int i = startIndex + 1; i < safeEnd; ++i) {
-            const double value = points.at(i).y();
-            if (value < minValue) {
-                minValue = value;
-                minIndex = i;
-            }
-            if (value > maxValue) {
-                maxValue = value;
-                maxIndex = i;
-            }
-        }
-
-        if (minIndex <= maxIndex) {
-            sampled.append(points.at(minIndex));
-            if (maxIndex != minIndex) {
-                sampled.append(points.at(maxIndex));
-            }
-        } else {
-            sampled.append(points.at(maxIndex));
-            sampled.append(points.at(minIndex));
-        }
-    }
-
-    sampled.append(points.last());
-    std::sort(sampled.begin(), sampled.end(), [](const QPointF &a, const QPointF &b) {
-        if (qFuzzyCompare(a.x(), b.x())) {
-            return a.y() < b.y();
-        }
-        return a.x() < b.x();
-    });
-    return makePointList(sampled);
-}
-
-double lightCurveValueAtHeight(const QVector<LightCurveRowEx> &rows, bool useTransmission, double heightMm)
-{
-    if (rows.isEmpty()) {
-        return 0.0;
-    }
-    if (heightMm <= rows.first().heightMm) {
-        return useTransmission ? rows.first().transmission : rows.first().backscatter;
-    }
-    if (heightMm >= rows.last().heightMm) {
-        return useTransmission ? rows.last().transmission : rows.last().backscatter;
-    }
-
-    for (int i = 1; i < rows.size(); ++i) {
-        const LightCurveRowEx &left = rows.at(i - 1);
-        const LightCurveRowEx &right = rows.at(i);
-        if (heightMm > right.heightMm) {
-            continue;
-        }
-
-        const double x0 = left.heightMm;
-        const double x1 = right.heightMm;
-        const double y0 = useTransmission ? left.transmission : left.backscatter;
-        const double y1 = useTransmission ? right.transmission : right.backscatter;
-        if (qFuzzyCompare(x0, x1)) {
-            return y1;
-        }
-        const double ratio = (heightMm - x0) / (x1 - x0);
-        return y0 + (y1 - y0) * ratio;
-    }
-
-    return useTransmission ? rows.last().transmission : rows.last().backscatter;
-}
-
-QVector<LightCurveRowEx> filterLightCurveRowsByHeight(const QVector<LightCurveRowEx> &rows, double lowerMm, double upperMm)
-{
-    QVector<LightCurveRowEx> filtered;
-    filtered.reserve(rows.size());
-    for (const LightCurveRowEx &row : rows) {
-        if (row.heightMm >= lowerMm && row.heightMm <= upperMm) {
-            filtered.append(row);
-        }
-    }
-    return filtered;
 }
 
 double valueAtHeight(const QVector<InstabilityRowEx> &rows, bool useTransmission, double heightMm)
@@ -1117,7 +994,7 @@ SqlOrmManager* SqlOrmManager::instance() {
  */
 SqlOrmManager::SqlOrmManager(QObject *parent)
     : QObject(parent)
-    , d_ptr(new SqlOrmManagerPrivate(this))
+    , d_ptr(new SqlOrmManagerPrivate())
 {
     Q_D(SqlOrmManager);
     
@@ -1341,11 +1218,6 @@ bool SqlOrmManager::rollbackTransaction() {
  * @brief 检查是否在事务中
  * @return 在事务中返回 true，否则返回 false
  */
-bool SqlOrmManager::isInTransaction() const {
-    Q_D(const SqlOrmManager);
-    return d->inTransaction;
-}
-
 // ============================================================================
 // 用户管理
 // ============================================================================
@@ -1565,42 +1437,6 @@ bool SqlOrmManager::addProject(const QVariantMap& projectData) {
     }
 }
 
-bool SqlOrmManager::updateProject(int projectId, const QVariantMap& projectData) {
-    Q_D(SqlOrmManager);
-    
-    if (!d->initialized) return false;
-    
-    try {
-        auto projects = d->storage->get_all<Project>(
-                    where(c(&Project::id) == projectId)
-                    );
-        
-        if (projects.empty()) {
-            qWarning() << "[SqlOrmManager] 项目不存在：" << projectId;
-            return false;
-        }
-        
-        Project& project = projects[0];
-        
-        if (projectData.contains("project_name"))
-            project.project_name = projectData.value("project_name").toString();
-        if (projectData.contains("description"))
-            project.description = projectData.value("description").toString();
-        if (projectData.contains("creator_id"))
-            project.creator_id = projectData.value("creator_id").toInt();
-        if (projectData.contains("updated_at"))
-            project.updated_at = projectData.value("updated_at").toString();
-        
-        d->storage->update(project);
-        qDebug() << "[SqlOrmManager] 项目更新成功：" << projectId;
-        return true;
-    } catch (const std::exception& e) {
-        qWarning() << "[SqlOrmManager] 更新项目失败：" << QString::fromStdString(e.what());
-        emit errorOccurred(QString::fromStdString(e.what()));
-        return false;
-    }
-}
-
 QVariantMap SqlOrmManager::getProjectById(int projectId) {
     QVariantMap result;
     Q_D(SqlOrmManager);
@@ -1656,52 +1492,6 @@ QVector<QVariantMap> SqlOrmManager::getAllProjects() {
     return result;
 }
 
-QVector<QVariantMap> SqlOrmManager::getProjectsByCreator(int creatorId) {
-    QVector<QVariantMap> result;
-    Q_D(SqlOrmManager);
-    
-    if (!d->initialized) return result;
-    
-    try {
-        auto projects = d->storage->get_all<Project>(
-                    where(c(&Project::creator_id) == creatorId)
-                    );
-        
-        for (const auto& project : projects) {
-            QVariantMap projectData;
-            projectData["id"] = project.id;
-            projectData["name"] = project.project_name;
-            projectData["description"] = project.description;
-            projectData["creatorId"] = project.creator_id;
-            projectData["createdAt"] = project.created_at;
-            result.append(projectData);
-        }
-    } catch (const std::exception& e) {
-        qWarning() << "[SqlOrmManager] 查询创建者的项目失败：" << QString::fromStdString(e.what());
-        emit errorOccurred(QString::fromStdString(e.what()));
-    }
-    
-    return result;
-}
-
-bool SqlOrmManager::deleteProject(int projectId) {
-    Q_D(SqlOrmManager);
-    
-    if (!d->initialized) return false;
-    
-    try {
-        d->storage->remove_all<Project>(
-                    where(c(&Project::id) == projectId)
-                    );
-        qDebug() << "[SqlOrmManager] 项目删除成功：" << projectId;
-        return true;
-    } catch (const std::exception& e) {
-        qWarning() << "[SqlOrmManager] 删除项目失败：" << QString::fromStdString(e.what());
-        emit errorOccurred(QString::fromStdString(e.what()));
-        return false;
-    }
-}
-
 // ==================== 实验管理 ====================
 
 bool SqlOrmManager::addExperiment(const QVariantMap& experimentData) {
@@ -1735,66 +1525,6 @@ bool SqlOrmManager::addExperiment(const QVariantMap& experimentData) {
         return true;
     } catch (const std::exception& e) {
         qWarning() << "[SqlOrmManager] 添加实验失败：" << QString::fromStdString(e.what());
-        emit errorOccurred(QString::fromStdString(e.what()));
-        return false;
-    }
-}
-
-bool SqlOrmManager::updateExperiment(int experimentId, const QVariantMap& experimentData) {
-    Q_D(SqlOrmManager);
-    
-    if (!d->initialized) return false;
-    
-    try {
-        auto experiments = d->storage->get_all<Experiment>(
-                    where(c(&Experiment::id) == experimentId and c(&Experiment::deleted_flag) == 0)
-                    );
-        
-        if (experiments.empty()) {
-            qWarning() << "[SqlOrmManager] 实验不存在：" << experimentId;
-            return false;
-        }
-        
-        Experiment& experiment = experiments[0];
-        
-        if (experimentData.contains("project_id"))
-            experiment.project_id = experimentData.value("project_id").toInt();
-        if (experimentData.contains("sample_name"))
-            experiment.sample_name = experimentData.value("sample_name").toString();
-        if (experimentData.contains("operator_name"))
-            experiment.operator_name = experimentData.value("operator_name").toString();
-        if (experimentData.contains("description"))
-            experiment.description = experimentData.value("description").toString();
-        if (experimentData.contains("creator_id"))
-            experiment.creator_id = experimentData.value("creator_id").toInt();
-        if (experimentData.contains("duration"))
-            experiment.duration = experimentData.value("duration").toInt();
-        if (experimentData.contains("interval"))
-            experiment.interval = experimentData.value("interval").toInt();
-        if (experimentData.contains("count"))
-            experiment.count = experimentData.value("count").toInt();
-        if (experimentData.contains("temperature_control"))
-            experiment.temperature_control = experimentData.value("temperature_control").toBool();
-        if (experimentData.contains("target_temp"))
-            experiment.target_temp = experimentData.value("target_temp").toDouble();
-        if (experimentData.contains("scan_range_start"))
-            experiment.scan_range_start = experimentData.value("scan_range_start").toInt();
-        if (experimentData.contains("scan_range_end"))
-            experiment.scan_range_end = experimentData.value("scan_range_end").toInt();
-        if (experimentData.contains("scan_step"))
-            experiment.scan_step = experimentData.value("scan_step").toInt();
-        if (experimentData.contains("status")) {
-            experiment.status = experimentData.value("status").toInt();
-            if (experiment.status == 2) {  // 状态为 2 表示完成
-                // 不需要 completed_at 字段
-            }
-        }
-        
-        d->storage->update(experiment);
-        qDebug() << "[SqlOrmManager] 实验更新成功：" << experimentId;
-        return true;
-    } catch (const std::exception& e) {
-        qWarning() << "[SqlOrmManager] 更新实验失败：" << QString::fromStdString(e.what());
         emit errorOccurred(QString::fromStdString(e.what()));
         return false;
     }
@@ -1894,76 +1624,6 @@ QVector<QVariantMap> SqlOrmManager::getAllExperiments() {
     }
     
     return result;
-}
-
-QVector<QVariantMap> SqlOrmManager::getExperimentsByProject(int projectId) {
-    QVector<QVariantMap> result;
-    Q_D(SqlOrmManager);
-    
-    if (!d->initialized) return result;
-    
-    try {
-        QString purgeError;
-        const QString connectionName = QString("SqlOrmGetExperimentsByProject_%1").arg(reinterpret_cast<quintptr>(this));
-        QSqlDatabase purgeDb = openReadOnlyDb(d->dbPath, connectionName, &purgeError);
-        if (purgeDb.isOpen()) {
-            purgeExpiredDeletedExperiments(purgeDb, &purgeError);
-            closeReadOnlyDb(connectionName);
-        }
-
-        // 先获取项目名称
-        QVariantMap projectData = getProjectById(projectId);
-        QString projectName = projectData["project_name"].toString();
-        
-        auto experiments = d->storage->get_all<Experiment>(
-                    where(c(&Experiment::project_id) == projectId and c(&Experiment::deleted_flag) == 0)
-                    );
-        
-        for (const auto& experiment : experiments) {
-            QVariantMap experimentData = experimentToVariantMap(experiment);
-            experimentData["project_name"] = projectName;
-            result.append(experimentData);
-        }
-    } catch (const std::exception& e) {
-        qWarning() << "[SqlOrmManager] 查询项目的实验失败：" << QString::fromStdString(e.what());
-        emit errorOccurred(QString::fromStdString(e.what()));
-    }
-    
-    return result;
-}
-
-QVector<QVariantMap> SqlOrmManager::getExperimentsByUser(const QString& operatorName) {
-    QVector<QVariantMap> result;
-    Q_D(SqlOrmManager);
-    
-    if (!d->initialized) return result;
-    
-    try {
-        auto experiments = d->storage->get_all<Experiment>(
-                    where(c(&Experiment::operator_name) == operatorName.toStdString() and c(&Experiment::deleted_flag) == 0)
-                    );
-        
-        for (const auto& experiment : experiments) {
-            QVariantMap experimentData = experimentToVariantMap(experiment);
-            
-            // 通过 project_id 查询项目名称
-            QVariantMap projectData = getProjectById(experiment.project_id);
-            experimentData["project_name"] = projectData["project_name"].toString();
-            
-            result.append(experimentData);
-        }
-    } catch (const std::exception& e) {
-        qWarning() << "[SqlOrmManager] 查询用户的实验失败：" << QString::fromStdString(e.what());
-        emit errorOccurred(QString::fromStdString(e.what()));
-    }
-    
-    return result;
-}
-
-QVector<QVariantMap> SqlOrmManager::getExperimentsByCreator(int creatorId) {
-    // 实验表没有 creatorId 字段，此方法返回空
-    Q_UNUSED(creatorId)
-    return QVector<QVariantMap>();
 }
 
 QVector<QVariantMap> SqlOrmManager::getExperimentsByStatus(int status) {
@@ -2185,36 +1845,6 @@ bool SqlOrmManager::batchAddExperimentData(const QVector<QVariantMap>& dataList)
     }
 }
 
-QVariantMap SqlOrmManager::getExperimentDataById(int dataId) {
-    QVariantMap result;
-    Q_D(SqlOrmManager);
-    
-    if (!d->initialized) return result;
-    
-    try {
-        auto dataList = d->storage->get_all<ExperimentData>(
-                    where(c(&ExperimentData::id) == dataId)
-                    );
-        
-        if (!dataList.empty()) {
-            const ExperimentData& expData = dataList[0];
-            result["id"] = expData.id;
-            result["experiment_id"] = expData.experiment_id;
-            result["timestamp"] = expData.timestamp;
-            result["scan_id"] = expData.scan_id;
-            result["scan_elapsed_ms"] = expData.scan_elapsed_ms;
-            result["height"] = expData.height;
-            result["backscatter_intensity"] = expData.backscatter_intensity;
-            result["transmission_intensity"] = expData.transmission_intensity;
-        }
-    } catch (const std::exception& e) {
-        qWarning() << "[SqlOrmManager] 查询实验数据失败：" << QString::fromStdString(e.what());
-        emit errorOccurred(QString::fromStdString(e.what()));
-    }
-    
-    return result;
-}
-
 QVector<QVariantMap> SqlOrmManager::getExperimentDataByExperiment(int experimentId) {
     QVector<QVariantMap> result;
     Q_D(SqlOrmManager);
@@ -2312,42 +1942,6 @@ QVector<QVariantMap> SqlOrmManager::getAllExperimentData() {
     return result;
 }
 
-bool SqlOrmManager::updateExperimentData(int dataId, const QVariantMap& data) {
-    Q_D(SqlOrmManager);
-    
-    if (!d->initialized) return false;
-    
-    try {
-        auto dataList = d->storage->get_all<ExperimentData>(
-                    where(c(&ExperimentData::id) == dataId)
-                    );
-        
-        if (dataList.empty()) {
-            qWarning() << "[SqlOrmManager] 实验数据不存在：" << dataId;
-            return false;
-        }
-        
-        ExperimentData& expData = dataList[0];
-        
-        if (data.contains("timestamp"))
-            expData.timestamp = data.value("timestamp").toInt();
-        if (data.contains("height"))
-            expData.height = data.value("height").toDouble();
-        if (data.contains("backscatterIntensity"))
-            expData.backscatter_intensity = data.value("backscatterIntensity").toDouble();
-        if (data.contains("transmissionIntensity"))
-            expData.transmission_intensity = data.value("transmissionIntensity").toDouble();
-        
-        d->storage->update(expData);
-        qDebug() << "[SqlOrmManager] 实验数据更新成功：" << dataId;
-        return true;
-    } catch (const std::exception& e) {
-        qWarning() << "[SqlOrmManager] 更新实验数据失败：" << QString::fromStdString(e.what());
-        emit errorOccurred(QString::fromStdString(e.what()));
-        return false;
-    }
-}
-
 bool SqlOrmManager::deleteExperimentData(int dataId) {
     Q_D(SqlOrmManager);
     
@@ -2387,45 +1981,6 @@ bool SqlOrmManager::deleteExperimentDataByExperiment(int experimentId) {
 // ============================================================================
 // 操作日志管理
 // ============================================================================
-
-QVector<QVariantMap> SqlOrmManager::getExperimentDataPreviewByExperiment(int experimentId, int limit) {
-    QVector<QVariantMap> result;
-    Q_D(SqlOrmManager);
-
-    if (!d->initialized || experimentId <= 0 || limit <= 0) return result;
-
-    const QString connectionName = QString("SqlOrmPreview_%1").arg(reinterpret_cast<quintptr>(this));
-    QString openError;
-    QSqlDatabase db = openReadOnlyDb(d->dbPath, connectionName, &openError);
-    if (!db.isOpen()) {
-        emit errorOccurred(openError);
-        closeReadOnlyDb(connectionName);
-        return result;
-    }
-
-    QSqlQuery query(db);
-    query.setForwardOnly(true);
-    query.prepare(
-        "SELECT id, experiment_id, timestamp, scan_id, scan_elapsed_ms, height, "
-        "backscatter_intensity, transmission_intensity "
-        "FROM experiment_data WHERE experiment_id = ? "
-        "ORDER BY timestamp ASC, scan_id ASC, id ASC LIMIT ?");
-    query.addBindValue(experimentId);
-    query.addBindValue(limit);
-
-    if (!query.exec()) {
-        emit errorOccurred(query.lastError().text());
-        closeReadOnlyDb(connectionName);
-        return result;
-    }
-
-    while (query.next()) {
-        result.append(readExtendedExperimentDataRow(query));
-    }
-
-    closeReadOnlyDb(connectionName);
-    return result;
-}
 
 QVector<QVariantMap> SqlOrmManager::getLightIntensityAveragesByExperiment(int experimentId) {
     QVector<QVariantMap> result;
@@ -2655,159 +2210,6 @@ QVector<QVariantMap> SqlOrmManager::getLightIntensityCurvesByExperiment(int expe
 
     if (currentScanId != std::numeric_limits<int>::min()) {
         flushCurve(currentScanId);
-    }
-
-    closeReadOnlyDb(connectionName);
-    return result;
-}
-
-QVector<QVariantMap> SqlOrmManager::getProcessedLightIntensityCurvesByExperiment(int experimentId, int pointsPerCurve, int referenceScanId,
-                                                                                 double lowerMm, double upperMm, bool useReference)
-{
-    QVector<QVariantMap> result;
-    Q_D(SqlOrmManager);
-
-    if (!d->initialized || experimentId <= 0) return result;
-
-    const QString connectionName = QString("SqlOrmProcessedLightCurves_%1").arg(reinterpret_cast<quintptr>(this));
-    QString openError;
-    QSqlDatabase db = openReadOnlyDb(d->dbPath, connectionName, &openError);
-    if (!db.isOpen()) {
-        emit errorOccurred(openError);
-        closeReadOnlyDb(connectionName);
-        return result;
-    }
-
-    struct CurveSummary {
-        int scanId = 0;
-        int timestamp = 0;
-        int elapsedMs = 0;
-        int pointCount = 0;
-        double minHeightMm = 0.0;
-        double maxHeightMm = 0.0;
-    };
-
-    QSqlQuery summaryQuery(db);
-    summaryQuery.prepare(
-        "SELECT scan_id, MIN(timestamp) AS timestamp, MAX(scan_elapsed_ms) AS scan_elapsed_ms, "
-        "COUNT(*) AS point_count, MIN(height) / 1000.0 AS min_height_mm, MAX(height) / 1000.0 AS max_height_mm "
-        "FROM experiment_data WHERE experiment_id = ? "
-        "GROUP BY scan_id ORDER BY scan_id ASC");
-    summaryQuery.addBindValue(experimentId);
-
-    if (!summaryQuery.exec()) {
-        emit errorOccurred(summaryQuery.lastError().text());
-        closeReadOnlyDb(connectionName);
-        return result;
-    }
-
-    QVector<CurveSummary> summaries;
-    double globalMinHeight = std::numeric_limits<double>::max();
-    double globalMaxHeight = std::numeric_limits<double>::lowest();
-    while (summaryQuery.next()) {
-        CurveSummary summary;
-        summary.scanId = summaryQuery.value("scan_id").toInt();
-        summary.timestamp = summaryQuery.value("timestamp").toInt();
-        summary.elapsedMs = summaryQuery.value("scan_elapsed_ms").toInt();
-        summary.pointCount = summaryQuery.value("point_count").toInt();
-        summary.minHeightMm = summaryQuery.value("min_height_mm").toDouble();
-        summary.maxHeightMm = summaryQuery.value("max_height_mm").toDouble();
-        summaries.append(summary);
-        globalMinHeight = qMin(globalMinHeight, summary.minHeightMm);
-        globalMaxHeight = qMax(globalMaxHeight, summary.maxHeightMm);
-    }
-
-    if (summaries.isEmpty()) {
-        closeReadOnlyDb(connectionName);
-        return result;
-    }
-
-    const double safeLower = qMax(globalMinHeight, qMin(lowerMm, upperMm));
-    const double safeUpper = qMin(globalMaxHeight, qMax(lowerMm, upperMm));
-    if (safeUpper - safeLower <= 1e-6) {
-        closeReadOnlyDb(connectionName);
-        return result;
-    }
-
-    const int totalPointBudgetPerChannel = 12000;
-    const int effectivePointsPerCurve = qMax(64, qMin(pointsPerCurve > 0 ? pointsPerCurve : 640,
-                                                      qMax(64, totalPointBudgetPerChannel / qMax(1, summaries.size()))));
-
-    QSqlQuery query(db);
-    query.setForwardOnly(true);
-    query.prepare(
-        "SELECT scan_id, height, backscatter_intensity, transmission_intensity "
-        "FROM experiment_data WHERE experiment_id = ? "
-        "ORDER BY scan_id ASC, height ASC, id ASC");
-    query.addBindValue(experimentId);
-
-    if (!query.exec()) {
-        emit errorOccurred(query.lastError().text());
-        closeReadOnlyDb(connectionName);
-        return result;
-    }
-
-    QHash<int, QVector<LightCurveRowEx>> rowsByScanId;
-    while (query.next()) {
-        const int scanId = query.value("scan_id").toInt();
-        LightCurveRowEx row;
-        row.heightMm = query.value("height").toDouble() / 1000.0;
-        row.backscatter = query.value("backscatter_intensity").toDouble();
-        row.transmission = query.value("transmission_intensity").toDouble();
-        rowsByScanId[scanId].append(row);
-    }
-
-    const int safeReferenceScanId = rowsByScanId.contains(referenceScanId) ? referenceScanId : summaries.first().scanId;
-    const QVector<LightCurveRowEx> referenceRows = filterLightCurveRowsByHeight(rowsByScanId.value(safeReferenceScanId), safeLower, safeUpper);
-
-    for (const CurveSummary &summary : summaries) {
-        const QVector<LightCurveRowEx> filteredRows = filterLightCurveRowsByHeight(rowsByScanId.value(summary.scanId), safeLower, safeUpper);
-        if (filteredRows.isEmpty()) {
-            continue;
-        }
-
-        QVector<QPointF> backscatterPoints;
-        QVector<QPointF> transmissionPoints;
-        backscatterPoints.reserve(filteredRows.size());
-        transmissionPoints.reserve(filteredRows.size());
-
-        double minBackscatter = std::numeric_limits<double>::max();
-        double maxBackscatter = std::numeric_limits<double>::lowest();
-        double minTransmission = std::numeric_limits<double>::max();
-        double maxTransmission = std::numeric_limits<double>::lowest();
-
-        for (const LightCurveRowEx &row : filteredRows) {
-            double backscatterValue = row.backscatter;
-            double transmissionValue = row.transmission;
-            if (useReference && !referenceRows.isEmpty()) {
-                backscatterValue -= lightCurveValueAtHeight(referenceRows, false, row.heightMm);
-                transmissionValue -= lightCurveValueAtHeight(referenceRows, true, row.heightMm);
-            }
-
-            backscatterPoints.append(QPointF(row.heightMm, backscatterValue));
-            transmissionPoints.append(QPointF(row.heightMm, transmissionValue));
-            minBackscatter = qMin(minBackscatter, backscatterValue);
-            maxBackscatter = qMax(maxBackscatter, backscatterValue);
-            minTransmission = qMin(minTransmission, transmissionValue);
-            maxTransmission = qMax(maxTransmission, transmissionValue);
-        }
-
-        QVariantMap curve;
-        curve["scan_id"] = summary.scanId;
-        curve["timestamp"] = summary.timestamp;
-        curve["scan_elapsed_ms"] = summary.elapsedMs;
-        curve["point_count"] = filteredRows.size();
-        curve["min_height_mm"] = safeLower;
-        curve["max_height_mm"] = safeUpper;
-        curve["min_backscatter"] = minBackscatter;
-        curve["max_backscatter"] = maxBackscatter;
-        curve["min_transmission"] = minTransmission;
-        curve["max_transmission"] = maxTransmission;
-        curve["reference_scan_id"] = safeReferenceScanId;
-        curve["use_reference"] = useReference;
-        curve["backscatter_points"] = downsamplePointSeries(backscatterPoints, effectivePointsPerCurve);
-        curve["transmission_points"] = downsamplePointSeries(transmissionPoints, effectivePointsPerCurve);
-        result.append(curve);
     }
 
     closeReadOnlyDb(connectionName);
@@ -3808,102 +3210,6 @@ QVector<QVariantMap> SqlOrmManager::getOperationLogsByUser(int userId) {
     }
     
     return result;
-}
-
-QVector<QVariantMap> SqlOrmManager::getOperationLogsByType(const QString& operation) {
-    QVector<QVariantMap> result;
-    Q_D(SqlOrmManager);
-    
-    if (!d->initialized) return result;
-    
-    try {
-        auto logs = d->storage->get_all<OperationLog>(
-                    where(c(&OperationLog::operation) == operation.toStdString()),
-                    order_by(&OperationLog::id).desc()
-                    );
-        
-        for (const auto& log : logs) {
-            QVariantMap logData;
-            logData["id"] = log.id;
-            logData["username"] = log.username;
-            logData["user_id"] = log.user_id;
-            logData["operation"] = log.operation;
-            logData["target"] = log.target;
-            logData["detail"] = log.detail;
-            logData["created_at"] = log.created_at;
-            result.append(logData);
-        }
-    } catch (const std::exception& e) {
-        qWarning() << "[SqlOrmManager] 按类型查询操作日志失败：" << QString::fromStdString(e.what());
-        emit errorOccurred(QString::fromStdString(e.what()));
-    }
-    
-    return result;
-}
-
-QVector<QVariantMap> SqlOrmManager::getOperationLogsByTimeRange(const QString& startTime, const QString& endTime) {
-    QVector<QVariantMap> result;
-    Q_D(SqlOrmManager);
-    
-    if (!d->initialized) return result;
-    
-    try {
-        auto logs = d->storage->get_all<OperationLog>(
-                    where(
-                        c(&OperationLog::created_at) >= startTime.toStdString()
-                        and c(&OperationLog::created_at) <= endTime.toStdString()
-                    ),
-                    order_by(&OperationLog::id).desc()
-                    );
-        
-        for (const auto& log : logs) {
-            QVariantMap logData;
-            logData["id"] = log.id;
-            logData["username"] = log.username;
-            logData["user_id"] = log.user_id;
-            logData["operation"] = log.operation;
-            logData["target"] = log.target;
-            logData["detail"] = log.detail;
-            logData["created_at"] = log.created_at;
-            result.append(logData);
-        }
-    } catch (const std::exception& e) {
-        qWarning() << "[SqlOrmManager] 按时间范围查询操作日志失败：" << QString::fromStdString(e.what());
-        emit errorOccurred(QString::fromStdString(e.what()));
-    }
-    
-    return result;
-}
-
-int SqlOrmManager::deleteOldOperationLogs(const QString& beforeTime) {
-    Q_D(SqlOrmManager);
-
-    if (!d->initialized) return 0;
-
-    try {
-        // 1. 先计算将要删除的记录数量
-        auto count = d->storage->count<OperationLog>(
-                    where(c(&OperationLog::created_at) < beforeTime.toStdString())
-                    );
-
-        if (count > 0) {
-            // 2. 执行删除操作 (remove_all 返回 void)
-            d->storage->remove_all<OperationLog>(
-                        where(c(&OperationLog::created_at) < beforeTime.toStdString())
-                        );
-
-            qDebug() << "[SqlOrmManager] 清理旧操作日志，删除" << count << "条记录";
-            return static_cast<int>(count);
-        } else {
-            qDebug() << "[SqlOrmManager] 没有需要清理的旧操作日志";
-            return 0;
-        }
-
-    } catch (const std::exception& e) {
-        qWarning() << "[SqlOrmManager] 清理旧操作日志失败：" << QString::fromStdString(e.what());
-        emit errorOccurred(QString::fromStdString(e.what()));
-        return 0;
-    }
 }
 
 void SqlOrmManager::close() {

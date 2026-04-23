@@ -27,47 +27,26 @@ Rectangle {
     color: "#FFFFFF"
 
     function loadAverageData() {
-        // 先收集 BS/T 两条曲线，再统一计算一套可复用的时间轴和 Y 轴范围。
+        // 平均值曲线的排序、取点和坐标轴范围都由后端统一整理。
         rows = []
         bsPoints = []
         tPoints = []
         if (!detailPage || !experimentData || experimentData.id === undefined || !data_ctrl)
             return
 
-        var source = data_ctrl.getLightIntensityAverages(Number(experimentData.id))
-        if (!source || source.length === 0)
+        var chartData = data_ctrl.getLightIntensityAverageChartData(Number(experimentData.id))
+        if (!chartData || !chartData.rows || chartData.rows.length === 0)
             return
 
-        var sorted = source.slice(0)
-        sorted.sort(function(a, b) {
-            return detailPage.toNumber(a.scan_elapsed_ms, 0) - detailPage.toNumber(b.scan_elapsed_ms, 0)
-        })
-
-        var localBs = []
-        var localT = []
-        var minY = Number.POSITIVE_INFINITY
-        var maxY = Number.NEGATIVE_INFINITY
-        for (var i = 0; i < sorted.length; ++i) {
-            var xValue = detailPage.toNumber(sorted[i].scan_elapsed_ms, 0) / 60000.0
-            var bsValue = detailPage.toNumber(sorted[i].avg_backscatter, 0)
-            var tValue = detailPage.toNumber(sorted[i].avg_transmission, 0)
-            localBs.push({ x: xValue, y: bsValue })
-            localT.push({ x: xValue, y: tValue })
-            minY = Math.min(minY, bsValue, tValue)
-            maxY = Math.max(maxY, bsValue, tValue)
-        }
-
-        rows = sorted
-        bsPoints = localBs
-        tPoints = localT
-        chartMinX = localBs.length > 0 ? localBs[0].x : 0
-        chartMaxX = localBs.length > 1 ? localBs[localBs.length - 1].x : chartMinX + 1
-        if (chartMaxX <= chartMinX)
-            chartMaxX = chartMinX + 1
-        chartMinY = isFinite(minY) ? detailPage.paddedMin(minY, maxY, 1) : 0
-        chartMaxY = isFinite(maxY) ? detailPage.paddedMax(maxY, minY, 1) : 1
-        xAxisTickValues = detailPage.buildTimeTicks(chartMinX, chartMaxX, 6)
-        yAxisLabels = detailPage.makeAxisLabels(chartMinY, chartMaxY, 6, 1)
+        rows = chartData.rows
+        bsPoints = chartData.bsPoints
+        tPoints = chartData.tPoints
+        chartMinX = detailPage.toNumber(chartData.chartMinX, 0)
+        chartMaxX = detailPage.toNumber(chartData.chartMaxX, 1)
+        chartMinY = detailPage.toNumber(chartData.chartMinY, 0)
+        chartMaxY = detailPage.toNumber(chartData.chartMaxY, 1)
+        xAxisTickValues = chartData.xAxisTickValues || [0, 1]
+        yAxisLabels = chartData.yAxisLabels || detailPage.makeAxisLabels(chartMinY, chartMaxY, 6, 1)
     }
 
     onDetailPageChanged: loadAverageData()

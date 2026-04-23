@@ -8,7 +8,7 @@ ComboBox {
 
     property int pixelSize : 14
     property string text_color : "#000000"
-    //property string family : notoSansSCRegular.name
+    property string family : "Microsoft YaHei"
 
     property color hover_color: "#F4F8FF"
     property color border_color: "#EDEEF0"
@@ -29,7 +29,7 @@ ComboBox {
             text: comboBox.displayText
             color: text_color
             font.pixelSize: pixelSize
-            // font.family: family
+            font.family: family
             // elide: Text.ElideRight
 
         }
@@ -115,7 +115,7 @@ ComboBox {
                         height: 20
                         color: text_color
                         font.pixelSize: pixelSize
-                        //font.family: family
+                        font.family: family
                         elide: Text.ElideRight
                         verticalAlignment: Text.AlignVCenter
                         anchors.verticalCenter: parent.verticalCenter
