@@ -17,9 +17,11 @@
 #include <QSet>
 #include <QtMath>
 #include <QDebug>
+#include <algorithm>
 
 namespace {
 constexpr int kChannelCount = 4;
+constexpr qint64 kDrainStopGraceMs = 15000;
 
 /**
  * @brief 由于 addExperiment 当前返回 bool，这里通过“取最大ID”方式获取最新实验ID
@@ -37,6 +39,66 @@ int findLatestExperimentId(SqlOrmManager* db)
         maxId = qMax(maxId, item.value("id", 0).toInt());
     }
     return maxId;
+}
+
+int ensureProjectIdForExperiment(SqlOrmManager *db,
+                                 const ExperimentParams &params,
+                                 int creatorId)
+{
+    if (!db) {
+        return 0;
+    }
+
+    const QString normalizedProjectName = params.projectName.trimmed();
+    if (params.projectId > 0) {
+        const QVariantMap existingProject = db->getProjectById(params.projectId);
+        if (!existingProject.isEmpty()) {
+            return params.projectId;
+        }
+    }
+
+    if (!normalizedProjectName.isEmpty()) {
+        const QVector<QVariantMap> projects = db->getAllProjects();
+        for (const QVariantMap &project : projects) {
+            if (project.value(QStringLiteral("project_name")).toString().trimmed() == normalizedProjectName) {
+                return project.value(QStringLiteral("id")).toInt();
+            }
+        }
+
+        QVariantMap projectData;
+        projectData.insert(QStringLiteral("project_name"), normalizedProjectName);
+        projectData.insert(QStringLiteral("description"), QString());
+        projectData.insert(QStringLiteral("creator_id"), creatorId);
+        if (!db->addProject(projectData)) {
+            return 0;
+        }
+
+        const QVector<QVariantMap> refreshedProjects = db->getAllProjects();
+        for (const QVariantMap &project : refreshedProjects) {
+            if (project.value(QStringLiteral("project_name")).toString().trimmed() == normalizedProjectName) {
+                return project.value(QStringLiteral("id")).toInt();
+            }
+        }
+    }
+
+    return params.projectId;
+}
+
+int resolveScanIntervalSeconds(const ExperimentParams &params, int totalDurationSeconds)
+{
+    const int configuredIntervalSeconds =
+            qMax(0, params.intervalHours) * 3600
+            + qMax(0, params.intervalMinutes) * 60
+            + qMax(0, params.intervalSeconds);
+    if (configuredIntervalSeconds > 0) {
+        return configuredIntervalSeconds;
+    }
+
+    if (params.scanCount > 0 && totalDurationSeconds > 0) {
+        return qMax(1, totalDurationSeconds / params.scanCount);
+    }
+
+    return 0;
 }
 
 /**
@@ -82,6 +144,10 @@ ExperimentCtrl::ExperimentCtrl(QObject *parent)
         m_experimentTimers[channel] = new QTimer(this);
         m_statusPollTimers[channel] = new QTimer(this);
         m_runningFlags[channel] = false;
+        m_plannedScanCounts[channel] = 0;
+        m_startedScanCounts[channel] = 0;
+        m_stopAfterDrainFlags[channel] = false;
+        m_stopAfterDrainDeadlineMs[channel] = 0;
         // 默认给每个通道分配不同 slaveId，避免调度器加载 JSON 时因重复而跳过设备。
         m_stateStore->setSlaveId(i, i + 1);
 
@@ -105,6 +171,7 @@ ExperimentCtrl::ExperimentCtrl(QObject *parent)
             {"startFlag", 0},
             {"runStatus", 0},
             {"running", false},
+            {"experiment_id", 0},
             {"coverStatus", 0},
             {"isCovered", false},
             {"sampleStatus", 0},
@@ -365,8 +432,14 @@ bool ExperimentCtrl::startExperiment(int channel, int creatorId)
     }
 
     const ExperimentParams params = m_stateStore->params(channel);
+    if (params.scanStep <= 0 || params.scanRangeEnd <= params.scanRangeStart) {
+        emit operationFailed(tr("扫描区间或步长无效"));
+        return false;
+    }
+
     qDebug() << "[ExperimentCtrl][Start] channel=" << channel
              << "projectId=" << params.projectId
+             << "projectName=" << params.projectName
              << "duration(d/h/m/s)=" << params.durationDays << params.durationHours << params.durationMinutes << params.durationSeconds
              << "interval(h/m/s)=" << params.intervalHours << params.intervalMinutes << params.intervalSeconds
              << "scanRange=" << params.scanRangeStart << "~" << params.scanRangeEnd
@@ -374,8 +447,14 @@ bool ExperimentCtrl::startExperiment(int channel, int creatorId)
              << "tempCtrl=" << params.temperatureControl
              << "targetTemp=" << params.targetTemperature;
 
+    const int deviceProjectId = ensureProjectIdForExperiment(m_dbManager, params, creatorId);
+    if (deviceProjectId <= 0) {
+        emit operationFailed(tr("创建设备端工程失败"));
+        return false;
+    }
+
     QVariantMap experimentData;
-    experimentData["project_id"] = params.projectId;
+    experimentData["project_id"] = deviceProjectId;
     experimentData["sample_name"] = params.sampleName;
     experimentData["operator_name"] = params.operatorName;
     experimentData["description"] = params.description;
@@ -383,8 +462,7 @@ bool ExperimentCtrl::startExperiment(int channel, int creatorId)
 
     const int durationSeconds = m_sessionService->calculateTotalSeconds(
                 params.durationDays, params.durationHours, params.durationMinutes, params.durationSeconds);
-    const int intervalSeconds = m_sessionService->calculateTotalSeconds(
-                0, params.intervalHours, params.intervalMinutes, params.intervalSeconds);
+    const int intervalSeconds = resolveScanIntervalSeconds(params, durationSeconds);
 
     experimentData["duration"] = durationSeconds;
     experimentData["interval"] = intervalSeconds;
@@ -409,19 +487,30 @@ bool ExperimentCtrl::startExperiment(int channel, int creatorId)
     qDebug() << "[ExperimentCtrl][Start] created experimentId=" << experimentId;
 
     m_experimentIds[ch] = experimentId;
+    m_stateStore->clearMemoryCache(channel);
     m_sessionService->resetScanContexts(channel);
     ExperimentScanProfile scanProfile = m_sessionService->buildScanProfile(params);
     scanProfile.experimentStartMs = QDateTime::currentMSecsSinceEpoch();
     m_sessionService->setScanProfile(channel, scanProfile);
     m_startTimes[ch] = scanProfile.experimentStartMs;
     m_runningFlags[ch] = true;
+    m_plannedScanCounts[ch] = qMax(1, params.scanCount);
+    m_startedScanCounts[ch] = 0;
+    m_stopAfterDrainFlags[ch] = false;
+    m_stopAfterDrainDeadlineMs[ch] = 0;
 
-    if (durationSeconds > 0) {
+    const bool multiScanByInterval = (intervalSeconds > 0 && m_plannedScanCounts.value(ch, 1) > 1);
+    if (durationSeconds > 0 && !multiScanByInterval) {
         m_experimentTimers[ch]->start(durationSeconds * 1000);
+    } else {
+        m_experimentTimers[ch]->stop();
     }
     if (intervalSeconds > 0) {
         m_scanTimers[ch]->start(intervalSeconds * 1000);
     }
+    qDebug() << "[ExperimentCtrl][Start] effective durationSeconds=" << durationSeconds
+             << "effective intervalSeconds=" << intervalSeconds
+             << "scanCount=" << params.scanCount;
 
     // 开始实验前，先将用户参数写入对应寄存器。
     sendControlCommand(channel, "set_scan_range", {{"start", params.scanRangeStart}, {"end", params.scanRangeEnd}});
@@ -431,12 +520,17 @@ bool ExperimentCtrl::startExperiment(int channel, int creatorId)
     // 立即触发首轮扫描；每次 start_scan 都先登记一条扫描上下文，
     // 后续到达的数据按上下文顺序分配，避免晚到数据串到下一轮高度。
     m_sessionService->beginScanCycle(channel, params);
+    m_startedScanCounts[ch] = 1;
+    if (m_startedScanCounts.value(ch, 0) >= m_plannedScanCounts.value(ch, 1)) {
+        m_scanTimers[ch]->stop();
+    }
     sendControlCommand(channel, "start_scan", {{"value", 1}});
     qDebug() << "[ExperimentCtrl][Start] control commands sent, first scan triggered";
 
     QVariantMap mergedStatus;
     if (m_stateStore->updateChannelStatus(channel, {
         {"running", true},
+        {"experiment_id", experimentId},
         {"remainingSeconds", durationSeconds}
     }, &mergedStatus)) {
         emit channelStatusUpdated(channel, mergedStatus);
@@ -473,21 +567,24 @@ bool ExperimentCtrl::stopExperiment(int channel)
 
     m_scanTimers[ch]->stop();
     m_experimentTimers[ch]->stop();
+    m_plannedScanCounts[ch] = 0;
+    m_startedScanCounts[ch] = 0;
+    m_stopAfterDrainFlags[ch] = false;
+    m_stopAfterDrainDeadlineMs[ch] = 0;
 
     // 停止实验时清除扫描触发标志。
     sendControlCommand(channel, "stop_scan", {{"value", 0}});
     qDebug() << "[ExperimentCtrl][Stop] channel=" << channel << "write startFlag=0";
 
     const int experimentId = m_experimentIds.value(ch, 0);
-    if (experimentId > 0) {
-        m_dbManager->updateExperimentStatus(experimentId, 1);
-    }
 
+    m_stateStore->clearMemoryCache(channel);
     m_sessionService->resetScanContexts(channel);
     m_runningFlags[ch] = false;
     QVariantMap mergedStatus;
     if (m_stateStore->updateChannelStatus(channel, {
         {"running", false},
+        {"experiment_id", 0},
         {"remainingSeconds", 0}
     }, &mergedStatus)) {
         emit channelStatusUpdated(channel, mergedStatus);
@@ -503,24 +600,14 @@ bool ExperimentCtrl::isExperimentRunning(int channel) const
     return m_runningFlags.value(static_cast<Channel>(channel), false);
 }
 
-void ExperimentCtrl::saveExperimentData(int experimentId, const QVariantMap& data)
-{
-    m_dataService->saveExperimentData(experimentId, data);
-}
-
-/**
- * @brief 批量保存实验数据
- *
- * 在每条记录中补齐 experiment_id，统一调用 ORM 批量入库。
- */
-void ExperimentCtrl::batchSaveExperimentData(int experimentId, const QVector<QVariantMap>& dataList)
-{
-    m_dataService->batchSaveExperimentData(experimentId, dataList);
-}
-
 int ExperimentCtrl::getCurrentScanCount(int channel) const
 {
     return m_sessionService->currentScanCount(channel);
+}
+
+int ExperimentCtrl::getCurrentExperimentId(int channel) const
+{
+    return m_experimentIds.value(static_cast<Channel>(channel), 0);
 }
 
 qint64 ExperimentCtrl::getElapsedTime(int channel) const
@@ -613,17 +700,45 @@ void ExperimentCtrl::onScanTimer(int channel)
         return;
     }
 
+    const int plannedScanCount = qMax(1, m_plannedScanCounts.value(ch, 1));
+    const int startedScanCount = m_startedScanCounts.value(ch, 0);
+    if (startedScanCount >= plannedScanCount) {
+        m_scanTimers[ch]->stop();
+        qDebug() << "[ExperimentCtrl][ScanTimer] channel=" << channel
+                 << "planned scans reached, stop scheduling new scans"
+                 << "started=" << startedScanCount
+                 << "planned=" << plannedScanCount;
+        return;
+    }
+
     m_sessionService->beginScanCycle(channel, m_stateStore->params(channel));
+    m_startedScanCounts[ch] = startedScanCount + 1;
+    if (m_startedScanCounts.value(ch, 0) >= plannedScanCount) {
+        m_scanTimers[ch]->stop();
+    }
     sendControlCommand(channel, "start_scan", {{"value", 1}});
     qDebug() << "[ExperimentCtrl][ScanTimer] channel=" << channel
+             << "started=" << m_startedScanCounts.value(ch, 0)
+             << "planned=" << plannedScanCount
              << "begin new scan cycle, pendingContexts=" << m_sessionService->pendingContextCount(channel)
              << "trigger scan by write addr 0(40001)=1";
 }
 
 void ExperimentCtrl::onExperimentTimeout(int channel)
 {
-    // 实验总时长到达后自动停机。
-    stopExperiment(channel);
+    // 总时长到达后不直接停机，先停止发新扫描并等待剩余数据排空，避免最后一轮被截断。
+    const Channel ch = static_cast<Channel>(channel);
+    if (!m_runningFlags.value(ch, false)) {
+        return;
+    }
+
+    m_scanTimers[ch]->stop();
+    m_stopAfterDrainFlags[ch] = true;
+    m_stopAfterDrainDeadlineMs[ch] = 0;
+    qDebug() << "[ExperimentCtrl][Timeout] channel=" << channel
+             << "stop scheduling new scans and wait for drain"
+             << "pendingContexts=" << m_sessionService->pendingContextCount(channel)
+             << "deadlineMs=" << m_stopAfterDrainDeadlineMs.value(ch, 0);
 }
 
 void ExperimentCtrl::onSchedulerTaskCompleted(TaskResult res, QVector<quint16> data)
@@ -719,13 +834,9 @@ void ExperimentCtrl::pollChannelStatus(int channel)
                     params.durationDays, params.durationHours, params.durationMinutes, params.durationSeconds);
         const int elapsed = static_cast<int>(getElapsedTime(channel));
         const int remaining = qMax(0, total - elapsed);
+        patch["experiment_id"] = m_experimentIds.value(ch, 0);
         patch["remainingSeconds"] = remaining;
-        patch["running"] = (remaining > 0);
-
-        if (remaining <= 0) {
-            stopExperiment(channel);
-            return;
-        }
+        patch["running"] = true;
 
         // 实验过程中：依据采集/存储状态决定是否读取A/B区数据。
         tryFetchStoredData(channel,
@@ -733,11 +844,49 @@ void ExperimentCtrl::pollChannelStatus(int channel)
                            status.value("storageBReadableCount", 0).toInt(),
                            status.value("storageAState", 0).toInt(),
                            status.value("storageBState", 0).toInt());
+
+        if (remaining <= 0) {
+            m_stopAfterDrainFlags[ch] = true;
+        }
+
+        const int storageAReadableCount = status.value("storageAReadableCount", 0).toInt();
+        const int storageBReadableCount = status.value("storageBReadableCount", 0).toInt();
+        const bool hasReadableData = (storageAReadableCount > 0) || (storageBReadableCount > 0);
+        if (m_stopAfterDrainFlags.value(ch, false)
+                && m_stopAfterDrainDeadlineMs.value(ch, 0) <= 0
+                && !runningByDevice) {
+            m_stopAfterDrainDeadlineMs[ch] = QDateTime::currentMSecsSinceEpoch() + kDrainStopGraceMs;
+            qDebug() << "[ExperimentCtrl][StopAfterDrain] channel=" << channel
+                     << "device idle, start drain deadline"
+                     << "pendingContexts=" << m_sessionService->pendingContextCount(channel)
+                     << "hasReadableData=" << hasReadableData
+                     << "deadlineMs=" << m_stopAfterDrainDeadlineMs.value(ch, 0);
+        }
+        const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+        const bool drainDeadlineReached = m_stopAfterDrainDeadlineMs.value(ch, 0) > 0
+                && nowMs >= m_stopAfterDrainDeadlineMs.value(ch, 0);
+        const int pendingContexts = m_sessionService->pendingContextCount(channel);
+        if (m_stopAfterDrainFlags.value(ch, false)
+                && ((pendingContexts <= 0 && !hasReadableData) || drainDeadlineReached)) {
+            qDebug() << "[ExperimentCtrl][StopAfterDrain] channel=" << channel
+                     << "hasReadableData=" << hasReadableData
+                     << "drainDeadlineReached=" << drainDeadlineReached
+                     << "pendingContexts=" << pendingContexts;
+            stopExperiment(channel);
+            return;
+        }
     } else {
         // 实验未开始时：仅刷新基础状态（样品、运行、温度等）。
-        patch["running"] = runningByDevice;
-        if (!runningByDevice) {
+        const int currentExperimentId = m_experimentIds.value(ch, 0);
+        patch["experiment_id"] = currentExperimentId;
+        if (currentExperimentId <= 0) {
+            patch["running"] = false;
             patch["remainingSeconds"] = 0;
+        } else {
+            patch["running"] = runningByDevice;
+            if (!runningByDevice) {
+                patch["remainingSeconds"] = 0;
+            }
         }
     }
 
@@ -791,5 +940,51 @@ void ExperimentCtrl::tryFetchStoredData(int channel, int storageAReadableCount, 
         [this](int targetChannel, const QString& command, const QVariantMap& params) {
             return sendControlCommand(targetChannel, command, params);
         },
-        [this, channel]() { return m_sessionService->currentScanCount(channel); });
+        [this, channel]() { return m_sessionService->currentScanCount(channel); },
+        [this](int targetChannel, int targetExperimentId, const QVector<QVariantMap>& rows) {
+            if (rows.isEmpty()) {
+                return;
+            }
+
+            QMap<int, bool> completedByScanId;
+            for (const QVariantMap &row : rows) {
+                const int scanId = row.value(QStringLiteral("scan_id"), -1).toInt();
+                completedByScanId[scanId] = completedByScanId.value(scanId, false)
+                        || row.value(QStringLiteral("scan_completed"), false).toBool();
+            }
+
+            QVector<QVariantMap> *cache = m_stateStore->memoryCache(targetChannel);
+            if (!cache) {
+                return;
+            }
+
+            for (auto it = completedByScanId.constBegin(); it != completedByScanId.constEnd(); ++it) {
+                if (!it.value()) {
+                    continue;
+                }
+
+                QVariantList fullScanRows;
+                for (const QVariantMap &cachedRow : *cache) {
+                    if (cachedRow.value(QStringLiteral("scan_id"), -1).toInt() == it.key()) {
+                        fullScanRows.append(cachedRow);
+                    }
+                }
+
+                if (fullScanRows.isEmpty()) {
+                    continue;
+                }
+
+                emit scanDataChunkReady(targetChannel,
+                                        targetExperimentId,
+                                        it.key(),
+                                        true,
+                                        fullScanRows);
+
+                const int completedScanId = it.key();
+                cache->erase(std::remove_if(cache->begin(), cache->end(),
+                                            [completedScanId](const QVariantMap &cachedRow) {
+                    return cachedRow.value(QStringLiteral("scan_id"), -1).toInt() == completedScanId;
+                }), cache->end());
+            }
+        });
 }

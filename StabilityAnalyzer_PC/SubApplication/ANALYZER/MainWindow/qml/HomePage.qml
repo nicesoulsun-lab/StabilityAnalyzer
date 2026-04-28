@@ -52,6 +52,39 @@ Item {
         openPage(pageUrl, contentPageKey)
     }
 
+    function openRealtimePage(channelIndex) {
+        var statusData = channelStatus(channelIndex)
+        if (!statusData || !statusData.running) {
+            return
+        }
+
+        var experimentId = 0
+        if (experiment_ctrl && experiment_ctrl.getCurrentExperimentId) {
+            experimentId = Number(experiment_ctrl.getCurrentExperimentId(channelIndex))
+        }
+        if (experimentId <= 0 && statusData.experiment_id !== undefined) {
+            experimentId = Number(statusData.experiment_id)
+        }
+        if (experimentId <= 0 && statusData.experimentId !== undefined) {
+            experimentId = Number(statusData.experimentId)
+        }
+        if (experimentId <= 0) {
+            info_pop.openDialog(qsTr("当前通道暂无可查看的实时实验数据"))
+            return
+        }
+
+        var experimentData = data_ctrl ? data_ctrl.getExperimentById(experimentId) : ({})
+        if (!experimentData || experimentData.id === undefined) {
+            experimentData = ({ id: experimentId })
+        }
+
+        currentPageKey = "realtime"
+        mainLoader.setSource("qrc:/qml/RealtimeExperimentPage.qml", {
+                                 "channelIndex": channelIndex,
+                                 "experimentData": experimentData
+                             })
+    }
+
     function openInstructionPage() {
         openPage("qrc:/qml/ManualViewerPage.qml", "help")
     }
@@ -86,6 +119,7 @@ Item {
                     hasSample: !!statusData.hasSample
                     isCovered: !!statusData.isCovered
                     //remainingTimeText: homepage.formatRemainingTime(statusData.remainingSeconds || 0)
+                    onClicked: homepage.openRealtimePage(0)
                 }
 
                 ChannelPanel {
@@ -97,6 +131,7 @@ Item {
                     hasSample: !!statusData.hasSample
                     isCovered: !!statusData.isCovered
                     //remainingTimeText: homepage.formatRemainingTime(statusData.remainingSeconds || 0)
+                    onClicked: homepage.openRealtimePage(1)
                 }
 
                 ChannelPanel {
@@ -108,6 +143,7 @@ Item {
                     hasSample: !!statusData.hasSample
                     isCovered: !!statusData.isCovered
                     //remainingTimeText: homepage.formatRemainingTime(statusData.remainingSeconds || 0)
+                    onClicked: homepage.openRealtimePage(2)
                 }
 
                 ChannelPanel {
@@ -119,6 +155,7 @@ Item {
                     hasSample: !!statusData.hasSample
                     isCovered: !!statusData.isCovered
                     //remainingTimeText: homepage.formatRemainingTime(statusData.remainingSeconds || 0)
+                    onClicked: homepage.openRealtimePage(3)
                 }
 
                 Item { Layout.fillHeight: true }
@@ -178,7 +215,10 @@ Item {
     ImportRecordPop {
         id: importRecordPop
         onImportStarted: importProgressPop.open()
-        onImportFinished: importProgressPop.close()
+        onImportFinished: {
+            importProgressPop.visible = false
+            importProgressPop.close()
+        }
     }
 
     ImportProgressPop {

@@ -77,6 +77,12 @@ Rectangle {
         chartMaxY = detailPage.toNumber(chartData.chartMaxY, 1)
         xAxisTickValues = chartData.xAxisTickValues || [0, 1]
         yAxisLabels = chartData.yAxisLabels || detailPage.makeAxisLabels(chartMinY, chartMaxY, 6, 1)
+        console.log("[DetailCurve][separation]",
+                    "experimentId=", Number(experimentData.id),
+                    "rowCount=", rows.length,
+                    "clarificationPoints=", clarificationPoints ? clarificationPoints.length : 0,
+                    "concentratedPoints=", concentratedPoints ? concentratedPoints.length : 0,
+                    "sedimentPoints=", sedimentPoints ? sedimentPoints.length : 0)
     }
 
     onDetailPageChanged: loadSeparationData()

@@ -61,6 +61,10 @@ Rectangle {
         chartMaxY = detailPage.toNumber(chartData.chartMaxY, 1)
         xAxisTickValues = chartData.xAxisTickValues || [0, 1]
         yAxisLabels = chartData.yAxisLabels || detailPage.makeAxisLabels(chartMinY, chartMaxY, 6, 1)
+        console.log("[DetailCurve][peak thickness]",
+                    "experimentId=", Number(experimentData.id),
+                    "rowCount=", rows.length,
+                    "pointCount=", points ? points.length : 0)
     }
 
     onDetailPageChanged: {

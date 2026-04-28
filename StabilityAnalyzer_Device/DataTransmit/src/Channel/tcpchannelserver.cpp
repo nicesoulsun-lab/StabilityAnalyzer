@@ -51,13 +51,27 @@ void TcpChannelServer::stopListening()
 bool TcpChannelServer::sendJsonMessage(const QJsonObject &message)
 {
     if (!m_clientSocket || m_clientSocket->state() != QAbstractSocket::ConnectedState) {
+        const QString errorMessage = QString("%1 send failed: client is not connected").arg(m_channelName);
+        emitLog(errorMessage);
         return false;
     }
 
     QByteArray payload = QJsonDocument(message).toJson(QJsonDocument::Compact);
     payload.append('\n');
-    const qint64 written = m_clientSocket->write(payload);
-    return written == payload.size();
+    qint64 totalWritten = 0;
+    while (totalWritten < payload.size()) {
+        const qint64 written = m_clientSocket->write(payload.constData() + totalWritten,
+                                                     payload.size() - totalWritten);
+        if (written <= 0) {
+            const QString errorMessage = QString("%1 write failed: %2")
+                    .arg(m_channelName, m_clientSocket->errorString());
+            emit errorOccurred(errorMessage);
+            emitLog(errorMessage);
+            return false;
+        }
+        totalWritten += written;
+    }
+    return true;
 }
 
 bool TcpChannelServer::isListening() const

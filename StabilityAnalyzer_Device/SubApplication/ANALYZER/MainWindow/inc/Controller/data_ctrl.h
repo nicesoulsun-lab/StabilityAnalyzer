@@ -26,6 +26,12 @@ public:
     // 更新实验状态
     Q_INVOKABLE bool updateExperimentStatus(int experimentId, int status);
     
+    // 返回设备端全部实验，供 PC 导入弹框列出候选记录。
+    Q_INVOKABLE QVector<QVariantMap> getAllExperiments();
+
+    // 返回单条实验的完整元数据，供导出时和原始数据一起打包。
+    Q_INVOKABLE QVariantMap getExperimentById(int experimentId);
+
     // 查询指定状态的实验
     Q_INVOKABLE QVector<QVariantMap> getExperimentsByStatus(int status);
     
@@ -45,6 +51,10 @@ public:
     
     // 查询实验数据
     Q_INVOKABLE QVector<QVariantMap> getDataByExperiment(int experimentId);
+    Q_INVOKABLE QVector<int> getScanIdsByExperiment(int experimentId);
+    Q_INVOKABLE int getDataCountByExperiment(int experimentId);
+    Q_INVOKABLE QVector<QVariantMap> getDataByExperimentAndScan(int experimentId, int scanId, int offset = 0, int limit = 0);
+    Q_INVOKABLE int getDataCountByExperimentAndScan(int experimentId, int scanId);
     Q_INVOKABLE QVector<QVariantMap> getDataByRange(int experimentId, int startTimestamp, int endTimestamp);
     Q_INVOKABLE QVector<QVariantMap> getAllData();
     

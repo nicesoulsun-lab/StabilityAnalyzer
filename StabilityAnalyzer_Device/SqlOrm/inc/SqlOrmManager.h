@@ -325,6 +325,10 @@ public:
      * @return 实验数据列表
      */
     QVector<QVariantMap> getExperimentDataByExperiment(int experimentId);
+    QVector<int> getExperimentScanIds(int experimentId);
+    int getExperimentDataCountByExperiment(int experimentId);
+    QVector<QVariantMap> getExperimentDataByExperimentAndScan(int experimentId, int scanId, int offset = 0, int limit = 0);
+    int getExperimentDataCountByExperimentAndScan(int experimentId, int scanId);
     
     /**
      * @brief 根据时间范围查询实验数据

@@ -7,6 +7,7 @@
 #include "datatransmit_global.h"
 
 class QTimer;
+class QProcess;
 class TcpChannelClient;
 class ControlChannelClient;
 class StatusChannelClient;
@@ -126,6 +127,13 @@ signals:
     void logMessage(const QString &message);
 
 private:
+    enum ProbeTask {
+        NoProbeTask,
+        DetectAdapterTask,
+        ConfigureAdapterTask,
+        PingDeviceTask
+    };
+
     void ensureConnection();
     void connectChannel(TcpChannelClient *channel);
     bool sendJson(TcpChannelClient *channel, const QVariantMap &payload);
@@ -150,6 +158,16 @@ private:
     void resetDeviceChannelInfo();
     void resetExperimentChannels();
     void scheduleRetry(int intervalMs);
+    void startProbeTask(ProbeTask task,
+                        const QString &program,
+                        const QStringList &arguments,
+                        const QString &errorContext);
+    void finishProbeTask();
+    void handleProbeFinished(int exitCode, int exitStatus);
+    void handleProbeError(int processError);
+    void handleAdapterLookupFinished(int exitCode, int exitStatus, const QString &stdOutput, const QString &stdError);
+    void handleConfigureAdapterFinished(int exitCode, int exitStatus, const QString &stdOutput, const QString &stdError);
+    void handlePingFinished(int exitCode, int exitStatus, const QString &stdOutput, const QString &stdError);
     bool ensureAdminPrivilege();
     QString findAdapterByVidPid() const;
     QString findRndisAdapter() const;
@@ -161,8 +179,12 @@ private:
 
 private:
     QTimer *m_retryTimer = nullptr;
+    QProcess *m_probeProcess = nullptr;
     bool m_running = false;
     bool m_autoReconnectEnabled = true;
+    ProbeTask m_probeTask = NoProbeTask;
+    QString m_probeErrorContext;
+    bool m_deviceReachabilityConfirmed = false;
     ConnectionState m_connectionState = INIT;
     // UI 展示状态：避免重连状态机一直显示“连接中”。
     DeviceUiConnectionState m_deviceUiConnectionState = DeviceDisconnected;

@@ -1596,6 +1596,142 @@ QVector<QVariantMap> SqlOrmManager::getExperimentDataByExperiment(int experiment
     return result;
 }
 
+QVector<int> SqlOrmManager::getExperimentScanIds(int experimentId) {
+    QVector<int> result;
+    Q_D(SqlOrmManager);
+
+    if (!d->initialized || experimentId <= 0) return result;
+
+    const QString connectionName = makeMigrationConnectionName();
+    QSqlDatabase db = openQtDb(d->dbPath, connectionName);
+    if (!db.open()) {
+        qWarning() << "[SqlOrmManager] getExperimentScanIds open db failed:" << db.lastError().text();
+        closeQtDb(connectionName);
+        return result;
+    }
+
+    QSqlQuery query(db);
+    query.prepare(QStringLiteral(
+        "SELECT DISTINCT scan_id FROM experiment_data "
+        "WHERE experiment_id = ? AND scan_id >= 0 "
+        "ORDER BY scan_id ASC"));
+    query.addBindValue(experimentId);
+    if (query.exec()) {
+        while (query.next()) {
+            result.append(query.value(0).toInt());
+        }
+    }
+
+    db.close();
+    closeQtDb(connectionName);
+    return result;
+}
+
+int SqlOrmManager::getExperimentDataCountByExperiment(int experimentId) {
+    Q_D(SqlOrmManager);
+
+    if (!d->initialized || experimentId <= 0) return 0;
+
+    const QString connectionName = makeMigrationConnectionName();
+    QSqlDatabase db = openQtDb(d->dbPath, connectionName);
+    if (!db.open()) {
+        qWarning() << "[SqlOrmManager] getExperimentDataCountByExperiment open db failed:" << db.lastError().text();
+        closeQtDb(connectionName);
+        return 0;
+    }
+
+    int count = 0;
+    QSqlQuery query(db);
+    query.prepare(QStringLiteral(
+        "SELECT COUNT(*) FROM experiment_data WHERE experiment_id = ?"));
+    query.addBindValue(experimentId);
+    if (query.exec() && query.next()) {
+        count = query.value(0).toInt();
+    }
+
+    db.close();
+    closeQtDb(connectionName);
+    return count;
+}
+
+QVector<QVariantMap> SqlOrmManager::getExperimentDataByExperimentAndScan(int experimentId, int scanId, int offset, int limit) {
+    QVector<QVariantMap> result;
+    Q_D(SqlOrmManager);
+
+    if (!d->initialized || experimentId <= 0 || scanId < 0) return result;
+
+    const QString connectionName = makeMigrationConnectionName();
+    QSqlDatabase db = openQtDb(d->dbPath, connectionName);
+    if (!db.open()) {
+        qWarning() << "[SqlOrmManager] getExperimentDataByExperimentAndScan open db failed:" << db.lastError().text();
+        closeQtDb(connectionName);
+        return result;
+    }
+
+    QString sql = QStringLiteral(
+        "SELECT id, experiment_id, timestamp, scan_id, scan_elapsed_ms, height, "
+        "backscatter_intensity, transmission_intensity "
+        "FROM experiment_data WHERE experiment_id = ? AND scan_id = ? "
+        "ORDER BY id ASC");
+    if (limit > 0) {
+        sql += QStringLiteral(" LIMIT ? OFFSET ?");
+    }
+
+    QSqlQuery query(db);
+    query.prepare(sql);
+    query.addBindValue(experimentId);
+    query.addBindValue(scanId);
+    if (limit > 0) {
+        query.addBindValue(limit);
+        query.addBindValue(qMax(0, offset));
+    }
+
+    if (query.exec()) {
+        while (query.next()) {
+            QVariantMap data;
+            data["id"] = query.value(0).toInt();
+            data["experiment_id"] = query.value(1).toInt();
+            data["timestamp"] = query.value(2).toInt();
+            data["scan_id"] = query.value(3).toInt();
+            data["scan_elapsed_ms"] = query.value(4).toLongLong();
+            data["height"] = query.value(5).toDouble();
+            data["backscatter_intensity"] = query.value(6).toDouble();
+            data["transmission_intensity"] = query.value(7).toDouble();
+            result.append(data);
+        }
+    }
+    db.close();
+    closeQtDb(connectionName);
+    return result;
+}
+
+int SqlOrmManager::getExperimentDataCountByExperimentAndScan(int experimentId, int scanId) {
+    Q_D(SqlOrmManager);
+
+    if (!d->initialized || experimentId <= 0 || scanId < 0) return 0;
+
+    const QString connectionName = makeMigrationConnectionName();
+    QSqlDatabase db = openQtDb(d->dbPath, connectionName);
+    if (!db.open()) {
+        qWarning() << "[SqlOrmManager] getExperimentDataCountByExperimentAndScan open db failed:" << db.lastError().text();
+        closeQtDb(connectionName);
+        return 0;
+    }
+
+    int count = 0;
+    QSqlQuery query(db);
+    query.prepare(QStringLiteral(
+        "SELECT COUNT(*) FROM experiment_data WHERE experiment_id = ? AND scan_id = ?"));
+    query.addBindValue(experimentId);
+    query.addBindValue(scanId);
+    if (query.exec() && query.next()) {
+        count = query.value(0).toInt();
+    }
+    db.close();
+    closeQtDb(connectionName);
+    return count;
+}
+
 QVector<QVariantMap> SqlOrmManager::getExperimentDataByRange(int experimentId, int startTimestamp, int endTimestamp) {
     QVector<QVariantMap> result;
     Q_D(SqlOrmManager);

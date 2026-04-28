@@ -14,8 +14,8 @@ Item {
     property color axisColor: "#3C4654"
 
     onVisibleChanged: {
-        gridCanvas.requestPaint()
-        legendCanvas.requestPaint()
+        requestCanvasPaint(gridCanvas, "rootVisibleChanged")
+        requestCanvasPaint(legendCanvas, "rootVisibleChanged")
     }
 
     function toNumber(value, fallback) {
@@ -43,6 +43,22 @@ Item {
         return points
     }
 
+    function requestCanvasPaint(canvasItem, reason) {
+        if (!canvasItem)
+            return
+
+        if (!canvasItem.visible || canvasItem.width <= 1 || canvasItem.height <= 1) {
+            console.log("[InstabilityRadar][canvas skip]",
+                        "reason=", reason,
+                        "visible=", canvasItem.visible,
+                        "width=", canvasItem.width,
+                        "height=", canvasItem.height)
+            return
+        }
+
+        canvasItem.requestPaint()
+    }
+
     RowLayout {
         anchors.fill: parent
         spacing: 18
@@ -62,18 +78,23 @@ Item {
 
                 Connections {
                     target: radarChart
-                    function onPolygonsChanged() { gridCanvas.requestPaint() }
-                    function onMaxValueChanged() { gridCanvas.requestPaint() }
-                    function onAxisLabelsChanged() { gridCanvas.requestPaint() }
-                    function onTickCountChanged() { gridCanvas.requestPaint() }
-                    function onVisibleChanged() { gridCanvas.requestPaint() }
+                    function onPolygonsChanged() { radarChart.requestCanvasPaint(gridCanvas, "polygonsChanged") }
+                    function onMaxValueChanged() { radarChart.requestCanvasPaint(gridCanvas, "maxValueChanged") }
+                    function onAxisLabelsChanged() { radarChart.requestCanvasPaint(gridCanvas, "axisLabelsChanged") }
+                    function onTickCountChanged() { radarChart.requestCanvasPaint(gridCanvas, "tickCountChanged") }
+                    function onVisibleChanged() { radarChart.requestCanvasPaint(gridCanvas, "visibleChanged") }
                 }
 
-                onWidthChanged: requestPaint()
-                onHeightChanged: requestPaint()
+                onVisibleChanged: radarChart.requestCanvasPaint(gridCanvas, "gridVisibleChanged")
+                onWidthChanged: radarChart.requestCanvasPaint(gridCanvas, "gridWidthChanged")
+                onHeightChanged: radarChart.requestCanvasPaint(gridCanvas, "gridHeightChanged")
 
                 onPaint: {
+                    if (width <= 1 || height <= 1 || !visible)
+                        return
                     var ctx = getContext("2d")
+                    if (!ctx)
+                        return
                     ctx.clearRect(0, 0, width, height)
 
                     var axisCount = Math.max(radarChart.axisLabels.length, 4)
@@ -181,15 +202,20 @@ Item {
 
                 Connections {
                     target: radarChart
-                    function onPolygonsChanged() { legendCanvas.requestPaint() }
-                    function onVisibleChanged() { legendCanvas.requestPaint() }
+                    function onPolygonsChanged() { radarChart.requestCanvasPaint(legendCanvas, "polygonsChanged") }
+                    function onVisibleChanged() { radarChart.requestCanvasPaint(legendCanvas, "visibleChanged") }
                 }
 
-                onWidthChanged: requestPaint()
-                onHeightChanged: requestPaint()
+                onVisibleChanged: radarChart.requestCanvasPaint(legendCanvas, "legendVisibleChanged")
+                onWidthChanged: radarChart.requestCanvasPaint(legendCanvas, "legendWidthChanged")
+                onHeightChanged: radarChart.requestCanvasPaint(legendCanvas, "legendHeightChanged")
 
                 onPaint: {
+                    if (width <= 1 || height <= 1 || !visible)
+                        return
                     var ctx = getContext("2d")
+                    if (!ctx)
+                        return
                     ctx.clearRect(0, 0, width, height)
                     if (!radarChart.polygons || radarChart.polygons.length === 0)
                         return

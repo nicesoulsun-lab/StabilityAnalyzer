@@ -119,6 +119,51 @@ QVector<QVariantMap> dataCtrl::getDataByExperiment(int experimentId)
     return m_dbManager->getExperimentDataByExperiment(experimentId);
 }
 
+QVector<int> dataCtrl::getScanIdsByExperiment(int experimentId)
+{
+    if (experimentId <= 0) {
+        qWarning() << "[dataCtrl] 瀹為獙 ID 鏃犳晥";
+        return QVector<int>();
+    }
+
+    return m_dbManager->getExperimentScanIds(experimentId);
+}
+
+int dataCtrl::getDataCountByExperiment(int experimentId)
+{
+    if (experimentId <= 0) {
+        qWarning() << "[dataCtrl] 瀹為獙 ID 鏃犳晥";
+        return 0;
+    }
+
+    return m_dbManager->getExperimentDataCountByExperiment(experimentId);
+}
+
+QVector<QVariantMap> dataCtrl::getDataByExperimentAndScan(int experimentId, int scanId, int offset, int limit)
+{
+    if (experimentId <= 0) {
+        qWarning() << "[dataCtrl] 瀹為獙 ID 鏃犳晥";
+        return QVector<QVariantMap>();
+    }
+
+    if (scanId < 0) {
+        qWarning() << "[dataCtrl] scan ID 鏃犳晥";
+        return QVector<QVariantMap>();
+    }
+
+    return m_dbManager->getExperimentDataByExperimentAndScan(experimentId, scanId, offset, limit);
+}
+
+int dataCtrl::getDataCountByExperimentAndScan(int experimentId, int scanId)
+{
+    if (experimentId <= 0 || scanId < 0) {
+        qWarning() << "[dataCtrl] 瀹為獙 ID 鎴?scan ID 鏃犳晥";
+        return 0;
+    }
+
+    return m_dbManager->getExperimentDataCountByExperimentAndScan(experimentId, scanId);
+}
+
 QVector<QVariantMap> dataCtrl::getDataByRange(int experimentId, int startTimestamp, int endTimestamp)
 {
     if (experimentId <= 0) {
@@ -205,6 +250,38 @@ bool dataCtrl::updateExperimentStatus(int experimentId, int status)
     }
     
     return success;
+}
+
+QVector<QVariantMap> dataCtrl::getAllExperiments()
+{
+    QVector<QVariantMap> result = m_dbManager->getAllExperiments();
+    qDebug() << "[dataCtrl] 查询全部实验成功，数量:" << result.size();
+    return result;
+}
+
+QVariantMap dataCtrl::getExperimentById(int experimentId)
+{
+    if (experimentId <= 0) {
+        qWarning() << "[dataCtrl] 实验 ID 无效";
+        return QVariantMap();
+    }
+
+    QVariantMap experiment = m_dbManager->getExperimentById(experimentId);
+    if (experiment.isEmpty()) {
+        return experiment;
+    }
+
+    // 导出给 PC 时补齐所属工程信息，这样 PC 端在本地缺少工程时可以同步创建。
+    const int projectId = experiment.value("project_id").toInt();
+    if (projectId > 0) {
+        const QVariantMap project = m_dbManager->getProjectById(projectId);
+        if (!project.isEmpty()) {
+            experiment.insert(QStringLiteral("project_name"), project.value(QStringLiteral("project_name")));
+            experiment.insert(QStringLiteral("project_description"), project.value(QStringLiteral("description")));
+        }
+    }
+
+    return experiment;
 }
 
 QVector<QVariantMap> dataCtrl::getExperimentsByStatus(int status)

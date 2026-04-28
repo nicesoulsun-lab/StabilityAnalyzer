@@ -139,6 +139,13 @@ Item {
                 return Qt.point(timestampX, valueY)
         }
 
+        if (value.length !== undefined && value.length >= 2) {
+            var listX = Number(value[0])
+            var listY = Number(value[1])
+            if (!isNaN(listX) && !isNaN(listY))
+                return Qt.point(listX, listY)
+        }
+
         return null
     }
 

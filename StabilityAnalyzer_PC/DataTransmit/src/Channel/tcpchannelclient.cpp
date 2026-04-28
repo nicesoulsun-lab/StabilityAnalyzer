@@ -10,6 +10,21 @@
 #include <QDebug>
 #include <QNetworkProxy>
 #include <QTcpSocket>
+#include <new>
+
+namespace {
+
+bool isHighFrequencyStatusMessage(const QString &channelName, const QJsonObject &message)
+{
+    if (channelName != QStringLiteral("status")) {
+        return false;
+    }
+
+    const QString type = message.value(QStringLiteral("type")).toString();
+    return type == QStringLiteral("heartbeat") || type == QStringLiteral("status_snapshot");
+}
+
+}
 
 TcpChannelClient::TcpChannelClient(const QString &name, quint16 port, QObject *parent)
     : QObject(parent)
@@ -56,6 +71,13 @@ void TcpChannelClient::connectToHost(const QString &host)
     if (isConnected()) {
         qDebug() << "[DataTransmit][" << m_name << "] already connected to"
                  << m_socket->peerAddress().toString() << ":" << m_socket->peerPort();
+        return;
+    }
+
+    if (m_socket->state() == QAbstractSocket::ConnectingState
+            || m_socket->state() == QAbstractSocket::HostLookupState) {
+        qDebug() << "[DataTransmit][" << m_name << "] connect already in progress, state="
+                 << m_socket->state();
         return;
     }
 
@@ -111,7 +133,9 @@ bool TcpChannelClient::sendMessage(const QJsonObject &message, QString *errorMes
 void TcpChannelClient::onReadyRead()
 {
     const QByteArray chunk = m_socket->readAll();
-    qDebug() << "[DataTransmit][" << m_name << "] readyRead bytes=" << chunk.size();
+    if (m_name != QStringLiteral("status")) {
+        qDebug() << "[DataTransmit][" << m_name << "] readyRead bytes=" << chunk.size();
+    }
     m_buffer.append(chunk);
     processIncomingBuffer();
 }
@@ -133,11 +157,23 @@ void TcpChannelClient::processIncomingBuffer()
         m_buffer.remove(0, newlineIndex + 1);
 
         if (!line.isEmpty()) {
-            qDebug() << "[DataTransmit][" << m_name << "] recv" << line;
             QJsonParseError parseError;
             const QJsonDocument document = QJsonDocument::fromJson(line, &parseError);
             if (parseError.error == QJsonParseError::NoError && document.isObject()) {
-                emit messageReceived(document.object().toVariantMap());
+                try {
+                    const QJsonObject object = document.object();
+                    if (!isHighFrequencyStatusMessage(m_name, object)) {
+                        qDebug() << "[DataTransmit][" << m_name << "] recv" << line.size();
+                    }
+                    emit messageReceived(object.toVariantMap());
+                } catch (const std::bad_alloc &) {
+                    qWarning() << "[DataTransmit][" << m_name
+                               << "] insufficient memory while decoding JSON payload, bytes="
+                               << line.size();
+                    emit errorOccurred(QStringLiteral("%1 channel payload is too large to decode safely").arg(m_name));
+                    m_buffer.clear();
+                    return;
+                }
             } else {
                 qWarning() << "[DataTransmit][" << m_name << "] invalid json, error="
                            << parseError.errorString() << "payload=" << line;

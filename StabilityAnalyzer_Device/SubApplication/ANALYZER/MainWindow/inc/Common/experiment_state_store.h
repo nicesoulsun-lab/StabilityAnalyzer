@@ -56,6 +56,7 @@ public:
     bool updateChannelStatus(int channel, const QVariantMap& patch, QVariantMap* mergedStatus = nullptr);
 
     QVector<QVariantMap>* memoryCache(int channel);
+    void clearMemoryCache(int channel);
 
 private:
     QMap<int, int> m_slaveIds;

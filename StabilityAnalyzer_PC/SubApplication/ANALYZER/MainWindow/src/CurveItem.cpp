@@ -1,8 +1,10 @@
 #include "CurveItem.h"
+#include <QDebug>
 #include <QSGGeometry>
 #include <QSGFlatColorMaterial>
 #include <QVariantMap>
 #include <algorithm>
+#include <new>
 
 namespace {
 bool variantToPoint(const QVariant &value, QPointF &point)
@@ -10,6 +12,18 @@ bool variantToPoint(const QVariant &value, QPointF &point)
     if (value.canConvert<QPointF>()) {
         point = value.toPointF();
         return true;
+    }
+
+    const QVariantList list = value.toList();
+    if (list.size() >= 2) {
+        bool xOk = false;
+        bool yOk = false;
+        const qreal x = list.at(0).toReal(&xOk);
+        const qreal y = list.at(1).toReal(&yOk);
+        if (xOk && yOk) {
+            point = QPointF(x, y);
+            return true;
+        }
     }
 
     const QVariantMap map = value.toMap();
@@ -99,12 +113,25 @@ void CurveItem::setDataPoints(const QVariantList &points)
     }
 
     QList<QPointF> convertedPoints;
-    convertedPoints.reserve(points.size());
-    for (const QVariant &pointValue : points) {
-        QPointF point;
-        if (variantToPoint(pointValue, point)) {
-            convertedPoints.append(point);
+    const int maxRenderedPoints = m_maxPoints > 0 ? m_maxPoints : points.size();
+    const int targetPointCount = std::min(points.size(), maxRenderedPoints);
+
+    try {
+        convertedPoints.reserve(targetPointCount);
+        for (int i = 0; i < targetPointCount; ++i) {
+            const int sourceIndex = targetPointCount == points.size()
+                    ? i
+                    : static_cast<int>(static_cast<double>(i) * (points.size() - 1) / std::max(targetPointCount - 1, 1) + 0.5);
+            QPointF point;
+            if (variantToPoint(points.at(sourceIndex), point)) {
+                convertedPoints.append(point);
+            }
         }
+    } catch (const std::bad_alloc &) {
+        qWarning() << "[CurveItem] insufficient memory while converting dataPoints"
+                   << "inputSize=" << points.size()
+                   << "maxRenderedPoints=" << maxRenderedPoints;
+        return;
     }
 
     if (convertedPoints.isEmpty()) {
@@ -250,7 +277,6 @@ QSGNode *CurveItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *data)
 
     QSGGeometryNode *node = static_cast<QSGGeometryNode *>(oldNode);
     const int currentPointCount = m_points.size();
-    const bool needsReallocation = !node || m_geometryDirty || !node->geometry() || node->geometry()->vertexCount() != currentPointCount;
 
     if (!node) {
         node = new QSGGeometryNode;
@@ -258,22 +284,27 @@ QSGNode *CurveItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *data)
         node->setFlag(QSGNode::OwnsMaterial);
     }
 
-    if (needsReallocation) {
-        QSGGeometry *geometry = new QSGGeometry(QSGGeometry::defaultAttributes_Point2D(), currentPointCount);
-        geometry->setLineWidth(m_lineWidth);
+    QSGGeometry *geometry = node->geometry();
+    if (!geometry) {
+        geometry = new QSGGeometry(QSGGeometry::defaultAttributes_Point2D(), currentPointCount);
         geometry->setDrawingMode(QSGGeometry::DrawLineStrip);
         geometry->setVertexDataPattern(QSGGeometry::DynamicPattern);
         node->setGeometry(geometry);
-
-        QSGFlatColorMaterial *material = new QSGFlatColorMaterial;
-        material->setColor(m_lineColor);
-        node->setMaterial(material);
-    } else {
-        static_cast<QSGFlatColorMaterial *>(node->material())->setColor(m_lineColor);
-        node->geometry()->setLineWidth(m_lineWidth);
+    } else if (geometry->vertexCount() != currentPointCount) {
+        geometry->allocate(currentPointCount);
     }
 
-    QSGGeometry *geometry = node->geometry();
+    geometry->setLineWidth(m_lineWidth);
+    geometry->setDrawingMode(QSGGeometry::DrawLineStrip);
+    geometry->setVertexDataPattern(QSGGeometry::DynamicPattern);
+
+    auto *material = static_cast<QSGFlatColorMaterial *>(node->material());
+    if (!material) {
+        material = new QSGFlatColorMaterial;
+        node->setMaterial(material);
+    }
+    material->setColor(m_lineColor);
+
     QSGGeometry::Point2D *vertices = geometry->vertexDataAsPoint2D();
     const qreal w = boundingRect().width();
     const qreal h = boundingRect().height();

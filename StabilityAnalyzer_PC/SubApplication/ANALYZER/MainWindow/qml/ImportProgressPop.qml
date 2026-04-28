@@ -15,6 +15,34 @@ Popup {
     anchors.centerIn: Overlay.overlay
     closePolicy: Popup.NoAutoClose
 
+    Timer {
+        id: closeCheckTimer
+        interval: 200
+        repeat: true
+        running: root.visible
+        onTriggered: {
+            if (data_ctrl && !data_ctrl.deviceImportRunning) {
+                console.log("[Import][ImportProgressPop] close by timer",
+                            "visible=", root.visible,
+                            "opened=", root.opened)
+                root.close()
+            }
+        }
+    }
+
+    Connections {
+        target: data_ctrl
+        function onDeviceImportRunningChanged() {
+            console.log("[Import][ImportProgressPop] deviceImportRunningChanged",
+                        "running=", data_ctrl ? data_ctrl.deviceImportRunning : undefined,
+                        "visible=", root.visible,
+                        "opened=", root.opened)
+            if (data_ctrl && !data_ctrl.deviceImportRunning) {
+                root.close()
+            }
+        }
+    }
+
     background: Rectangle {
         color: "#FFFFFF"
         radius: 8

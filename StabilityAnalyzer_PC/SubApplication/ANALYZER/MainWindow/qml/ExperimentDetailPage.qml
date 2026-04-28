@@ -17,6 +17,8 @@ Item {
     property real minLightValue: 0
     property real maxLightValue: 100
     property int lightCurveCount: 0
+    property int lightCurvesVersion: 0
+    property bool lightCurvesLoading: false
 
     signal backRequested()
 
@@ -111,23 +113,68 @@ Item {
         return ticks
     }
 
+    function pointsPerCurve() {
+        return Math.max(280, Math.min(600, Math.round((detailPage.width > 0 ? detailPage.width : 1000) * 0.5)))
+    }
+
+    function pointX(point) {
+        if (point === undefined || point === null)
+            return Number.NaN
+        if (point.x !== undefined)
+            return toNumber(point.x, Number.NaN)
+        if (point.length !== undefined && point.length > 0)
+            return toNumber(point[0], Number.NaN)
+        return Number.NaN
+    }
+
+    function updateCurveBoundsFromPoints(points, bounds) {
+        if (!points || points.length === 0)
+            return
+
+        for (var i = 0; i < points.length; ++i) {
+            var x = pointX(points[i])
+            if (isNaN(x))
+                continue
+            bounds.minHeight = Math.min(bounds.minHeight, x)
+            bounds.maxHeight = Math.max(bounds.maxHeight, x)
+        }
+    }
+
+    function applyExperimentHeightFallback() {
+        var startMm = toNumber(experimentData.scan_range_start, 0)
+        var endMm = toNumber(experimentData.scan_range_end, 55)
+        var stepUm = toNumber(experimentData.scan_step, 20)
+        var effectiveEndMm = endMm
+        if (stepUm > 0 && endMm > startMm)
+            effectiveEndMm = endMm - stepUm / 1000.0
+        minHeightValue = Math.min(startMm, endMm)
+        maxHeightValue = Math.max(startMm, effectiveEndMm)
+        if (maxHeightValue <= minHeightValue)
+            maxHeightValue = minHeightValue + 10
+    }
+
     function loadLightIntensityData() {
-        // 光强页仍然是特殊页：它需要一次性准备整组曲线和右侧时间色带，
-        // 所以保留在详情页层面统一预加载，其他页签按各自子页懒加载。
         lightCurves = []
-        minHeightValue = 0
-        maxHeightValue = 10
+        applyExperimentHeightFallback()
         minLightValue = 0
         maxLightValue = 100
         lightCurveCount = 0
+        lightCurvesVersion += 1
+        lightCurvesLoading = false
 
-        if (!experimentData || experimentData.id === undefined || !data_ctrl)
+        if (!experimentData || experimentData.id === undefined || !data_ctrl) {
             return
+        }
 
-        var pointsPerCurve = Math.max(480, Math.round((detailPage.width > 0 ? detailPage.width : 1000) * 1.1))
-        var curves = data_ctrl.getLightIntensityCurves(Number(experimentData.id), pointsPerCurve)
-        if (!curves || curves.length === 0)
+        lightCurvesLoading = true
+        var curves = data_ctrl.getLightIntensityCurves(Number(experimentData.id), pointsPerCurve())
+        console.log("[LightIntensity][detail load]",
+                    "experimentId=", Number(experimentData.id),
+                    "curveCount=", curves ? curves.length : 0)
+        if (!curves || curves.length === 0) {
+            lightCurvesLoading = false
             return
+        }
 
         var sortedCurves = curves.slice(0)
         sortedCurves.sort(function(a, b) {
@@ -167,6 +214,17 @@ Item {
             if (!isNaN(rawMaxTransmission))
                 maxLight = Math.max(maxLight, rawMaxTransmission)
 
+            if (isNaN(rawMinHeight) || isNaN(rawMaxHeight)) {
+                var heightBounds = {
+                    minHeight: minHeight,
+                    maxHeight: maxHeight
+                }
+                updateCurveBoundsFromPoints(backscatterPoints, heightBounds)
+                updateCurveBoundsFromPoints(transmissionPoints, heightBounds)
+                minHeight = heightBounds.minHeight
+                maxHeight = heightBounds.maxHeight
+            }
+
             normalizedCurves.push({
                 scan_id: curve.scan_id,
                 timestamp: curve.timestamp,
@@ -185,6 +243,8 @@ Item {
         minLightValue = isFinite(minLight) ? minLight : 0
         maxLightValue = isFinite(maxLight) ? maxLight : 100
         lightCurveCount = normalizedCurves.length
+        lightCurvesLoading = false
+        lightCurvesVersion += 1
     }
 
     function currentTabSource() {
@@ -206,20 +266,71 @@ Item {
         return "curve/PlaceholderPage.qml"
     }
 
-    function reloadCurrentTab() {
-        // 使用 setSource 注入 detailPage，保证子页在 Component.onCompleted 之前
-        // 就能拿到公共状态，避免首次进入页签时需要切换一次才触发计算。
-        detailContentLoader.setSource(currentTabSource(), { "detailPage": detailPage })
+    function initializeDetailTabItem(tabItem) {
+        if (!tabItem)
+            return
+
+        try {
+            tabItem.detailPage = detailPage
+        } catch (error) {
+            console.log("[DetailPage][tab init] assign detailPage failed",
+                        "tabIndex=", currentTabIndex,
+                        "source=", currentTabSource(),
+                        "error=", error)
+            return
+        }
+
+        console.log("[DetailPage][tab init]",
+                    "tabIndex=", currentTabIndex,
+                    "source=", currentTabSource())
+
+        try {
+            if (tabItem.resetAnalysisDefaults) {
+                tabItem.resetAnalysisDefaults()
+            } else if (tabItem.loadDisplayedCurves) {
+                tabItem.loadDisplayedCurves()
+            }
+
+            if (tabItem.loadInstabilityData) {
+                tabItem.loadInstabilityData()
+                if (tabItem.ensureModeData)
+                    tabItem.ensureModeData()
+            }
+
+            if (tabItem.loadUniformityData)
+                tabItem.loadUniformityData()
+
+            if (tabItem.applyPeakThicknessParameters) {
+                if (tabItem.heightLowerBound !== undefined)
+                    tabItem.heightLowerBound = detailPage.floorToStep(detailPage.minHeightValue, 1)
+                if (tabItem.heightUpperBound !== undefined)
+                    tabItem.heightUpperBound = detailPage.ceilToStep(detailPage.maxHeightValue, 1)
+                tabItem.applyPeakThicknessParameters()
+            }
+
+            if (tabItem.loadAverageData)
+                tabItem.loadAverageData()
+
+            if (tabItem.loadSeparationData)
+                tabItem.loadSeparationData()
+
+            if (tabItem.refreshFluidInputs)
+                tabItem.refreshFluidInputs()
+            if (tabItem.refreshOpticalInputs)
+                tabItem.refreshOpticalInputs()
+        } catch (error) {
+            console.log("[DetailPage][tab init] run failed",
+                        "tabIndex=", currentTabIndex,
+                        "source=", currentTabSource(),
+                        "error=", error)
+        }
     }
 
     onExperimentDataChanged: {
         loadLightIntensityData()
-        reloadCurrentTab()
     }
-    onCurrentTabIndexChanged: reloadCurrentTab()
     Component.onCompleted: {
         loadLightIntensityData()
-        reloadCurrentTab()
     }
 
     Rectangle {
@@ -316,6 +427,11 @@ Item {
                 id: detailContentLoader
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                source: detailPage.currentTabSource()
+
+                onLoaded: {
+                    detailPage.initializeDetailTabItem(item)
+                }
             }
         }
     }

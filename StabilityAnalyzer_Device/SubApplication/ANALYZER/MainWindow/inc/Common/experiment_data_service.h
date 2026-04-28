@@ -31,6 +31,7 @@ public:
     using BuildRowsFn = std::function<QVector<QVariantMap>(int, const QVector<quint16>&, bool)>;
     using SendControlFn = std::function<bool(int, const QString&, const QVariantMap&)>;
     using CurrentScanCountFn = std::function<int(void)>;
+    using StreamRowsFn = std::function<void(int, int, const QVector<QVariantMap>&)>;
 
     /**
      * @brief 构造数据服务。
@@ -42,7 +43,6 @@ public:
     /**
      * @brief 保存单条实验数据。
      */
-    void saveExperimentData(int experimentId, const QVariantMap& data) const;
 
     /**
      * @brief 批量保存实验数据。
@@ -64,13 +64,10 @@ public:
                             const DeviceIdProvider& deviceIdProvider,
                             const BuildRowsFn& buildRowsFn,
                             const SendControlFn& sendControlFn,
-                            const CurrentScanCountFn& currentScanCountFn) const;
+                            const CurrentScanCountFn& currentScanCountFn,
+                            const StreamRowsFn& streamRowsFn = StreamRowsFn()) const;
 
 private:
-    QVector<QVariantMap> parseStoragePairs(int channel, const QVector<quint16>& raw, bool areaA,
-                                           double startHeightUm, double stepUm,
-                                           int startPointIndex) const;
-
     SqlOrmManager* m_dbManager;
     ModbusTaskScheduler* m_scheduler;
 };

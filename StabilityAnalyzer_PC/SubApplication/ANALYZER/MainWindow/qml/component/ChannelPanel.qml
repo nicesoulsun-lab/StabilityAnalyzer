@@ -8,6 +8,7 @@ Rectangle {
     property bool isRunning: false
     property bool hasSample: false
     property bool isCovered: false
+    signal clicked()
     //property string remainingTimeText: qsTr("剩余时间：--:--:--")
 
     color: "transparent"
@@ -160,5 +161,10 @@ Rectangle {
 //            horizontalAlignment: Text.AlignHCenter
 //            wrapMode: Text.WrapAnywhere
 //        }
+    }
+    MouseArea {
+        anchors.fill: parent
+        cursorShape: Qt.PointingHandCursor
+        onClicked: root.clicked()
     }
 }

@@ -27,11 +27,6 @@ public:
                                                       const QVariantMap& middleSeries,
                                                       const QVariantMap& topSeries);
     // 直接基于原始扫描行构建峰厚度趋势图数据。
-    static QVariantMap buildPeakThicknessChartData(const QVector<QVariantMap>& rawRows,
-                                                   int intensityMode,
-                                                   double lowerBoundMm,
-                                                   double upperBoundMm,
-                                                   double thresholdValue);
 };
 
 #endif // CURVECHARTANALYSISENGINE_H

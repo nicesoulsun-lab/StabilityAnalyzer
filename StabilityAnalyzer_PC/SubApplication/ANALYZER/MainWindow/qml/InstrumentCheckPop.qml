@@ -143,8 +143,8 @@ Popup {
             return
         }
 
-        if (rangeEnd < rangeStart) {
-            showMessage(qsTr("扫描区间上限必须大于或等于下限"))
+        if (rangeEnd <= rangeStart) {
+            showMessage(qsTr("扫描区间上限必须大于下限"))
             return
         }
 

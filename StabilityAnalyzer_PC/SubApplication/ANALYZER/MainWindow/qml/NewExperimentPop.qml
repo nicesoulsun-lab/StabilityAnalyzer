@@ -16,6 +16,8 @@ Popup {
 
     property var projectNameList: []
     property var channelOptions: ["A", "B", "C", "D"]
+    property var availableChannelOptions: []
+    property var availableChannelIndexes: []
     property var scanRangeStartModel: []
     property var scanRangeEndModel: []
     property bool loadingParams: false
@@ -33,7 +35,47 @@ Popup {
     }
 
     function currentChannel() {
-        return channelCombo.currentIndex
+        if (channelCombo.currentIndex < 0 || channelCombo.currentIndex >= availableChannelIndexes.length)
+            return -1
+        return availableChannelIndexes[channelCombo.currentIndex]
+    }
+
+    function isChannelRunning(channelIndex) {
+        if (!data_transmit_ctrl || !data_transmit_ctrl.experimentChannels
+                || channelIndex < 0 || channelIndex >= data_transmit_ctrl.experimentChannels.length) {
+            return false
+        }
+
+        var channelInfo = data_transmit_ctrl.experimentChannels[channelIndex]
+        return !!(channelInfo && channelInfo.running)
+    }
+
+    function refreshAvailableChannels(preferredChannel) {
+        var nextOptions = []
+        var nextIndexes = []
+
+        for (var i = 0; i < channelOptions.length; ++i) {
+            if (!isChannelRunning(i)) {
+                nextOptions.push(channelOptions[i])
+                nextIndexes.push(i)
+            }
+        }
+
+        availableChannelOptions = nextOptions
+        availableChannelIndexes = nextIndexes
+        channelCombo.model = availableChannelOptions
+
+        if (availableChannelIndexes.length === 0) {
+            channelCombo.currentIndex = -1
+            return
+        }
+
+        var targetChannel = preferredChannel
+        if (targetChannel === undefined || targetChannel < 0)
+            targetChannel = currentChannel()
+
+        var targetIndex = availableChannelIndexes.indexOf(targetChannel)
+        channelCombo.currentIndex = targetIndex >= 0 ? targetIndex : 0
     }
 
     function initModels() {
@@ -50,10 +92,16 @@ Popup {
     }
 
     function loadChannelParams() {
+        var selectedChannel = currentChannel()
+        if (selectedChannel < 0) {
+            loadingParams = false
+            return
+        }
+
         loadingParams = true
         refreshProjectList()
 
-        var params = experiment_ctrl.loadParams(currentChannel())
+        var params = experiment_ctrl.loadParams(selectedChannel)
 
         if (projectNameList.length > 0 && params.projectId > 0 && params.projectId <= projectNameList.length)
             projectCombo.currentIndex = params.projectId - 1
@@ -97,17 +145,23 @@ Popup {
             return
         }
 
-        var scanTime = 20
-        var count = Math.floor(durationSeconds / intervalSeconds) + 1
+        var count = Math.floor(durationSeconds / intervalSeconds)
         scanCountEdit.text = String(Math.max(1, count))
     }
 
     function saveAndStartExperiment() {
+        var selectedChannel = currentChannel()
         var projectId = projectCombo.currentIndex + 1
+        var projectName = projectCombo.currentIndex >= 0 && projectCombo.currentIndex < projectNameList.length
+                ? String(projectNameList[projectCombo.currentIndex]) : ""
         var scanRangeStart = parseInt(scanRangeStartModel[scanStartCombo.currentIndex] || 0)
         var scanRangeEnd = parseInt(scanRangeEndModel[scanEndCombo.currentIndex] || 55)
         var targetTemperature = parseFloat(targetTempEdit.text || "0")
 
+        if (selectedChannel < 0) {
+            showMessage(qsTr("当前没有可用通道，请等待实验结束后再新建实验"))
+            return
+        }
         if (projectCombo.currentIndex < 0) {
             showMessage(qsTr("请先选择工程"))
             return
@@ -124,8 +178,8 @@ Popup {
             showMessage(qsTr("请填写有效的扫描次数"))
             return
         }
-        if (scanRangeEnd < scanRangeStart) {
-            showMessage(qsTr("扫描区间上限必须大于或等于下限"))
+        if (scanRangeEnd <= scanRangeStart) {
+            showMessage(qsTr("扫描区间上限必须大于下限"))
             return
         }
         if (temperatureSwitch.checked && (targetTempEdit.text.trim() === "" || isNaN(targetTemperature))) {
@@ -133,8 +187,9 @@ Popup {
             return
         }
 
-        experiment_ctrl.saveParams(currentChannel(), {
+        experiment_ctrl.saveParams(selectedChannel, {
                                        projectId: projectId,
+                                       projectName: projectName,
                                        sampleName: sampleNameEdit.text.trim(),
                                        operatorName: operatorNameEdit.text.trim(),
                                        description: noteEdit.text.trim(),
@@ -153,19 +208,35 @@ Popup {
                                        scanStep: 20
                                    })
 
-        if (experiment_ctrl.startExperiment(currentChannel(), user_ctrl.currentUserId))
+        if (experiment_ctrl.startExperiment(selectedChannel, user_ctrl.currentUserId))
             root.close()
     }
 
     Component.onCompleted: {
         initModels()
+        refreshAvailableChannels(0)
         loadChannelParams()
     }
 
     onOpened: {
-        channelCombo.currentIndex = 0
+        refreshAvailableChannels(currentChannel())
+        if (availableChannelIndexes.length === 0) {
+            showMessage(qsTr("当前所有通道都在实验中，请等待空闲后再新建实验"))
+        }
         loadChannelParams()
         calculateScanCount()
+    }
+
+    Connections {
+        target: data_transmit_ctrl
+
+        onExperimentChannelsChanged: {
+            var previousChannel = root.currentChannel()
+            root.refreshAvailableChannels(previousChannel)
+            if (root.currentChannel() !== previousChannel || previousChannel < 0) {
+                root.loadChannelParams()
+            }
+        }
     }
 
     background: Rectangle {
@@ -253,13 +324,15 @@ Popup {
                         id: channelCombo
                         Layout.fillWidth: true
                         Layout.preferredHeight: 36
-                        model: root.channelOptions
+                        model: root.availableChannelOptions
+                        enabled: root.availableChannelOptions.length > 0
                         onCurrentIndexChanged: root.loadChannelParams()
                         background: Rectangle {
-                            border.color: "#82C1F2"
+                            border.color: channelCombo.enabled ? "#82C1F2" : "#DCE3EC"
                             radius: 4
+                            color: channelCombo.enabled ? "#FFFFFF" : "#F3F5F7"
                         }
-                        text_color: "#333333"
+                        text_color: channelCombo.enabled ? "#333333" : "#98A1AF"
                     }
 
                     Text { text: qsTr("选择工程"); font.pixelSize: 16; color: "#333333"; font.family: "Microsoft YaHei" }
@@ -503,8 +576,9 @@ Popup {
             width: 138
             height: 42
             button_text: qsTr("开始实验")
-            button_color: "#3B87E4"
+            button_color: root.availableChannelOptions.length > 0 ? "#3B87E4" : "#AEB8C6"
             text_color: "#FFFFFF"
+            enabled: root.availableChannelOptions.length > 0
             onClicked: root.saveAndStartExperiment()
         }
     }

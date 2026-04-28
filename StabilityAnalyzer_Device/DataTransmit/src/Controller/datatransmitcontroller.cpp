@@ -8,6 +8,7 @@
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QMetaObject>
 #include <QTimer>
 
 DataTransmitController::DataTransmitController(QObject *parent)
@@ -61,6 +62,7 @@ DataTransmitController::DataTransmitController(QObject *parent)
         QVariantMap initialStatus;
         initialStatus.insert(QStringLiteral("channel"), channel);
         initialStatus.insert(QStringLiteral("running"), false);
+        initialStatus.insert(QStringLiteral("experiment_id"), 0);
         initialStatus.insert(QStringLiteral("hasSample"), false);
         initialStatus.insert(QStringLiteral("isCovered"), false);
         initialStatus.insert(QStringLiteral("remainingSeconds"), 0);
@@ -242,6 +244,20 @@ bool DataTransmitController::sendStreamMessage(const QVariantMap &payload)
     return m_streamServer->sendStreamMessage(QJsonObject::fromVariantMap(payload));
 }
 
+void DataTransmitController::sendCommandResult(const QString &command,
+                                               const QString &requestId,
+                                               bool success,
+                                               const QString &message,
+                                               const QVariantMap &extraPayload)
+{
+    QJsonObject response = buildCommandResult(command, requestId, success, message);
+    const QVariantMap::const_iterator endIt = extraPayload.constEnd();
+    for (QVariantMap::const_iterator it = extraPayload.constBegin(); it != endIt; ++it) {
+        response.insert(it.key(), QJsonValue::fromVariant(it.value()));
+    }
+    m_controlServer->sendControlMessage(response);
+}
+
 void DataTransmitController::updateExperimentChannelStatus(int channel, const QVariantMap &status)
 {
     if (channel < 0 || channel >= m_experimentChannels.size()) {
@@ -260,10 +276,6 @@ void DataTransmitController::updateExperimentChannelStatus(int channel, const QV
 
     m_experimentChannels[channel] = mergedStatus;
     emit experimentChannelsChanged();
-
-    if (m_statusServer->isClientConnected() && m_connectionState == Online) {
-        pushStatusSnapshot(QStringLiteral("status_snapshot"));
-    }
 }
 
 void DataTransmitController::performStartupStep()
@@ -342,6 +354,7 @@ void DataTransmitController::sendHeartbeat()
 void DataTransmitController::handleControlMessage(const QJsonObject &message)
 {
     const QString command = message.value(QStringLiteral("cmd")).toString();
+    const QString requestId = message.value(QStringLiteral("request_id")).toString();
     if (command.isEmpty()) {
         return;
     }
@@ -362,13 +375,85 @@ void DataTransmitController::handleControlMessage(const QJsonObject &message)
     if (command == QStringLiteral("get_channel_info")) {
         QJsonObject response = buildStatusSnapshot();
         response.insert(QStringLiteral("type"), QStringLiteral("channel_info"));
+        if (!requestId.isEmpty()) {
+            response.insert(QStringLiteral("request_id"), requestId);
+        }
         m_controlServer->sendControlMessage(response);
+        return;
+    }
+
+    if (command == QStringLiteral("start_experiment")) {
+        const int channel = message.value(QStringLiteral("channel")).toInt(-1);
+        const int creatorId = message.value(QStringLiteral("creator_id")).toInt(0);
+        const QVariantMap params = message.value(QStringLiteral("params")).toObject().toVariantMap();
+        if (channel < 0 || channel >= 4) {
+            m_controlServer->sendControlMessage(buildCommandResult(command, requestId, false,
+                                                                   QStringLiteral("Invalid channel")));
+            return;
+        }
+        emit startExperimentRequested(channel, creatorId, params, requestId);
+        return;
+    }
+
+    if (command == QStringLiteral("stop_experiment")) {
+        const int channel = message.value(QStringLiteral("channel")).toInt(-1);
+        if (channel < 0 || channel >= 4) {
+            m_controlServer->sendControlMessage(buildCommandResult(command, requestId, false,
+                                                                   QStringLiteral("Invalid channel")));
+        return;
+        }
+        emit stopExperimentRequested(channel, requestId);
+        return;
+    }
+
+    if (command == QStringLiteral("list_importable_experiments")) {
+        emit listImportExperimentsRequested(requestId);
+        return;
+    }
+
+    if (command == QStringLiteral("get_experiment_export")) {
+        const int experimentId = message.value(QStringLiteral("experiment_id")).toInt(-1);
+        if (experimentId <= 0) {
+            m_controlServer->sendControlMessage(buildCommandResult(command, requestId, false,
+                                                                   QStringLiteral("Invalid experiment id")));
+            return;
+        }
+        emit exportExperimentRequested(experimentId, requestId);
+        return;
+    }
+
+    if (command == QStringLiteral("get_experiment_scan_export")) {
+        const int experimentId = message.value(QStringLiteral("experiment_id")).toInt(-1);
+        const int scanId = message.value(QStringLiteral("scan_id")).toInt(-1);
+        const int offset = qMax(0, message.value(QStringLiteral("offset")).toInt(0));
+        const int limit = qMax(0, message.value(QStringLiteral("limit")).toInt(0));
+        if (experimentId <= 0 || scanId < 0) {
+            m_controlServer->sendControlMessage(buildCommandResult(command, requestId, false,
+                                                                   QStringLiteral("Invalid experiment or scan id")));
+            return;
+        }
+        emit exportExperimentScanRequested(experimentId, scanId, offset, limit, requestId);
+        return;
+    }
+
+    if (command == QStringLiteral("mark_experiment_imported")) {
+        const int experimentId = message.value(QStringLiteral("experiment_id")).toInt(-1);
+        const int status = message.value(QStringLiteral("status")).toInt(1);
+        if (experimentId <= 0) {
+            m_controlServer->sendControlMessage(buildCommandResult(command, requestId, false,
+                                                                   QStringLiteral("Invalid experiment id")));
+            return;
+        }
+        emit markExperimentImportedRequested(experimentId, status, requestId);
         return;
     }
 
     QJsonObject response;
     response.insert(QStringLiteral("type"), QStringLiteral("ack"));
     response.insert(QStringLiteral("cmd"), command);
+    if (!requestId.isEmpty()) {
+        response.insert(QStringLiteral("request_id"), requestId);
+    }
     response.insert(QStringLiteral("result"), QStringLiteral("unsupported"));
     m_controlServer->sendControlMessage(response);
 }
@@ -488,4 +573,23 @@ QJsonObject DataTransmitController::buildDeviceInfo() const
     info.insert(QStringLiteral("stream_port"), 9002);
     info.insert(QStringLiteral("rndis_ready"), isRndisReady());
     return info;
+}
+
+QJsonObject DataTransmitController::buildCommandResult(const QString &command,
+                                                       const QString &requestId,
+                                                       bool success,
+                                                       const QString &message) const
+{
+    QJsonObject result;
+    result.insert(QStringLiteral("type"), QStringLiteral("command_result"));
+    result.insert(QStringLiteral("cmd"), command);
+    result.insert(QStringLiteral("success"), success);
+    if (!requestId.isEmpty()) {
+        result.insert(QStringLiteral("request_id"), requestId);
+    }
+    if (!message.isEmpty()) {
+        result.insert(QStringLiteral("message"), message);
+    }
+    result.insert(QStringLiteral("timestamp"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+    return result;
 }

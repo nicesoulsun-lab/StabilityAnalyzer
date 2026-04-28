@@ -113,6 +113,7 @@ Popup {
                     font.pixelSize: 16
                     border_color: "#82C1F2"
                     placeholderText: qsTr("请输入工程名称")
+                    font.family: "Microsoft YaHei"
                 }
 
                 Text {
@@ -133,10 +134,11 @@ Popup {
                     maxLines: 5
                     font.pixelSize: 16
                     border_color: "#82C1F2"
+                    font.family: "Microsoft YaHei"
                 }
             }
 
-            Item { Layout.fillHeight: true }
+            //Item { Layout.fillHeight: true }
 
             IconButton {
                 button_text: qsTr("确定")

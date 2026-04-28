@@ -22,6 +22,7 @@
 struct ExperimentParams
 {
     int projectId = 0;
+    QString projectName;
     QString sampleName;
     QString operatorName;
     QString description;

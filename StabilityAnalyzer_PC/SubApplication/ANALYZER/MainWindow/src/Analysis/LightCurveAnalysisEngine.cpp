@@ -11,10 +11,27 @@ QVector<QPointF> LightCurveAnalysisEngine::extractPoints(const QVariantList &poi
     result.reserve(points.size());
 
     for (const QVariant &value : points) {
+        if (value.canConvert<QPointF>()) {
+            result.append(value.toPointF());
+            continue;
+        }
+
+        const QVariantList list = value.toList();
+        if (list.size() >= 2) {
+            bool xOk = false;
+            bool yOk = false;
+            const double xValue = list.at(0).toDouble(&xOk);
+            const double yValue = list.at(1).toDouble(&yOk);
+            if (xOk && yOk) {
+                result.append(QPointF(xValue, yValue));
+                continue;
+            }
+        }
+
         const QVariantMap map = value.toMap();
-        const double xValue = map.value("x").toDouble();
-        const double yValue = map.value("y").toDouble();
-        result.append(QPointF(xValue, yValue));
+        if (!map.isEmpty()) {
+            result.append(QPointF(map.value("x").toDouble(), map.value("y").toDouble()));
+        }
     }
 
     return result;
@@ -27,10 +44,11 @@ QVariantList LightCurveAnalysisEngine::toVariantPoints(const QVector<QPointF> &p
     result.reserve(points.size());
 
     for (const QPointF &point : points) {
-        QVariantMap map;
-        map["x"] = point.x();
-        map["y"] = point.y();
-        result.append(map);
+        QVariantList pair;
+        pair.reserve(2);
+        pair.append(point.x());
+        pair.append(point.y());
+        result.append(QVariant(pair));
     }
 
     return result;

@@ -13,25 +13,33 @@ Rectangle {
     // 这样可以尽量少动已有显示方式和被射/散射切换逻辑。
     property var detailPage
     readonly property var lightCurves: detailPage ? detailPage.lightCurves : []
+    readonly property bool lightCurvesLoading: !!(detailPage && detailPage.lightCurvesLoading)
     property int currentLightModeIndex: 0
-    property var lightModeTitles: [qsTr("背射光"), qsTr("透射光"), qsTr("背射光+透射光")]
+    property var lightModeTitles: [qsTr("透射光"), qsTr("背射光"), qsTr("透射光+背射光")]
     property int currentDataModeIndex: 0
     property var dataModeTitles: [qsTr("原始数据"), qsTr("参比数据")]
     property int referenceCurveIndex: 0
     property real heightLowerBound: detailPage ? detailPage.floorToStep(detailPage.minHeightValue, 1) : 0
     property real heightUpperBound: detailPage ? detailPage.ceilToStep(detailPage.maxHeightValue, 1) : 55
-    property var displayedCurves: []
+    property var processedCurves: []
+    property string lastDisplaySignature: ""
+    readonly property bool useDetailCurves: currentDataModeIndex === 0
+                                                && isFullHeightRange()
+                                                && lightCurves
+                                                && lightCurves.length > 0
+    readonly property var displayedCurves: useDetailCurves ? lightCurves : processedCurves
     readonly property int displayedCurveCount: displayedCurves ? displayedCurves.length : 0
+    readonly property var availableHeightRange: curveHeightRange(lightCurves)
 
     readonly property real safeHeightLowerBound: {
         if (!detailPage)
             return 0
-        return Math.max(detailPage.minHeightValue, Math.min(heightLowerBound, detailPage.maxHeightValue))
+        return Math.max(availableHeightRange.minValue, Math.min(heightLowerBound, availableHeightRange.maxValue))
     }
     readonly property real safeHeightUpperBound: {
         if (!detailPage)
             return 10
-        return Math.max(safeHeightLowerBound, Math.min(heightUpperBound, detailPage.maxHeightValue))
+        return Math.max(safeHeightLowerBound, Math.min(heightUpperBound, availableHeightRange.maxValue))
     }
     readonly property real chartMinX: safeHeightLowerBound
     readonly property real chartMaxX: Math.max(safeHeightUpperBound, safeHeightLowerBound + 1)
@@ -40,8 +48,9 @@ Rectangle {
     readonly property var backscatterRange: curveRange(displayedCurves, "backscatter_points")
     readonly property var transmissionLabels: buildYLabels(transmissionRange.minValue, transmissionRange.maxValue)
     readonly property var backscatterLabels: buildYLabels(backscatterRange.minValue, backscatterRange.maxValue)
-    readonly property var singleModeRange: currentLightModeIndex === 0 ? backscatterRange : transmissionRange
-    readonly property var singleModeLabels: currentLightModeIndex === 0 ? backscatterLabels : transmissionLabels
+    readonly property bool transmissionOnlyMode: currentLightModeIndex === 0
+    readonly property var singleModeRange: transmissionOnlyMode ? transmissionRange : backscatterRange
+    readonly property var singleModeLabels: transmissionOnlyMode ? transmissionLabels : backscatterLabels
 
     color: "#FFFFFF"
 
@@ -69,10 +78,63 @@ Rectangle {
         return ticks
     }
 
+    function pointX(point) {
+        if (point === undefined || point === null)
+            return Number.NaN
+        if (point.x !== undefined)
+            return Number(point.x)
+        if (point.length !== undefined && point.length > 0)
+            return Number(point[0])
+        return Number.NaN
+    }
+
+    function curveHeightRange(curves) {
+        var minValue = Number.POSITIVE_INFINITY
+        var maxValue = Number.NEGATIVE_INFINITY
+
+        for (var i = 0; i < curves.length; ++i) {
+            var curve = curves[i]
+            var rawMin = Number(curve.min_height_mm)
+            var rawMax = Number(curve.max_height_mm)
+            if (isFinite(rawMin))
+                minValue = Math.min(minValue, rawMin)
+            if (isFinite(rawMax))
+                maxValue = Math.max(maxValue, rawMax)
+
+            if (!isFinite(rawMin) || !isFinite(rawMax)) {
+                var keys = ["transmission_points", "backscatter_points"]
+                for (var keyIndex = 0; keyIndex < keys.length; ++keyIndex) {
+                    var points = curve[keys[keyIndex]] || []
+                    for (var pointIndex = 0; pointIndex < points.length; ++pointIndex) {
+                        var x = pointX(points[pointIndex])
+                        if (!isFinite(x))
+                            continue
+                        minValue = Math.min(minValue, x)
+                        maxValue = Math.max(maxValue, x)
+                    }
+                }
+            }
+        }
+
+        if (!isFinite(minValue) || !isFinite(maxValue)) {
+            if (detailPage)
+                return { minValue: detailPage.minHeightValue, maxValue: detailPage.maxHeightValue }
+            return { minValue: 0, maxValue: 10 }
+        }
+
+        return { minValue: minValue, maxValue: maxValue }
+    }
+
     function clampReferenceIndex(index) {
         if (!displayedCurves || displayedCurves.length <= 0)
             return 0
         return Math.max(0, Math.min(index, displayedCurves.length - 1))
+    }
+
+    function displayedCurveAt(index) {
+        if (!displayedCurves || index < 0 || index >= displayedCurves.length)
+            return null
+        return displayedCurves[index]
     }
 
     function normalizeCurves(curves) {
@@ -100,8 +162,8 @@ Rectangle {
     function isFullHeightRange() {
         if (!detailPage)
             return false
-        return Math.abs(safeHeightLowerBound - detailPage.minHeightValue) < 0.000001
-                && Math.abs(safeHeightUpperBound - detailPage.maxHeightValue) < 0.000001
+        return Math.abs(safeHeightLowerBound - availableHeightRange.minValue) < 0.000001
+                && Math.abs(safeHeightUpperBound - availableHeightRange.maxValue) < 0.000001
     }
 
     function paddedRange(minValue, maxValue) {
@@ -144,39 +206,98 @@ Rectangle {
         return detailPage ? detailPage.makeAxisLabels(minValue, maxValue, 6, currentDataModeIndex === 0 ? 0 : 1) : [0, 1]
     }
 
+    function requestHeatLegendPaint(reason) {
+        if (!heatLegendCanvas)
+            return
+
+        if (!heatLegendCanvas.visible || heatLegendCanvas.width <= 1 || heatLegendCanvas.height <= 1) {
+            console.log("[LightIntensity][heat legend skip]",
+                        "reason=", reason,
+                        "visible=", heatLegendCanvas.visible,
+                        "width=", heatLegendCanvas.width,
+                        "height=", heatLegendCanvas.height,
+                        "curveCount=", displayedCurveCount)
+            return
+        }
+
+        heatLegendCanvas.requestPaint()
+    }
+
+    function displaySignature() {
+        if (!detailPage || !detailPage.experimentData || detailPage.experimentData.id === undefined)
+            return ""
+
+        return [
+            Number(detailPage.experimentData.id),
+            detailPage.lightCurvesVersion,
+            currentLightModeIndex,
+            currentDataModeIndex,
+            referenceCurveIndex,
+            Number(safeHeightLowerBound).toFixed(3),
+            Number(safeHeightUpperBound).toFixed(3),
+            lightCurves ? lightCurves.length : 0
+        ].join("|")
+    }
+
+    function scheduleDisplayedCurvesReload() {
+        displayedCurveReloadTimer.restart()
+    }
+
     function applyAnalysisSettings(referenceIndex, lowerBound, upperBound) {
         referenceCurveIndex = Math.max(0, referenceIndex)
-        heightLowerBound = Math.max(detailPage.minHeightValue, Math.min(lowerBound, detailPage.maxHeightValue))
-        heightUpperBound = Math.max(heightLowerBound, Math.min(upperBound, detailPage.maxHeightValue))
-        loadDisplayedCurves()
+        heightLowerBound = Math.max(availableHeightRange.minValue, Math.min(lowerBound, availableHeightRange.maxValue))
+        heightUpperBound = Math.max(heightLowerBound, Math.min(upperBound, availableHeightRange.maxValue))
+        scheduleDisplayedCurvesReload()
     }
 
     function loadDisplayedCurves() {
-        displayedCurves = []
-        if (!detailPage || !detailPage.experimentData || detailPage.experimentData.id === undefined || !data_ctrl)
+        if (!detailPage || !detailPage.experimentData || detailPage.experimentData.id === undefined || !data_ctrl) {
+            processedCurves = []
+            lastDisplaySignature = ""
             return
+        }
+        if (detailPage.lightCurvesLoading) {
+            return
+        }
+
+        var signature = displaySignature()
+        if (signature === lastDisplaySignature && displayedCurves && displayedCurves.length > 0)
+            return
+        lastDisplaySignature = signature
 
         // 默认原始视图直接复用详情页已加载的原始曲线，避免首次进入光强页重复查询。
-        if (currentDataModeIndex === 0 && isFullHeightRange() && lightCurves && lightCurves.length > 0) {
-            displayedCurves = normalizeCurves(lightCurves)
+        if (useDetailCurves) {
+            processedCurves = []
             referenceCurveIndex = 0
+            console.log("[LightIntensity][curve page display]",
+                        "curveCount=", lightCurves.length,
+                        "firstTransmissionPoints=", lightCurves.length > 0 ? lightCurves[0].transmission_points.length : 0,
+                        "firstBackscatterPoints=", lightCurves.length > 0 ? lightCurves[0].backscatter_points.length : 0)
             return
         }
 
         // 其余情况统一走 data_ctrl，由后端分析层完成裁剪/参比处理。
-        var pointsPerCurve = Math.max(480, Math.round((lightIntensityPanel.width > 0 ? lightIntensityPanel.width : 1000) * 1.1))
         var curves = data_ctrl.getProcessedLightIntensityCurves(
                     Number(detailPage.experimentData.id),
-                    pointsPerCurve,
+                    detailPage.pointsPerCurve ? detailPage.pointsPerCurve() : 3000,
                     referenceCurveIndex,
                     safeHeightLowerBound,
                     safeHeightUpperBound,
                     currentDataModeIndex === 1)
-        if (!curves || curves.length === 0)
+        if (!curves || curves.length === 0) {
+            if (lightCurves && lightCurves.length > 0) {
+                processedCurves = []
+                referenceCurveIndex = 0
+                console.log("[LightIntensity][curve page fallback]",
+                            "curveCount=", lightCurves.length)
+            } else {
+                processedCurves = []
+            }
             return
+        }
 
         var normalizedCurves = normalizeCurves(curves)
-        displayedCurves = normalizedCurves
+        processedCurves = normalizedCurves
         if (normalizedCurves.length > 0) {
             var actualReferenceScanId = Number(normalizedCurves[0].reference_scan_id)
             for (var index = 0; index < normalizedCurves.length; ++index) {
@@ -192,17 +313,40 @@ Rectangle {
         if (!detailPage)
             return
         applyAnalysisSettings(0,
-                              detailPage.floorToStep(detailPage.minHeightValue, 1),
-                              detailPage.ceilToStep(detailPage.maxHeightValue, 1))
+                              detailPage.floorToStep(availableHeightRange.minValue, 1),
+                              detailPage.ceilToStep(availableHeightRange.maxValue, 1))
     }
 
-    onDetailPageChanged: resetAnalysisDefaults()
-    onCurrentDataModeIndexChanged: loadDisplayedCurves()
+    onDetailPageChanged: {
+        lastDisplaySignature = ""
+        resetAnalysisDefaults()
+    }
+    onCurrentDataModeIndexChanged: {
+        lastDisplaySignature = ""
+        scheduleDisplayedCurvesReload()
+    }
+    Component.onCompleted: scheduleDisplayedCurvesReload()
+
+    Timer {
+        id: displayedCurveReloadTimer
+        interval: 0
+        repeat: false
+        onTriggered: lightIntensityPanel.loadDisplayedCurves()
+    }
 
     Connections {
         target: detailPage
-        function onExperimentDataChanged() { lightIntensityPanel.resetAnalysisDefaults() }
-        function onLightCurvesChanged() { lightIntensityPanel.loadDisplayedCurves() }
+        ignoreUnknownSignals: true
+        function onExperimentDataChanged() {
+            lightIntensityPanel.lastDisplaySignature = ""
+            lightIntensityPanel.resetAnalysisDefaults()
+        }
+        function onLightCurvesVersionChanged() {
+            if (detailPage && !detailPage.lightCurvesLoading) {
+                lightIntensityPanel.lastDisplaySignature = ""
+                lightIntensityPanel.resetAnalysisDefaults()
+            }
+        }
     }
 
     ColumnLayout {
@@ -322,17 +466,36 @@ Rectangle {
 
                 Text {
                     anchors.centerIn: parent
-                    visible: displayedCurveCount === 0
+                    visible: !lightIntensityPanel.lightCurvesLoading && displayedCurveCount === 0
                     text: qsTr("数据库中暂无该实验的光强曲线数据")
                     font.pixelSize: 15
                     font.family: "Microsoft YaHei"
                     color: "#7A8CA5"
                 }
 
+                Column {
+                    anchors.centerIn: parent
+                    spacing: 12
+                    visible: lightIntensityPanel.lightCurvesLoading
+
+                    BusyIndicator {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        running: lightIntensityPanel.lightCurvesLoading
+                    }
+
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: qsTr("正在加载光强曲线，请稍候")
+                        font.pixelSize: 15
+                        font.family: "Microsoft YaHei"
+                        color: "#7A8CA5"
+                    }
+                }
+
                 RowLayout {
                     anchors.fill: parent
                     spacing: 14
-                    visible: displayedCurveCount > 0
+                    visible: displayedCurveCount > 0 && !lightIntensityPanel.lightCurvesLoading
 
                     Item {
                         Layout.fillWidth: true
@@ -385,17 +548,19 @@ Rectangle {
                                     }
 
                                     Repeater {
-                                        model: displayedCurves
+                                        model: lightIntensityPanel.currentLightModeIndex === 2 ? displayedCurveCount : 0
                                         CurveItem {
+                                            property var curveData: lightIntensityPanel.displayedCurveAt(index)
                                             anchors.fill: parent
-                                            lineColor: modelData.color
+                                            lineColor: curveData ? curveData.color : "#4A89DC"
                                             lineWidth: 2
+                                            maxPoints: 480
                                             autoScale: false
                                             minXValue: lightIntensityPanel.chartMinX
                                             maxXValue: lightIntensityPanel.chartMaxX
                                             minYValue: lightIntensityPanel.transmissionRange.minValue
                                             maxYValue: lightIntensityPanel.transmissionRange.maxValue
-                                            dataPoints: modelData.transmission_points
+                                            dataPoints: curveData ? curveData.transmission_points : []
                                         }
                                     }
 
@@ -468,17 +633,19 @@ Rectangle {
                                     }
 
                                     Repeater {
-                                        model: displayedCurves
+                                        model: lightIntensityPanel.currentLightModeIndex === 2 ? displayedCurveCount : 0
                                         CurveItem {
+                                            property var curveData: lightIntensityPanel.displayedCurveAt(index)
                                             anchors.fill: parent
-                                            lineColor: modelData.color
+                                            lineColor: curveData ? curveData.color : "#4A89DC"
                                             lineWidth: 2
+                                            maxPoints: 480
                                             autoScale: false
                                             minXValue: lightIntensityPanel.chartMinX
                                             maxXValue: lightIntensityPanel.chartMaxX
                                             minYValue: lightIntensityPanel.backscatterRange.minValue
                                             maxYValue: lightIntensityPanel.backscatterRange.maxValue
-                                            dataPoints: modelData.backscatter_points
+                                            dataPoints: curveData ? curveData.backscatter_points : []
                                         }
                                     }
 
@@ -573,26 +740,30 @@ Rectangle {
                                     }
                                 }
 
-                                Repeater {
-                                    model: displayedCurves
-                                    CurveItem {
-                                        anchors.fill: parent
-                                        lineColor: modelData.color
-                                        lineWidth: 2
-                                        autoScale: false
-                                        minXValue: lightIntensityPanel.chartMinX
-                                        maxXValue: lightIntensityPanel.chartMaxX
-                                        minYValue: lightIntensityPanel.singleModeRange.minValue
-                                        maxYValue: lightIntensityPanel.singleModeRange.maxValue
-                                        dataPoints: lightIntensityPanel.currentLightModeIndex === 0 ? modelData.backscatter_points : modelData.transmission_points
-                                    }
-                                }
+            Repeater {
+                model: lightIntensityPanel.currentLightModeIndex !== 2 ? displayedCurveCount : 0
+                CurveItem {
+                    property var curveData: lightIntensityPanel.displayedCurveAt(index)
+                    anchors.fill: parent
+                    lineColor: curveData ? curveData.color : "#4A89DC"
+                    lineWidth: 2
+                    maxPoints: 480
+                    autoScale: false
+                    minXValue: lightIntensityPanel.chartMinX
+                    maxXValue: lightIntensityPanel.chartMaxX
+                    minYValue: lightIntensityPanel.singleModeRange.minValue
+                    maxYValue: lightIntensityPanel.singleModeRange.maxValue
+                    dataPoints: curveData
+                                ? (lightIntensityPanel.transmissionOnlyMode ? curveData.transmission_points : curveData.backscatter_points)
+                                : []
+                }
+            }
 
                                 Text {
                                     anchors.left: parent.left
                                     anchors.leftMargin: -50
                                     anchors.verticalCenter: parent.verticalCenter
-                                    text: lightIntensityPanel.currentLightModeIndex === 0 ? "BS\n(%)" : "T\n(%)"
+                                    text: lightIntensityPanel.transmissionOnlyMode ? "T\n(%)" : "BS\n(%)"
                                     font.pixelSize: 12
                                     font.family: "Microsoft YaHei"
                                     color: "#6E8096"
@@ -707,14 +878,25 @@ Rectangle {
 
                                     Connections {
                                         target: lightIntensityPanel
-                                        function onDisplayedCurvesChanged() { heatLegendCanvas.requestPaint() }
+                                        function onDisplayedCurvesChanged() { lightIntensityPanel.requestHeatLegendPaint("displayedCurvesChanged") }
                                     }
 
-                                    onWidthChanged: requestPaint()
-                                    onHeightChanged: requestPaint()
+                                    onVisibleChanged: lightIntensityPanel.requestHeatLegendPaint("visibleChanged")
+                                    onWidthChanged: lightIntensityPanel.requestHeatLegendPaint("widthChanged")
+                                    onHeightChanged: lightIntensityPanel.requestHeatLegendPaint("heightChanged")
 
                                     onPaint: {
+                                        if (width <= 1 || height <= 1 || !visible) {
+                                            console.log("[LightIntensity][heat legend paint skipped]",
+                                                        "visible=", visible,
+                                                        "width=", width,
+                                                        "height=", height)
+                                            return
+                                        }
+
                                         var ctx = getContext("2d")
+                                        if (!ctx)
+                                            return
                                         ctx.clearRect(0, 0, width, height)
                                         if (!displayedCurves || displayedCurves.length === 0)
                                             return

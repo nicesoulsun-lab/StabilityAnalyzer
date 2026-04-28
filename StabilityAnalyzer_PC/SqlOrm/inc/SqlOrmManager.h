@@ -318,8 +318,16 @@ public:
      * @return 实验数据列表
      */
     QVector<QVariantMap> getExperimentDataByExperiment(int experimentId);
+    bool deleteExperimentDataByExperimentAndScan(int experimentId, int scanId);
+    QVector<int> getExperimentScanIds(int experimentId);
     // 为光强页返回按 scan 聚合且已降采样的整帧曲线。
     QVector<QVariantMap> getLightIntensityCurvesByExperiment(int experimentId, int pointsPerCurve);
+    QVector<QVariantMap> getLightIntensityCurveByScan(int experimentId, int scanId, int pointsPerCurve);
+    QVariantMap getPeakThicknessChartDataByExperiment(int experimentId,
+                                                      int intensityMode,
+                                                      double lowerBoundMm,
+                                                      double upperBoundMm,
+                                                      double thresholdValue);
     QVector<QVariantMap> getLightIntensityAveragesByExperiment(int experimentId);
     QVector<QVariantMap> getUniformityIndicesByExperiment(int experimentId);
     // 计算并缓存三区分层厚度结果。

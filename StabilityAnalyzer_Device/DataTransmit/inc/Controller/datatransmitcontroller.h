@@ -103,6 +103,11 @@ public:
 
 public slots:
     void updateExperimentChannelStatus(int channel, const QVariantMap &status);
+    void sendCommandResult(const QString &command,
+                           const QString &requestId,
+                           bool success,
+                           const QString &message = QString(),
+                           const QVariantMap &extraPayload = QVariantMap());
 
 signals:
     void connectionStateChanged();
@@ -118,6 +123,14 @@ signals:
     void controlMessageReceived(const QVariantMap &message);
     void statusMessageReceived(const QVariantMap &message);
     void streamMessageReceived(const QVariantMap &message);
+    void startExperimentRequested(int channel, int creatorId, const QVariantMap &params, const QString &requestId);
+    void stopExperimentRequested(int channel, const QString &requestId);
+    // 导入链路：PC 先拉取设备已有实验列表，再按实验 ID 拉取实验详情和原始数据。
+    void listImportExperimentsRequested(const QString &requestId);
+    void exportExperimentRequested(int experimentId, const QString &requestId);
+    void exportExperimentScanRequested(int experimentId, int scanId, int offset, int limit, const QString &requestId);
+    // 导入完成后回写设备端状态，避免同一条记录被重复导入。
+    void markExperimentImportedRequested(int experimentId, int status, const QString &requestId);
 
 private slots:
     /* 函数功能：执行启动状态机下一步。 */
@@ -154,6 +167,10 @@ private:
 
     /* 函数功能：组装一条标准设备信息响应。 */
     QJsonObject buildDeviceInfo() const;
+    QJsonObject buildCommandResult(const QString &command,
+                                   const QString &requestId,
+                                   bool success,
+                                   const QString &message = QString()) const;
 
     /* 属性功能：当前通信状态机状态。 */
     ConnectionState m_connectionState = Init;

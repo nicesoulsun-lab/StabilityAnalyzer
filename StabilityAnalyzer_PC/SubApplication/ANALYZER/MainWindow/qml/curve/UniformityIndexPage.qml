@@ -45,6 +45,11 @@ Rectangle {
         chartMaxY = detailPage.toNumber(chartData.chartMaxY, 1)
         xAxisTickValues = chartData.xAxisTickValues || [0, 1]
         yAxisLabels = chartData.yAxisLabels || detailPage.makeAxisLabels(0, 1, 6, 2)
+        console.log("[DetailCurve][uniformity]",
+                    "experimentId=", Number(experimentData.id),
+                    "rowCount=", rows.length,
+                    "bsPoints=", bsPoints ? bsPoints.length : 0,
+                    "tPoints=", tPoints ? tPoints.length : 0)
     }
 
     onDetailPageChanged: loadUniformityData()

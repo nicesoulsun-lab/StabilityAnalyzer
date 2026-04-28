@@ -47,6 +47,11 @@ Rectangle {
         chartMaxY = detailPage.toNumber(chartData.chartMaxY, 1)
         xAxisTickValues = chartData.xAxisTickValues || [0, 1]
         yAxisLabels = chartData.yAxisLabels || detailPage.makeAxisLabels(chartMinY, chartMaxY, 6, 1)
+        console.log("[DetailCurve][average]",
+                    "experimentId=", Number(experimentData.id),
+                    "rowCount=", rows.length,
+                    "bsPoints=", bsPoints ? bsPoints.length : 0,
+                    "tPoints=", tPoints ? tPoints.length : 0)
     }
 
     onDetailPageChanged: loadAverageData()

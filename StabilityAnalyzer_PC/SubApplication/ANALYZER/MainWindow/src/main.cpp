@@ -14,6 +14,8 @@ int main(int argc, char *argv[])
 
     CtrllerManager *ctrl_manager = new CtrllerManager(&a);
     ctrl_manager->getDataTransmitCtrl()->startConnection();
+    QObject::connect(ctrl_manager->getExperimentCtrl(), &ExperimentCtrl::experimentStopped,
+                     ctrl_manager->getDataCtrl(), &dataCtrl::clearExperimentRuntimeResources);
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("data_transmit_ctrl", ctrl_manager->getDataTransmitCtrl());

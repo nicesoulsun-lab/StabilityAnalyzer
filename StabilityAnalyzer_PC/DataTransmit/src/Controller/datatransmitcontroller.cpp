@@ -48,18 +48,32 @@ bool containsRndisKeyword(const QString &text)
 DataTransmitController::DataTransmitController(QObject *parent)
     : QObject(parent)
     , m_retryTimer(new QTimer(this))
+    , m_probeProcess(new QProcess(this))
     , m_controlChannel(new ControlChannelClient(this))
     , m_statusChannel(new StatusChannelClient(this))
     , m_streamChannel(new StreamChannelClient(this))
 {
     m_retryTimer->setSingleShot(true);
     connect(m_retryTimer, &QTimer::timeout, this, [this]() { ensureConnection(); });
+    connect(m_probeProcess,
+            static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished),
+            this,
+            [this](int exitCode, QProcess::ExitStatus exitStatus) {
+                handleProbeFinished(exitCode, static_cast<int>(exitStatus));
+            });
+    connect(m_probeProcess,
+            static_cast<void (QProcess::*)(QProcess::ProcessError)>(&QProcess::error),
+            this,
+            [this](QProcess::ProcessError processError) {
+                handleProbeError(static_cast<int>(processError));
+            });
     bindChannels();
 
     for (int channel = 0; channel < 4; ++channel) {
         QVariantMap initialStatus;
         initialStatus.insert(QStringLiteral("channel"), channel);
         initialStatus.insert(QStringLiteral("running"), false);
+        initialStatus.insert(QStringLiteral("experiment_id"), 0);
         initialStatus.insert(QStringLiteral("hasSample"), false);
         initialStatus.insert(QStringLiteral("isCovered"), false);
         initialStatus.insert(QStringLiteral("remainingSeconds"), 0);
@@ -207,6 +221,7 @@ void DataTransmitController::startConnection()
     }
 
     m_running = true;
+    m_deviceReachabilityConfirmed = false;
     m_ipConfiguredAdapterName.clear();
     resetConnectFailures();
     updateDeviceUiConnectionState(DeviceConnecting);
@@ -224,7 +239,12 @@ void DataTransmitController::stopConnection()
 {
     qDebug() << "[DataTransmit] stopConnection";
     m_running = false;
+    m_deviceReachabilityConfirmed = false;
     m_retryTimer->stop();
+    if (m_probeProcess->state() != QProcess::NotRunning) {
+        m_probeProcess->kill();
+    }
+    finishProbeTask();
     m_controlChannel->disconnectFromHost();
     m_statusChannel->disconnectFromHost();
     m_streamChannel->disconnectFromHost();
@@ -287,6 +307,11 @@ void DataTransmitController::ensureConnection()
         return;
     }
 
+    if (m_probeTask != NoProbeTask) {
+        qDebug() << "[DataTransmit] ensureConnection skipped because probe task is running, task=" << m_probeTask;
+        return;
+    }
+
     qDebug() << "[DataTransmit] ensureConnection state=" << stateToText(m_connectionState)
              << "control=" << controlConnected()
              << "status=" << statusConnected()
@@ -300,19 +325,26 @@ void DataTransmitController::ensureConnection()
         return;
     }
 
-    QString adapter = findAdapterByVidPid();
+    QString adapter = findRndisAdapter();
     if (adapter.isEmpty()) {
-        adapter = findRndisAdapter();
+        adapter = m_adapterName;
     }
 
     if (adapter.isEmpty()) {
-        recordConnectFailure();
-        setAdapterName(QString());
-        setAdapterStatus(QStringLiteral("RNDIS adapter not found"));
-        setDeviceStatus(QStringLiteral("Waiting for device"));
         setConnectionState(WAIT_ADAPTER);
-        qDebug() << "[DataTransmit] RNDIS adapter not found yet";
-        scheduleRetry(2000);
+        startProbeTask(DetectAdapterTask,
+                       QStringLiteral("powershell"),
+                       QStringList() << QStringLiteral("-NoProfile")
+                                     << QStringLiteral("-ExecutionPolicy") << QStringLiteral("Bypass")
+                                     << QStringLiteral("-Command")
+                                     << QStringLiteral(
+                                            "$usbVid='%1';"
+                                            "$usbPid='%2';"
+                                            "Get-CimInstance Win32_NetworkAdapter | "
+                                            "Where-Object { $_.NetConnectionID -and $_.PNPDeviceID -and $_.PNPDeviceID.ToUpper().Contains(\"VID_\" + $usbVid) -and $_.PNPDeviceID.ToUpper().Contains(\"PID_\" + $usbPid) } | "
+                                            "Select-Object -ExpandProperty NetConnectionID")
+                                            .arg(QString::fromLatin1(kDeviceVid), QString::fromLatin1(kDevicePid)),
+                       QStringLiteral("Detect adapter"));
         return;
     }
 
@@ -321,19 +353,41 @@ void DataTransmitController::ensureConnection()
     qDebug() << "[DataTransmit] detected adapter:" << adapter;
 
     setConnectionState(CONFIGURE_IP);
-    if (!ensureAdapterConfigured()) {
-        recordConnectFailure();
-        qWarning() << "[DataTransmit] ensureAdapterConfigured failed, adapter=" << m_adapterName;
-        scheduleRetry(2000);
+    const bool adapterAlreadyConfigured = isAdapterIpConfigured(m_adapterName)
+            || (!m_ipConfiguredAdapterName.isEmpty() && m_ipConfiguredAdapterName == m_adapterName);
+    if (!adapterAlreadyConfigured) {
+        startProbeTask(ConfigureAdapterTask,
+                       QStringLiteral("netsh"),
+                       QStringList()
+                           << QStringLiteral("interface")
+                           << QStringLiteral("ip")
+                           << QStringLiteral("set")
+                           << QStringLiteral("address")
+                           << QStringLiteral("name=%1").arg(m_adapterName)
+                           << QStringLiteral("static")
+                           << QString::fromLatin1(kPcIp)
+                           << QString::fromLatin1(kMask),
+                       QStringLiteral("Configure adapter IP"));
         return;
     }
+    setAdapterStatus(QStringLiteral("IP configured as 192.168.0.1"));
+    m_ipConfiguredAdapterName = m_adapterName;
 
     setConnectionState(WAIT_DEVICE_READY);
-    if (!pingDevice()) {
-        recordConnectFailure();
-        setDeviceStatus(QStringLiteral("Device not reachable"));
-        qWarning() << "[DataTransmit] ping device failed, target=" << kDeviceIp;
-        scheduleRetry(1000);
+    if (!m_deviceReachabilityConfirmed) {
+        setDeviceStatus(QStringLiteral("Checking device reachability"));
+        startProbeTask(PingDeviceTask,
+                       QStringLiteral("ping"),
+#ifdef Q_OS_WIN
+                       QStringList() << QStringLiteral("-n") << QStringLiteral("1")
+                                     << QStringLiteral("-w") << QStringLiteral("1000")
+                                     << QString::fromLatin1(kDeviceIp),
+#else
+                       QStringList() << QStringLiteral("-c") << QStringLiteral("1")
+                                     << QStringLiteral("-W") << QStringLiteral("1")
+                                     << QString::fromLatin1(kDeviceIp),
+#endif
+                       QStringLiteral("Ping device"));
         return;
     }
 
@@ -341,33 +395,41 @@ void DataTransmitController::ensureConnection()
     if (m_deviceUiConnectionState == DeviceDisconnected) {
         updateDeviceUiConnectionState(DeviceConnecting);
     }
-    qDebug() << "[DataTransmit] ping device success, target=" << kDeviceIp;
+    qDebug() << "[DataTransmit] device reachability already confirmed, target=" << kDeviceIp;
 
+    bool startedAnyChannelConnect = false;
     if (!controlConnected()) {
         setConnectionState(CONNECT_CONTROL);
         qDebug() << "[DataTransmit] connecting control channel";
         connectChannel(m_controlChannel);
-        scheduleRetry(1000);
-        return;
+        startedAnyChannelConnect = true;
     }
 
     if (!statusConnected()) {
-        setConnectionState(CONNECT_STATUS);
+        if (!startedAnyChannelConnect) {
+            setConnectionState(CONNECT_STATUS);
+        }
         qDebug() << "[DataTransmit] connecting status channel";
         connectChannel(m_statusChannel);
-        scheduleRetry(1000);
-        return;
+        startedAnyChannelConnect = true;
     }
 
     if (!streamConnected()) {
-        setConnectionState(CONNECT_STREAM);
+        if (!startedAnyChannelConnect) {
+            setConnectionState(CONNECT_STREAM);
+        }
         qDebug() << "[DataTransmit] connecting stream channel";
         connectChannel(m_streamChannel);
-        scheduleRetry(1000);
+        startedAnyChannelConnect = true;
+    }
+
+    if (startedAnyChannelConnect) {
+        scheduleRetry(1500);
         return;
     }
 
     if (allChannelsConnected()) {
+        m_retryTimer->stop();
         resetConnectFailures();
         updateDeviceUiConnectionState(DeviceConnected);
         setConnectionState(ONLINE);
@@ -444,7 +506,18 @@ void DataTransmitController::bindChannels()
 
 void DataTransmitController::handleChannelMessage(const QString &channelName, const QVariantMap &message)
 {
-    qDebug() << "[DataTransmit]" << channelName << "message received:" << message;
+    const QString messageType = message.value(QStringLiteral("type")).toString();
+    const bool highFrequencyStatusMessage = channelName == QStringLiteral("status")
+            && (messageType == QStringLiteral("heartbeat")
+                || messageType == QStringLiteral("status_snapshot"));
+
+    if (highFrequencyStatusMessage) {
+//        qDebug() << "[DataTransmit]" << channelName
+//                 << "message received, type=" << messageType
+//                 << "timestamp=" << message.value(QStringLiteral("timestamp")).toString();
+    } else {
+        //qDebug() << "[DataTransmit]" << channelName << "message received:" << message;
+    }
     emit rawMessageReceived(channelName, message);
 
     if (channelName == QStringLiteral("control")) {
@@ -497,6 +570,9 @@ void DataTransmitController::handleChannelDisconnected()
     emit channelStatusChanged();
     qWarning() << "[DataTransmit] channel disconnected, control/status/stream ="
                << controlConnected() << statusConnected() << streamConnected();
+    if (!controlConnected() && !statusConnected() && !streamConnected()) {
+        m_deviceReachabilityConfirmed = false;
+    }
     if (!statusConnected()) {
         resetDeviceChannelInfo();
         resetExperimentChannels();
@@ -714,6 +790,7 @@ void DataTransmitController::resetExperimentChannels()
         QVariantMap initialStatus;
         initialStatus.insert(QStringLiteral("channel"), channel);
         initialStatus.insert(QStringLiteral("running"), false);
+        initialStatus.insert(QStringLiteral("experiment_id"), 0);
         initialStatus.insert(QStringLiteral("hasSample"), false);
         initialStatus.insert(QStringLiteral("isCovered"), false);
         initialStatus.insert(QStringLiteral("remainingSeconds"), 0);
@@ -740,6 +817,164 @@ void DataTransmitController::scheduleRetry(int intervalMs)
     } else {
         qDebug() << "[DataTransmit] retry timer already active";
     }
+}
+
+void DataTransmitController::startProbeTask(ProbeTask task,
+                                            const QString &program,
+                                            const QStringList &arguments,
+                                            const QString &errorContext)
+{
+    if (!m_running) {
+        return;
+    }
+
+    if (m_probeTask != NoProbeTask || m_probeProcess->state() != QProcess::NotRunning) {
+        qDebug() << "[DataTransmit] probe task already running, skip start, task=" << m_probeTask;
+        return;
+    }
+
+    m_probeTask = task;
+    m_probeErrorContext = errorContext;
+    setLastError(QString());
+    qDebug() << "[DataTransmit] start probe task, task=" << task
+             << "program=" << program << "args=" << arguments;
+    m_probeProcess->start(program, arguments);
+}
+
+void DataTransmitController::finishProbeTask()
+{
+    m_probeTask = NoProbeTask;
+    m_probeErrorContext.clear();
+}
+
+void DataTransmitController::handleProbeFinished(int exitCode, int exitStatus)
+{
+    const ProbeTask finishedTask = m_probeTask;
+    const QString stdOutput = QString::fromLocal8Bit(m_probeProcess->readAllStandardOutput()).trimmed();
+    const QString stdError = QString::fromLocal8Bit(m_probeProcess->readAllStandardError()).trimmed();
+    finishProbeTask();
+
+    switch (finishedTask) {
+    case DetectAdapterTask:
+        handleAdapterLookupFinished(exitCode, exitStatus, stdOutput, stdError);
+        break;
+    case ConfigureAdapterTask:
+        handleConfigureAdapterFinished(exitCode, exitStatus, stdOutput, stdError);
+        break;
+    case PingDeviceTask:
+        handlePingFinished(exitCode, exitStatus, stdOutput, stdError);
+        break;
+    case NoProbeTask:
+        break;
+    }
+}
+
+void DataTransmitController::handleProbeError(int processError)
+{
+    if (m_probeTask == NoProbeTask) {
+        return;
+    }
+
+    const QString errorString = m_probeProcess->errorString();
+    qWarning() << "[DataTransmit] probe process error, task=" << m_probeTask
+               << "error=" << processError << errorString;
+    finishProbeTask();
+    recordConnectFailure();
+    setLastError(m_probeErrorContext.isEmpty()
+                     ? errorString
+                     : QStringLiteral("%1: %2").arg(m_probeErrorContext, errorString));
+    scheduleRetry(1500);
+}
+
+void DataTransmitController::handleAdapterLookupFinished(int exitCode,
+                                                         int exitStatus,
+                                                         const QString &stdOutput,
+                                                         const QString &stdError)
+{
+    Q_UNUSED(exitStatus)
+    if (!stdError.isEmpty()) {
+        qWarning() << "[DataTransmit] powershell VID/PID lookup stderr =" << stdError;
+    }
+
+    QString adapter;
+    if (exitCode == 0 && !stdOutput.isEmpty()) {
+        const QStringList lines = stdOutput.split(QRegularExpression(QStringLiteral("[\r\n]+")),
+                                                  QString::SkipEmptyParts);
+        if (!lines.isEmpty()) {
+            adapter = lines.first().trimmed();
+        }
+    }
+
+    if (adapter.isEmpty()) {
+        adapter = findRndisAdapter();
+    }
+
+    if (adapter.isEmpty()) {
+        recordConnectFailure();
+        setAdapterName(QString());
+        setAdapterStatus(QStringLiteral("RNDIS adapter not found"));
+        setDeviceStatus(QStringLiteral("Waiting for device"));
+        qDebug() << "[DataTransmit] async adapter lookup did not find adapter";
+        scheduleRetry(2000);
+        return;
+    }
+
+    setAdapterName(adapter);
+    setAdapterStatus(QStringLiteral("Adapter detected"));
+    qDebug() << "[DataTransmit] async adapter lookup matched adapter:" << adapter;
+    ensureConnection();
+}
+
+void DataTransmitController::handleConfigureAdapterFinished(int exitCode,
+                                                            int exitStatus,
+                                                            const QString &stdOutput,
+                                                            const QString &stdError)
+{
+    Q_UNUSED(stdOutput)
+    const bool success = exitStatus == QProcess::NormalExit && exitCode == 0;
+    if (!success) {
+        recordConnectFailure();
+        setLastError(stdError.isEmpty() ? QStringLiteral("Failed to configure adapter by netsh") : stdError);
+        setAdapterStatus(QStringLiteral("IP configure failed"));
+        qWarning() << "[DataTransmit] async netsh configure failed, stderr=" << stdError;
+        scheduleRetry(2000);
+        return;
+    }
+
+    setAdapterStatus(QStringLiteral("IP configured as 192.168.0.1"));
+    emit logMessage(QStringLiteral("Adapter IP configured as 192.168.0.1/24"));
+    m_ipConfiguredAdapterName = m_adapterName;
+    qDebug() << "[DataTransmit] async adapter ip configured successfully";
+    ensureConnection();
+}
+
+void DataTransmitController::handlePingFinished(int exitCode,
+                                                int exitStatus,
+                                                const QString &stdOutput,
+                                                const QString &stdError)
+{
+    Q_UNUSED(stdOutput)
+    if (!stdError.isEmpty()) {
+        qWarning() << "[DataTransmit] ping stderr =" << stdError;
+    }
+
+    const bool success = exitStatus == QProcess::NormalExit && exitCode == 0;
+    if (!success) {
+        m_deviceReachabilityConfirmed = false;
+        recordConnectFailure();
+        setDeviceStatus(QStringLiteral("Device not reachable"));
+        qWarning() << "[DataTransmit] async ping device failed, target=" << kDeviceIp;
+        scheduleRetry(1000);
+        return;
+    }
+
+    m_deviceReachabilityConfirmed = true;
+    setDeviceStatus(QStringLiteral("Device online"));
+    if (m_deviceUiConnectionState == DeviceDisconnected) {
+        updateDeviceUiConnectionState(DeviceConnecting);
+    }
+    qDebug() << "[DataTransmit] async ping device success, target=" << kDeviceIp;
+    ensureConnection();
 }
 
 bool DataTransmitController::ensureAdminPrivilege()

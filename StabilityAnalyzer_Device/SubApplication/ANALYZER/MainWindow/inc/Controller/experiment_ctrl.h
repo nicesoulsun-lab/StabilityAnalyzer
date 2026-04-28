@@ -83,22 +83,13 @@ public:
 
     // ==================== 数据写库（C++内部/QML可调用） ====================
 
-    /**
-     * @brief 保存单条实验数据
-     */
-    Q_INVOKABLE void saveExperimentData(int experimentId, const QVariantMap& data);
-
-    /**
-     * @brief 批量保存实验数据
-     */
-    Q_INVOKABLE void batchSaveExperimentData(int experimentId, const QVector<QVariantMap>& dataList);
-
     // ==================== 运行态查询（QML可调用） ====================
 
     /**
      * @brief 查询当前已采样/已入库计数
      */
     Q_INVOKABLE int getCurrentScanCount(int channel) const;
+    Q_INVOKABLE int getCurrentExperimentId(int channel) const;
 
     /**
      * @brief 查询已运行时长（秒）
@@ -171,6 +162,7 @@ signals:
      * @brief 首页状态更新推送（每秒轮询后按需触发）
      */
     void channelStatusUpdated(int channel, const QVariantMap& status);
+    void scanDataChunkReady(int channel, int experimentId, int scanId, bool scanCompleted, const QVariantList& rows);
 
 private slots:
     // 旧扫描计时器回调（保留兼容）
@@ -240,6 +232,10 @@ private:
     QMap<Channel, int> m_experimentIds;
     QMap<Channel, qint64> m_startTimes;
     QMap<Channel, bool> m_runningFlags;
+    QMap<Channel, int> m_plannedScanCounts;
+    QMap<Channel, int> m_startedScanCounts;
+    QMap<Channel, bool> m_stopAfterDrainFlags;
+    QMap<Channel, qint64> m_stopAfterDrainDeadlineMs;
 
     // 调度器初始化状态
     bool m_schedulerInitialized;

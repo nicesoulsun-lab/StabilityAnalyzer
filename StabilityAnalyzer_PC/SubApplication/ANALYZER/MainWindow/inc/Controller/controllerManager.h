@@ -27,6 +27,10 @@ public:
         , m_recycleExperimentListmodel(new experiment_listmodel(this))
     {
         m_recycleExperimentListmodel->setDeletedOnly(true);
+        // ExperimentCtrl 本身不创建通信模块，由 manager 在这里完成注入。
+        m_experimentCtrl->setDataTransmitController(m_dataTransmitCtrl);
+        // 导入记录属于数据业务，也通过同一个 DataTransmit 控制通道访问设备端。
+        m_dataCtrl->setDataTransmitController(m_dataTransmitCtrl);
     }
 
     // 获取各个 Controller 实例

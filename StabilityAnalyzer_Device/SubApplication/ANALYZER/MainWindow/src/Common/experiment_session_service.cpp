@@ -17,13 +17,13 @@ int ExperimentSessionService::calculateExpectedPointCount(const ExperimentParams
 {
     const double stepUm = static_cast<double>(params.scanStep);
     if (stepUm <= 0.0) {
-        return 1;
+        return 0;
     }
 
     const double startUm = static_cast<double>(params.scanRangeStart) * 1000.0;
     const double endUm = static_cast<double>(params.scanRangeEnd) * 1000.0;
     const double spanUm = qMax(0.0, endUm - startUm);
-    return qMax(1, static_cast<int>(qFloor(spanUm / stepUm)) + 1);
+    return qMax(0, static_cast<int>(qFloor(spanUm / stepUm)));
 }
 
 ExperimentScanProfile ExperimentSessionService::buildScanProfile(const ExperimentParams& params) const
@@ -37,8 +37,8 @@ ExperimentScanProfile ExperimentSessionService::buildScanProfile(const Experimen
     const qint64 totalDurationMs = static_cast<qint64>(
                 calculateTotalSeconds(params.durationDays, params.durationHours,
                                       params.durationMinutes, params.durationSeconds)) * 1000;
-    if (params.scanCount > 1 && totalDurationMs > 0) {
-        profile.idealScanIntervalMs = qMax<qint64>(0, totalDurationMs / (params.scanCount - 1));
+    if (params.scanCount > 0 && totalDurationMs > 0) {
+        profile.idealScanIntervalMs = qMax<qint64>(0, totalDurationMs / params.scanCount);
     } else {
         profile.idealScanIntervalMs = qMax<qint64>(0, configuredIntervalMs);
     }
@@ -158,6 +158,9 @@ QVector<QVariantMap> ExperimentSessionService::buildRowsFromStorageData(int chan
 
         if (context.savedPointCount >= context.expectedPointCount) {
             const ScanCycleContext completed = contexts.first();
+            for (int i = dataList.size() - savedPairs; i < dataList.size(); ++i) {
+                dataList[i]["scan_completed"] = true;
+            }
             contexts.remove(0);
             qDebug() << "[ExperimentSessionService][ScanCycle] channel=" << channel
                      << "scanId=" << completed.scanId

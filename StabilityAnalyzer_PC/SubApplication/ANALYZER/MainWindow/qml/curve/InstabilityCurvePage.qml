@@ -83,6 +83,9 @@ Rectangle {
                                                                 detailPage.maxHeightValue,
                                                                 "overall",
                                                                 qsTr("整体"))
+        console.log("[DetailCurve][instability overall]",
+                    "experimentId=", Number(experimentData.id),
+                    "pointCount=", overallSeries && overallSeries.points ? overallSeries.points.length : 0)
         overallLoaded = true
     }
 
@@ -418,7 +421,9 @@ Rectangle {
                                 yAxisLabels: modelData.yAxisLabels
                                 yAxisTitle: "Ius"
                                 xAxisTitle: qsTr("时间(min)")
-                                formatXLabel: function(value) { return detailPage.formatNumber(value, 1) }
+                                formatXLabel: function(value) {
+                                    return detailPage ? detailPage.formatNumber(value, 1) : Number(value).toFixed(1)
+                                }
                             }
                         }
                     }

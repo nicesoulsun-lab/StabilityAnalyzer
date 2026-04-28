@@ -87,5 +87,18 @@ Item {
         onOperationInfo: {
             info_pop.openDialog(message)
         }
+        onOperationFailed: {
+            info_pop.openDialog(message)
+        }
+    }
+
+    Connections {
+        target: experiment_ctrl
+        onOperationInfo: {
+            info_pop.openDialog(message)
+        }
+        onOperationFailed: {
+            info_pop.openDialog(message)
+        }
     }
 }

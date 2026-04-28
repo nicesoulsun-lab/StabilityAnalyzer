@@ -11,6 +11,7 @@ ExperimentParams paramsFromVariantMap(const QVariantMap& params)
 {
     ExperimentParams expParams;
     expParams.projectId = params.value("projectId", 0).toInt();
+    expParams.projectName = params.value("projectName", "").toString();
     expParams.sampleName = params.value("sampleName", "").toString();
     expParams.operatorName = params.value("operatorName", "").toString();
     expParams.description = params.value("description", "").toString();
@@ -37,6 +38,7 @@ QVariantMap paramsToVariantMap(const ExperimentParams& params)
 {
     QVariantMap data;
     data["projectId"] = params.projectId;
+    data["projectName"] = params.projectName;
     data["sampleName"] = params.sampleName;
     data["operatorName"] = params.operatorName;
     data["description"] = params.description;
@@ -64,6 +66,7 @@ QVariantMap defaultParamsVariantMap()
 {
     QVariantMap params;
     params["projectId"] = 0;
+    params["projectName"] = "";
     params["sampleName"] = "";
     params["operatorName"] = "";
     params["description"] = "";
@@ -114,6 +117,7 @@ QVariantMap readParamsFromCurrentGroup(QSettings& settings)
 {
     QVariantMap params = defaultParamsVariantMap();
     params["projectId"] = settings.value("projectId", params.value("projectId"));
+    params["projectName"] = settings.value("projectName", params.value("projectName"));
     params["sampleName"] = settings.value("sampleName", params.value("sampleName"));
     params["operatorName"] = settings.value("operatorName", params.value("operatorName"));
     params["description"] = settings.value("description", params.value("description"));
@@ -284,4 +288,9 @@ bool ExperimentStateStore::updateChannelStatus(int channel, const QVariantMap& p
 QVector<QVariantMap>* ExperimentStateStore::memoryCache(int channel)
 {
     return &m_memoryDataCache[channel];
+}
+
+void ExperimentStateStore::clearMemoryCache(int channel)
+{
+    m_memoryDataCache[channel].clear();
 }

@@ -59,7 +59,7 @@ Item {
 
         // 只有当持续时间和间隔时间都大于0时才计算
         if (duration > 0 && interval > 0) {
-            var scanCount = Math.floor(duration / interval) + 1
+            var scanCount = Math.floor(duration / interval)
             // 确保至少扫描1次
             if (scanCount < 1) {
                 scanCount = 1

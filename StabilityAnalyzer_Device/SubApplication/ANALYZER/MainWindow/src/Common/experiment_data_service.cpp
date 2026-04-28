@@ -7,13 +7,12 @@
 
 #include "../../../SqlOrm/inc/SqlOrmManager.h"
 
-#include <QDateTime>
 #include <QDebug>
 
 namespace {
 constexpr int kStorageChunkRegisterCount = 100;
-constexpr int kStorageMaxPairCount = 250;
-constexpr int kStorageMaxDataCount = kStorageMaxPairCount * 2;
+constexpr int kStorageMaxWordCount = 500;
+constexpr int kStorageMaxPairCount = kStorageMaxWordCount / 2;
 constexpr int kStorageReadyState = 2;
 constexpr int kStorageTakenState = 3;
 
@@ -35,16 +34,6 @@ ExperimentDataService::ExperimentDataService(SqlOrmManager* dbManager, ModbusTas
 /**
  * @brief 保存单条实验数据。
  */
-void ExperimentDataService::saveExperimentData(int experimentId, const QVariantMap& data) const
-{
-    if (!m_dbManager) {
-        return;
-    }
-
-    QVariantMap payload = data;
-    payload["experiment_id"] = experimentId;
-    m_dbManager->addExperimentData(payload);
-}
 
 /**
  * @brief 批量保存实验数据。
@@ -78,7 +67,8 @@ void ExperimentDataService::tryFetchStoredData(int channel,
                                                const DeviceIdProvider& deviceIdProvider,
                                                const BuildRowsFn& buildRowsFn,
                                                const SendControlFn& sendControlFn,
-                                               const CurrentScanCountFn& currentScanCountFn) const
+                                               const CurrentScanCountFn& currentScanCountFn,
+                                               const StreamRowsFn& streamRowsFn) const
 {
     if (!m_scheduler || experimentId <= 0 || !memoryCache || !buildRowsFn || !sendControlFn) {
         return;
@@ -93,8 +83,11 @@ void ExperimentDataService::tryFetchStoredData(int channel,
             return;
         }
 
-        const int readableDataCount = qBound(0, readableCount, kStorageMaxDataCount);
-        if (readableDataCount <= 0) {
+        // Lower device reports the readable size in "values/registers".
+        // Two consecutive registers form one transmission/backscatter pair.
+        const int readableWordCount = qBound(0, readableCount, kStorageMaxWordCount);
+        const int readablePairCount = readableWordCount / 2;
+        if (readableWordCount <= 0) {
             qWarning() << "[ExperimentDataService][Fetch] channel=" << channel
                        << (areaA ? "A" : "B") << "state=readable but readableCount=0";
             return;
@@ -107,10 +100,11 @@ void ExperimentDataService::tryFetchStoredData(int channel,
                                    "read_scan_data_b_800", "read_scan_data_b_900"};
         const QString ackCommand = areaA ? "write_storage_a_state" : "write_storage_b_state";
 
-        bool hasTakenAnyBatch = false;
+        bool hasReadAnyBatch = false;
+        bool hasSavedAnyBatch = false;
         int totalWords = 0;
         int totalPairs = 0;
-        int remainingDataCount = readableDataCount;
+        int remainingWordCount = readableWordCount;
 
         for (const QString& taskName : readPlans) {
             QVector<quint16> raw;
@@ -123,11 +117,11 @@ void ExperimentDataService::tryFetchStoredData(int channel,
                 continue;
             }
 
-            const int wantedWords = qMax(0, qMin(kStorageChunkRegisterCount, remainingDataCount));
+            const int wantedWords = qMax(0, qMin(kStorageChunkRegisterCount, remainingWordCount));
             const int effectiveWords = qMin(raw.size(), wantedWords);
             const int alignedWords = effectiveWords - (effectiveWords % 2);
             const QVector<quint16> sliced = raw.mid(0, alignedWords);
-            remainingDataCount -= effectiveWords;
+            remainingWordCount -= effectiveWords;
             totalWords += sliced.size();
 
             if (sliced.isEmpty()) {
@@ -140,11 +134,15 @@ void ExperimentDataService::tryFetchStoredData(int channel,
                 continue;
             }
 
+            hasReadAnyBatch = true;
             const QVector<QVariantMap> batch = buildRowsFn(channel, sliced, areaA);
             if (!batch.isEmpty()) {
-                hasTakenAnyBatch = true;
+                hasSavedAnyBatch = true;
                 *memoryCache += batch;
                 batchSaveExperimentData(experimentId, batch);
+                if (streamRowsFn) {
+                    streamRowsFn(channel, experimentId, batch);
+                }
                 totalPairs += batch.size();
                 qDebug() << "[ExperimentDataService][Fetch] channel=" << channel
                          << (areaA ? "A" : "B")
@@ -153,14 +151,29 @@ void ExperimentDataService::tryFetchStoredData(int channel,
             }
         }
 
-        if (hasTakenAnyBatch) {
-            sendControlFn(channel, ackCommand, {{"value", kStorageTakenState}});
+        const bool fullyFetched = (totalWords >= readableWordCount);
+        if (hasReadAnyBatch && fullyFetched) {
+            const bool ackWritten = sendControlFn(channel, ackCommand, {{"value", kStorageTakenState}});
             qDebug() << "[ExperimentDataService][Fetch] channel=" << channel
                      << (areaA ? "A" : "B")
-                     << "readableDataCount=" << readableDataCount
+                     << "readableCount=" << readableWordCount
+                     << "readablePairCount=" << readablePairCount
+                     << "readableWordCount=" << readableWordCount
                      << "done words=" << totalWords
                      << "pairs=" << totalPairs
+                     << "savedRows=" << hasSavedAnyBatch
+                     << "ackWritten=" << ackWritten
                      << "ackState=" << kStorageTakenState;
+        } else if (hasReadAnyBatch) {
+            qWarning() << "[ExperimentDataService][Fetch] channel=" << channel
+                       << (areaA ? "A" : "B")
+                       << "partial fetch, keep READY state"
+                       << "readableCount=" << readableWordCount
+                       << "readablePairCount=" << readablePairCount
+                       << "readableWordCount=" << readableWordCount
+                       << "done words=" << totalWords
+                       << "pairs=" << totalPairs
+                       << "savedRows=" << hasSavedAnyBatch;
         } else {
             qWarning() << "[ExperimentDataService][Fetch] channel=" << channel
                        << (areaA ? "A" : "B") << "readable but no data";
@@ -176,26 +189,3 @@ void ExperimentDataService::tryFetchStoredData(int channel,
  *
  * 该函数当前保留用于后续复用，现阶段主要由会话服务负责高度分配。
  */
-QVector<QVariantMap> ExperimentDataService::parseStoragePairs(int channel, const QVector<quint16>& raw,
-                                                              bool areaA, double startHeightUm,
-                                                              double stepUm, int startPointIndex) const
-{
-    QVector<QVariantMap> dataList;
-    const int pairCount = raw.size() / 2;
-    dataList.reserve(pairCount);
-    const int baseTs = static_cast<int>(QDateTime::currentSecsSinceEpoch());
-
-    for (int i = 0; i < pairCount; ++i) {
-        QVariantMap row;
-        row["timestamp"] = baseTs;
-        row["height"] = startHeightUm + (static_cast<double>(startPointIndex + i) * stepUm);
-        row["transmission_intensity"] = raw[(i * 2)] / 10.0;
-        row["backscatter_intensity"] = raw[(i * 2) + 1] / 10.0;
-        row["channel"] = channel;
-        row["point_index"] = startPointIndex + i;
-        row["storage_area"] = areaA ? "A" : "B";
-        dataList.append(row);
-    }
-
-    return dataList;
-}
