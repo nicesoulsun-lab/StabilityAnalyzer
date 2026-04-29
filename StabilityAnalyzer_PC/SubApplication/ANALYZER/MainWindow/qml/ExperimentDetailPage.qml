@@ -19,17 +19,20 @@ Item {
     property int lightCurveCount: 0
     property int lightCurvesVersion: 0
     property bool lightCurvesLoading: false
+    property int lightCurveRequestId: 0
+    property int lightCurveTotalCount: 0
+    property bool lightCurvesTruncated: false
 
     signal backRequested()
 
     readonly property var detailTabs: [
-        { title: qsTr("光强") },
-        { title: qsTr("不稳定性") },
-        { title: qsTr("均匀度") },
-        { title: qsTr("峰厚度") },
-        { title: qsTr("光强平均值") },
-        { title: qsTr("分层厚度") },
-        { title: qsTr("高级计算") }
+        { title: qsTr("\u5149\u5f3a") },
+        { title: qsTr("\u4e0d\u7a33\u5b9a\u6027") },
+        { title: qsTr("\u5747\u5300\u5ea6") },
+        { title: qsTr("\u5cf0\u539a\u5ea6") },
+        { title: qsTr("\u5149\u5f3a\u5e73\u5747\u503c") },
+        { title: qsTr("\u5206\u5c42\u539a\u5ea6") },
+        { title: qsTr("\u9ad8\u7ea7\u8ba1\u7b97") }
     ]
 
     function openTab(tabIndex) {
@@ -153,29 +156,33 @@ Item {
             maxHeightValue = minHeightValue + 10
     }
 
-    function loadLightIntensityData() {
-        lightCurves = []
+    function resetLightIntensityState(clearCurves) {
+        if (clearCurves === undefined || clearCurves)
+            lightCurves = []
         applyExperimentHeightFallback()
         minLightValue = 0
         maxLightValue = 100
         lightCurveCount = 0
-        lightCurvesVersion += 1
+        lightCurveTotalCount = 0
+        lightCurvesTruncated = false
         lightCurvesLoading = false
+        lightCurvesVersion += 1
+    }
 
-        if (!experimentData || experimentData.id === undefined || !data_ctrl) {
-            return
-        }
+    function releaseLightIntensityData(reason) {
+        if (detail_ctrl && lightCurveRequestId > 0)
+            detail_ctrl.cancelLightCurveRequest(lightCurveRequestId)
+        lightCurveRequestId = 0
+        if (detail_ctrl)
+            detail_ctrl.clearExperimentCache(experimentData && experimentData.id !== undefined ? Number(experimentData.id) : 0)
+        resetLightIntensityState(true)
+        console.log("[DetailLight][release]",
+                    "experimentId=", experimentData && experimentData.id !== undefined ? Number(experimentData.id) : 0,
+                    "reason=", reason)
+    }
 
-        lightCurvesLoading = true
-        var curves = data_ctrl.getLightIntensityCurves(Number(experimentData.id), pointsPerCurve())
-        console.log("[LightIntensity][detail load]",
-                    "experimentId=", Number(experimentData.id),
-                    "curveCount=", curves ? curves.length : 0)
-        if (!curves || curves.length === 0) {
-            lightCurvesLoading = false
-            return
-        }
-
+    function applyLightIntensityPayload(payload) {
+        var curves = payload && payload.curves ? payload.curves : []
         var sortedCurves = curves.slice(0)
         sortedCurves.sort(function(a, b) {
             var timeDiff = detailPage.toNumber(a.timestamp, 0) - detailPage.toNumber(b.timestamp, 0)
@@ -185,66 +192,61 @@ Item {
         })
 
         var normalizedCurves = []
-        var minHeight = Number.POSITIVE_INFINITY
-        var maxHeight = Number.NEGATIVE_INFINITY
-        var minLight = Number.POSITIVE_INFINITY
-        var maxLight = Number.NEGATIVE_INFINITY
-
         for (var i = 0; i < sortedCurves.length; ++i) {
             var curve = sortedCurves[i]
-            var backscatterPoints = curve.backscatter_points || []
-            var transmissionPoints = curve.transmission_points || []
-            var rawMinHeight = toNumber(curve.min_height_mm, Number.NaN)
-            var rawMaxHeight = toNumber(curve.max_height_mm, Number.NaN)
-            var rawMinBackscatter = toNumber(curve.min_backscatter, Number.NaN)
-            var rawMaxBackscatter = toNumber(curve.max_backscatter, Number.NaN)
-            var rawMinTransmission = toNumber(curve.min_transmission, Number.NaN)
-            var rawMaxTransmission = toNumber(curve.max_transmission, Number.NaN)
-
-            if (!isNaN(rawMinHeight))
-                minHeight = Math.min(minHeight, rawMinHeight)
-            if (!isNaN(rawMaxHeight))
-                maxHeight = Math.max(maxHeight, rawMaxHeight)
-            if (!isNaN(rawMinBackscatter))
-                minLight = Math.min(minLight, rawMinBackscatter)
-            if (!isNaN(rawMaxBackscatter))
-                maxLight = Math.max(maxLight, rawMaxBackscatter)
-            if (!isNaN(rawMinTransmission))
-                minLight = Math.min(minLight, rawMinTransmission)
-            if (!isNaN(rawMaxTransmission))
-                maxLight = Math.max(maxLight, rawMaxTransmission)
-
-            if (isNaN(rawMinHeight) || isNaN(rawMaxHeight)) {
-                var heightBounds = {
-                    minHeight: minHeight,
-                    maxHeight: maxHeight
-                }
-                updateCurveBoundsFromPoints(backscatterPoints, heightBounds)
-                updateCurveBoundsFromPoints(transmissionPoints, heightBounds)
-                minHeight = heightBounds.minHeight
-                maxHeight = heightBounds.maxHeight
-            }
-
             normalizedCurves.push({
-                scan_id: curve.scan_id,
-                timestamp: curve.timestamp,
-                scan_elapsed_ms: curve.scan_elapsed_ms,
-                point_count: curve.point_count,
-                backscatter_points: backscatterPoints,
-                transmission_points: transmissionPoints,
-                color: curveColor(i, sortedCurves.length),
-                legend_text: formatElapsedTime(curve.scan_elapsed_ms)
-            })
+                                      scan_id: curve.scan_id,
+                                      timestamp: curve.timestamp,
+                                      scan_elapsed_ms: curve.scan_elapsed_ms,
+                                      point_count: curve.point_count,
+                                      min_height_mm: curve.min_height_mm,
+                                      max_height_mm: curve.max_height_mm,
+                                      min_backscatter: curve.min_backscatter,
+                                      max_backscatter: curve.max_backscatter,
+                                      min_transmission: curve.min_transmission,
+                                      max_transmission: curve.max_transmission,
+                                      backscatter_points: curve.backscatter_points || [],
+                                      transmission_points: curve.transmission_points || [],
+                                      color: curveColor(i, sortedCurves.length),
+                                      legend_text: formatElapsedTime(curve.scan_elapsed_ms)
+                                  })
         }
 
         lightCurves = normalizedCurves
-        minHeightValue = isFinite(minHeight) ? minHeight : 0
-        maxHeightValue = isFinite(maxHeight) ? maxHeight : 10
-        minLightValue = isFinite(minLight) ? minLight : 0
-        maxLightValue = isFinite(maxLight) ? maxLight : 100
+        minHeightValue = toNumber(payload ? payload.minHeightValue : 0, minHeightValue)
+        maxHeightValue = toNumber(payload ? payload.maxHeightValue : 10, maxHeightValue)
+        minLightValue = toNumber(payload ? payload.minLightValue : 0, 0)
+        maxLightValue = toNumber(payload ? payload.maxLightValue : 100, 100)
         lightCurveCount = normalizedCurves.length
+        lightCurveTotalCount = toNumber(payload ? payload.totalCurveCount : normalizedCurves.length, normalizedCurves.length)
+        lightCurvesTruncated = !!(payload && payload.truncated)
         lightCurvesLoading = false
         lightCurvesVersion += 1
+
+        console.log("[DetailLight][ready]",
+                    "experimentId=", experimentData && experimentData.id !== undefined ? Number(experimentData.id) : 0,
+                    "loadedCurveCount=", lightCurveCount,
+                    "totalCurveCount=", lightCurveTotalCount,
+                    "truncated=", lightCurvesTruncated)
+    }
+
+    function loadLightIntensityData() {
+        if (currentTabIndex !== 0) {
+            releaseLightIntensityData("tabInactive")
+            return
+        }
+
+        resetLightIntensityState(true)
+        if (!experimentData || experimentData.id === undefined || !detail_ctrl)
+            return
+
+        lightCurvesLoading = true
+        lightCurveRequestId = detail_ctrl.requestLightCurves(Number(experimentData.id), pointsPerCurve())
+        console.log("[DetailLight][request]",
+                    "experimentId=", Number(experimentData.id),
+                    "requestId=", lightCurveRequestId)
+        if (lightCurveRequestId <= 0)
+            lightCurvesLoading = false
     }
 
     function currentTabSource() {
@@ -326,11 +328,50 @@ Item {
         }
     }
 
-    onExperimentDataChanged: {
-        loadLightIntensityData()
-    }
-    Component.onCompleted: {
-        loadLightIntensityData()
+    onExperimentDataChanged: loadLightIntensityData()
+    onCurrentTabIndexChanged: loadLightIntensityData()
+    Component.onCompleted: loadLightIntensityData()
+    Component.onDestruction: releaseLightIntensityData("destroyed")
+
+    Connections {
+        target: detail_ctrl
+        ignoreUnknownSignals: true
+        onLightCurveRequestFinished: {
+            console.log("[DetailLight][finished signal]",
+                        "requestId=", requestId,
+                        "activeRequestId=", detailPage.lightCurveRequestId,
+                        "experimentId=", experimentId,
+                        "activeExperimentId=", detailPage.experimentData && detailPage.experimentData.id !== undefined ? Number(detailPage.experimentData.id) : 0)
+            if (requestId !== detailPage.lightCurveRequestId)
+                return
+            if (!detailPage.experimentData || Number(detailPage.experimentData.id) !== Number(experimentId))
+                return
+
+            detailPage.lightCurveRequestId = 0
+            detailPage.applyLightIntensityPayload(payload)
+        }
+        onLightCurveRequestFailed: {
+            if (requestId !== detailPage.lightCurveRequestId)
+                return
+            if (!detailPage.experimentData || Number(detailPage.experimentData.id) !== Number(experimentId))
+                return
+
+            detailPage.lightCurveRequestId = 0
+            detailPage.lightCurvesLoading = false
+            console.log("[DetailLight][failed]",
+                        "experimentId=", experimentId,
+                        "message=", message)
+        }
+        onLightCurveRequestCancelled: {
+            if (requestId !== detailPage.lightCurveRequestId)
+                return
+
+            detailPage.lightCurveRequestId = 0
+            detailPage.lightCurvesLoading = false
+            console.log("[DetailLight][cancelled]",
+                        "experimentId=", experimentId,
+                        "reason=", reason)
+        }
     }
 
     Rectangle {

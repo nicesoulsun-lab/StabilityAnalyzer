@@ -5,21 +5,21 @@ import "../component"
 import ".."
 
 
-//不稳定性曲线
+//涓嶇ǔ瀹氭€ф洸绾?
 Rectangle {
     id: instabilityPanel
 
-    // 不稳定性页把最重的计算移回 C++/数据库层，
-    // QML 侧只负责按模式懒加载结果和组织展示。
+    // 涓嶇ǔ瀹氭€ч〉鎶婃渶閲嶇殑璁＄畻绉诲洖 C++/鏁版嵁搴撳眰锛?
+    // QML 渚у彧璐熻矗鎸夋ā寮忔噿鍔犺浇缁撴灉鍜岀粍缁囧睍绀恒€?
     property var detailPage
     readonly property var experimentData: detailPage ? detailPage.experimentData : ({})
     property int currentModeIndex: 0
-    property var modeTitles: [qsTr("整体"), qsTr("局部"), qsTr("自定义"), qsTr("总览")]
-    property var overallSeries: createEmptyInstabilitySeries(qsTr("整体"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
-    property var bottomSeries: createEmptyInstabilitySeries(qsTr("底部"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.minHeightValue : 0)
-    property var middleSeries: createEmptyInstabilitySeries(qsTr("中部"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.minHeightValue : 0)
-    property var topSeries: createEmptyInstabilitySeries(qsTr("顶部"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
-    property var customSeries: createEmptyInstabilitySeries(qsTr("自定义"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
+    property var modeTitles: [qsTr("\u6574\u4f53"), qsTr("\u5c40\u90e8"), qsTr("\u81ea\u5b9a\u4e49"), qsTr("\u603b\u89c8")]
+    property var overallSeries: createEmptyInstabilitySeries(qsTr("\u6574\u4f53"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
+    property var bottomSeries: createEmptyInstabilitySeries(qsTr("\u5e95\u90e8"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.minHeightValue : 0)
+    property var middleSeries: createEmptyInstabilitySeries(qsTr("\u4e2d\u90e8"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.minHeightValue : 0)
+    property var topSeries: createEmptyInstabilitySeries(qsTr("\u9876\u90e8"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
+    property var customSeries: createEmptyInstabilitySeries(qsTr("\u81ea\u5b9a\u4e49"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
     property var radarPolygons: []
     property real radarMaxValue: 1
     property real customLowerBound: 0
@@ -27,11 +27,15 @@ Rectangle {
     property bool overallLoaded: false
     property bool localLoaded: false
     property bool customLoaded: false
+    property bool overviewLoading: false
+    property bool customLoading: false
+    property int overviewRequestId: 0
+    property int customRequestId: 0
 
     color: "#FFFFFF"
 
     function createEmptyInstabilitySeries(title, lowerBound, upperBound) {
-        // 所有模式先使用同一种空结构，避免界面初次进入时反复判空。
+        // 鎵€鏈夋ā寮忓厛浣跨敤鍚屼竴绉嶇┖缁撴瀯锛岄伩鍏嶇晫闈㈠垵娆¤繘鍏ユ椂鍙嶅鍒ょ┖銆?
         return {
             title: title,
             rangeLabel: detailPage ? detailPage.formatNumber(lowerBound, 1) + " - " + detailPage.formatNumber(upperBound, 1) + " mm" : "",
@@ -45,81 +49,142 @@ Rectangle {
         }
     }
 
-    function buildInstabilitySeriesFromRows(title, rows, lowerBound, upperBound) {
-        // 后端已经给出每次扫描的结果，这里只做排序后的折线点和坐标轴整理。
-        var safeLower = Math.max(detailPage.minHeightValue, Math.min(lowerBound, upperBound))
-        var safeUpper = Math.min(detailPage.maxHeightValue, Math.max(lowerBound, upperBound))
-        var emptySeries = createEmptyInstabilitySeries(title, safeLower, safeUpper)
-        if (!rows || rows.length === 0 || safeUpper <= safeLower)
-            return emptySeries
 
-        var localPoints = []
-        var maxY = 0
-        for (var i = 0; i < rows.length; ++i) {
-            var xValue = detailPage.toNumber(rows[i].scan_elapsed_ms, 0) / 60000.0
-            var instabilityValue = detailPage.toNumber(rows[i].instability_value, 0)
-            localPoints.push({ x: xValue, y: instabilityValue })
-            maxY = Math.max(maxY, instabilityValue)
+    function resetInstabilityState() {
+        overallLoaded = false
+        localLoaded = false
+        customLoaded = false
+        overviewLoading = false
+        customLoading = false
+        overviewRequestId = 0
+        customRequestId = 0
+        overallSeries = createEmptyInstabilitySeries(qsTr("\u6574\u4f53"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
+        bottomSeries = createEmptyInstabilitySeries(qsTr("\u5e95\u90e8"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.minHeightValue : 0)
+        middleSeries = createEmptyInstabilitySeries(qsTr("\u4e2d\u90e8"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.minHeightValue : 0)
+        topSeries = createEmptyInstabilitySeries(qsTr("\u9876\u90e8"), detailPage ? detailPage.maxHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
+        customSeries = createEmptyInstabilitySeries(qsTr("\u81ea\u5b9a\u4e49"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
+        radarPolygons = []
+        radarMaxValue = 1
+    }
+
+    function cancelDetailRequests(reason) {
+        if (!detail_ctrl)
+            return
+
+        if (overviewRequestId > 0)
+            detail_ctrl.cancelInstabilityRequest(overviewRequestId)
+        if (customRequestId > 0)
+            detail_ctrl.cancelInstabilityRequest(customRequestId)
+
+        if (overviewRequestId > 0 || customRequestId > 0) {
+            console.log("[DetailInstability][release]",
+                        "experimentId=", experimentData && experimentData.id !== undefined ? Number(experimentData.id) : 0,
+                        "reason=", reason,
+                        "overviewRequestId=", overviewRequestId,
+                        "customRequestId=", customRequestId)
         }
 
-        emptySeries.points = localPoints
-        emptySeries.chartMinX = localPoints.length > 0 ? localPoints[0].x : 0
-        emptySeries.chartMaxX = localPoints.length > 1 ? localPoints[localPoints.length - 1].x : emptySeries.chartMinX + 1
-        if (emptySeries.chartMaxX <= emptySeries.chartMinX)
-            emptySeries.chartMaxX = emptySeries.chartMinX + 1
-        emptySeries.chartMinY = 0
-        emptySeries.chartMaxY = Math.max(1, maxY * 1.12)
-        emptySeries.xAxisTickValues = detailPage.buildTimeTicks(emptySeries.chartMinX, emptySeries.chartMaxX, 6)
-        emptySeries.yAxisLabels = detailPage.makeAxisLabels(emptySeries.chartMinY, emptySeries.chartMaxY, 6, 1)
-        return emptySeries
+        overviewRequestId = 0
+        customRequestId = 0
+        overviewLoading = false
+        customLoading = false
     }
 
-    function loadOverallData() {
-        if (!detailPage || !experimentData || experimentData.id === undefined || !data_ctrl)
-            return
+    function applyOverviewPayload(payload) {
+        overallSeries = payload && payload.overallSeries ? payload.overallSeries : createEmptyInstabilitySeries(qsTr("\u6574\u4f53"), detailPage.minHeightValue, detailPage.maxHeightValue)
+        bottomSeries = payload && payload.bottomSeries ? payload.bottomSeries : createEmptyInstabilitySeries(qsTr("\u5e95\u90e8"), detailPage.minHeightValue, detailPage.minHeightValue)
+        middleSeries = payload && payload.middleSeries ? payload.middleSeries : createEmptyInstabilitySeries(qsTr("\u4e2d\u90e8"), detailPage.minHeightValue, detailPage.minHeightValue)
+        topSeries = payload && payload.topSeries ? payload.topSeries : createEmptyInstabilitySeries(qsTr("\u9876\u90e8"), detailPage.maxHeightValue, detailPage.maxHeightValue)
 
-        overallSeries = data_ctrl.getInstabilitySeriesChartData(Number(experimentData.id),
-                                                                detailPage.minHeightValue,
-                                                                detailPage.maxHeightValue,
-                                                                "overall",
-                                                                qsTr("整体"))
-        console.log("[DetailCurve][instability overall]",
-                    "experimentId=", Number(experimentData.id),
-                    "pointCount=", overallSeries && overallSeries.points ? overallSeries.points.length : 0)
+        var radarData = payload && payload.radarData ? payload.radarData : ({})
+        radarPolygons = radarData.polygons || []
+        radarMaxValue = detailPage ? detailPage.toNumber(radarData.maxValue, 1) : 1
+
+        overviewLoading = false
         overallLoaded = true
+        localLoaded = true
+
+        console.log("[DetailInstability][overview ready]",
+                    "experimentId=", Number(experimentData.id),
+                    "overallPoints=", overallSeries && overallSeries.points ? overallSeries.points.length : 0,
+                    "bottomPoints=", bottomSeries && bottomSeries.points ? bottomSeries.points.length : 0,
+                    "middlePoints=", middleSeries && middleSeries.points ? middleSeries.points.length : 0,
+                    "topPoints=", topSeries && topSeries.points ? topSeries.points.length : 0,
+                    "radarPolygons=", radarPolygons.length)
     }
 
-    function loadLocalData() {
-        // 局部模式固定按底/中/顶三段切分，结果会被后端按区间缓存。
-        if (!detailPage || !experimentData || experimentData.id === undefined || !data_ctrl || localLoaded)
+    function applyCustomPayload(payload) {
+        customSeries = payload && payload.series ? payload.series : createEmptyInstabilitySeries(qsTr("\u81ea\u5b9a\u4e49"), customLowerBound, customUpperBound)
+        customLoading = false
+        customLoaded = true
+
+        console.log("[DetailInstability][custom ready]",
+                    "experimentId=", Number(experimentData.id),
+                    "lowerMm=", customLowerBound,
+                    "upperMm=", customUpperBound,
+                    "pointCount=", customSeries && customSeries.points ? customSeries.points.length : 0)
+    }
+
+    function requestOverviewData() {
+        if (!detailPage || !experimentData || experimentData.id === undefined || !detail_ctrl)
             return
 
-        var totalMinHeight = detailPage.minHeightValue
-        var totalMaxHeight = detailPage.maxHeightValue
-        var sectionHeight = Math.max((totalMaxHeight - totalMinHeight) / 3.0, 0)
-        var firstSplit = totalMinHeight + sectionHeight
-        var secondSplit = totalMinHeight + sectionHeight * 2
-
-        bottomSeries = data_ctrl.getInstabilitySeriesChartData(Number(experimentData.id), totalMinHeight, firstSplit, "bottom", qsTr("底部"))
-        middleSeries = data_ctrl.getInstabilitySeriesChartData(Number(experimentData.id), firstSplit, secondSplit, "middle", qsTr("中部"))
-        topSeries = data_ctrl.getInstabilitySeriesChartData(Number(experimentData.id), secondSplit, totalMaxHeight, "top", qsTr("顶部"))
-        localLoaded = true
-        buildRadarOverview()
+        overviewLoading = true
+        overviewRequestId = detail_ctrl.requestInstabilityOverview(Number(experimentData.id),
+                                                                  detailPage.minHeightValue,
+                                                                  detailPage.maxHeightValue)
+        console.log("[DetailInstability][overview request]",
+                    "experimentId=", Number(experimentData.id),
+                    "requestId=", overviewRequestId,
+                    "minHeightMm=", detailPage.minHeightValue,
+                    "maxHeightMm=", detailPage.maxHeightValue)
+        if (overviewRequestId <= 0)
+            overviewLoading = false
     }
 
-    function loadCustomData() {
-        // 自定义模式只有点击“应用”后才重新取数，避免输入框编辑时频繁触发计算。
-        if (!detailPage || !experimentData || experimentData.id === undefined || !data_ctrl)
+    function requestCustomData() {
+        if (!detailPage || !experimentData || experimentData.id === undefined || !detail_ctrl)
             return
 
         customLowerBound = Math.max(detailPage.minHeightValue, Math.min(customLowerBound, detailPage.maxHeightValue))
         customUpperBound = Math.max(detailPage.minHeightValue, Math.min(customUpperBound, detailPage.maxHeightValue))
-        customSeries = data_ctrl.getInstabilitySeriesChartData(Number(experimentData.id),
-                                                               customLowerBound,
-                                                               customUpperBound,
-                                                               "custom",
-                                                               qsTr("自定义"))
-        customLoaded = true
+
+        customLoading = true
+        customLoaded = false
+        customRequestId = detail_ctrl.requestInstabilityCustomSeries(Number(experimentData.id),
+                                                                     customLowerBound,
+                                                                     customUpperBound)
+        console.log("[DetailInstability][custom request]",
+                    "experimentId=", Number(experimentData.id),
+                    "requestId=", customRequestId,
+                    "lowerMm=", customLowerBound,
+                    "upperMm=", customUpperBound)
+        if (customRequestId <= 0)
+            customLoading = false
+    }
+
+    function loadOverallData() {
+        if (!detailPage || !experimentData || experimentData.id === undefined || !detail_ctrl)
+            return
+
+        if (!overallLoaded && !overviewLoading)
+            requestOverviewData()
+    }
+
+    function loadLocalData() {
+        // 灞€閮ㄦā寮忓浐瀹氭寜搴?涓?椤朵笁娈靛垏鍒嗭紝缁撴灉浼氳鍚庣鎸夊尯闂寸紦瀛樸€?
+        if (!detailPage || !experimentData || experimentData.id === undefined || localLoaded)
+            return
+
+        if (!overviewLoading && !overallLoaded)
+            requestOverviewData()
+    }
+    function loadCustomData() {
+        // 鑷畾涔夋ā寮忓彧鏈夌偣鍑烩€滃簲鐢ㄢ€濆悗鎵嶉噸鏂板彇鏁帮紝閬垮厤杈撳叆妗嗙紪杈戞椂棰戠箒瑙﹀彂璁＄畻銆?
+        if (!detailPage || !experimentData || experimentData.id === undefined || !detail_ctrl)
+            return
+
+        requestCustomData()
     }
 
     function activeSeriesList() {
@@ -141,24 +206,12 @@ Rectangle {
         return false
     }
 
-    function radarColor(index, total) {
-        if (total <= 1)
-            return Qt.hsla(0.65, 0.9, 0.45, 0.95)
-        var ratio = index / Math.max(total - 1, 1)
-        return Qt.hsla(0.65 * (1.0 - ratio), 0.9, 0.48, 0.95)
-    }
-
     function buildRadarOverview() {
-        // 雷达图的每一层对应同一个时间点在四个区间上的 Ius 值，
-        // 因此这里按时间索引把整体/底部/中部/顶部拼成一组 polygon。
+        // 闆疯揪鍥剧殑姣忎竴灞傚搴斿悓涓€涓椂闂寸偣鍦ㄥ洓涓尯闂翠笂鐨?Ius 鍊硷紝
+        // 鍥犳杩欓噷鎸夋椂闂寸储寮曟妸鏁翠綋/搴曢儴/涓儴/椤堕儴鎷兼垚涓€缁?polygon銆?
         radarPolygons = []
         radarMaxValue = 1
-        if (!detailPage || !experimentData || experimentData.id === undefined || !data_ctrl)
-            return
-
-        var radarData = data_ctrl.getInstabilityRadarChartData(Number(experimentData.id))
-        radarPolygons = radarData && radarData.polygons ? radarData.polygons : []
-        radarMaxValue = radarData ? detailPage.toNumber(radarData.maxValue, 1) : 1
+        return
     }
 
     function applyCustomRange() {
@@ -166,38 +219,30 @@ Rectangle {
     }
 
     function ensureModeData() {
-        // 首次进入页面只加载整体；
-        // 其他模式在真正切换过去时再补数据，避免进页卡顿。
+        // 棣栨杩涘叆椤甸潰鍙姞杞芥暣浣擄紱
+        // 鍏朵粬妯″紡鍦ㄧ湡姝ｅ垏鎹㈣繃鍘绘椂鍐嶈ˉ鏁版嵁锛岄伩鍏嶈繘椤靛崱椤裤€?
         if (!overallLoaded)
             loadOverallData()
 
         if (currentModeIndex === 1 || currentModeIndex === 3)
             loadLocalData()
-        else if (currentModeIndex === 2 && !customLoaded)
+        else if (currentModeIndex === 2 && !customLoaded && !customLoading)
             loadCustomData()
 
         if (currentModeIndex === 3 && radarPolygons.length === 0)
-            buildRadarOverview()
+            radarPolygons = []
     }
 
     function loadInstabilityData() {
         if (!detailPage)
             return
 
-        overallLoaded = false
-        localLoaded = false
-        customLoaded = false
-        overallSeries = createEmptyInstabilitySeries(qsTr("整体"), detailPage.minHeightValue, detailPage.maxHeightValue)
-        bottomSeries = createEmptyInstabilitySeries(qsTr("底部"), detailPage.minHeightValue, detailPage.minHeightValue)
-        middleSeries = createEmptyInstabilitySeries(qsTr("中部"), detailPage.minHeightValue, detailPage.minHeightValue)
-        topSeries = createEmptyInstabilitySeries(qsTr("顶部"), detailPage.maxHeightValue, detailPage.maxHeightValue)
-        customSeries = createEmptyInstabilitySeries(qsTr("自定义"), detailPage.minHeightValue, detailPage.maxHeightValue)
-        radarPolygons = []
-        radarMaxValue = 1
-
+        cancelDetailRequests("reload")
+        resetInstabilityState()
         customLowerBound = detailPage.floorToStep(detailPage.minHeightValue, 1)
         customUpperBound = detailPage.ceilToStep(detailPage.maxHeightValue, 1)
-        loadOverallData()
+
+        requestOverviewData()
     }
 
     function normalizedTextToNumber(textValue, fallback) {
@@ -211,10 +256,88 @@ Rectangle {
         if (detailPage)
             loadInstabilityData()
     }
+    Component.onDestruction: cancelDetailRequests("destroyed")
 
     Connections {
         target: detailPage
-        function onExperimentDataChanged() { instabilityPanel.loadInstabilityData() }
+        onExperimentDataChanged: instabilityPanel.loadInstabilityData()
+    }
+
+    Connections {
+        target: detail_ctrl
+        ignoreUnknownSignals: true
+        onInstabilityOverviewRequestFinished: {
+            console.log("[DetailInstability][overview finished signal]",
+                        "requestId=", requestId,
+                        "activeRequestId=", instabilityPanel.overviewRequestId,
+                        "experimentId=", experimentId,
+                        "activeExperimentId=", instabilityPanel.experimentData && instabilityPanel.experimentData.id !== undefined ? Number(instabilityPanel.experimentData.id) : 0)
+            if (requestId !== instabilityPanel.overviewRequestId)
+                return
+            if (!instabilityPanel.experimentData || Number(instabilityPanel.experimentData.id) !== Number(experimentId))
+                return
+
+            instabilityPanel.overviewRequestId = 0
+            instabilityPanel.applyOverviewPayload(payload)
+        }
+        onInstabilityOverviewRequestFailed: {
+            if (requestId !== instabilityPanel.overviewRequestId)
+                return
+            if (!instabilityPanel.experimentData || Number(instabilityPanel.experimentData.id) !== Number(experimentId))
+                return
+
+            instabilityPanel.overviewRequestId = 0
+            instabilityPanel.overviewLoading = false
+            console.log("[DetailInstability][overview failed]",
+                        "experimentId=", experimentId,
+                        "message=", message)
+        }
+        onInstabilityOverviewRequestCancelled: {
+            if (requestId !== instabilityPanel.overviewRequestId)
+                return
+
+            instabilityPanel.overviewRequestId = 0
+            instabilityPanel.overviewLoading = false
+            console.log("[DetailInstability][overview cancelled]",
+                        "experimentId=", experimentId,
+                        "reason=", reason)
+        }
+        onInstabilityCustomSeriesRequestFinished: {
+            console.log("[DetailInstability][custom finished signal]",
+                        "requestId=", requestId,
+                        "activeRequestId=", instabilityPanel.customRequestId,
+                        "experimentId=", experimentId,
+                        "activeExperimentId=", instabilityPanel.experimentData && instabilityPanel.experimentData.id !== undefined ? Number(instabilityPanel.experimentData.id) : 0)
+            if (requestId !== instabilityPanel.customRequestId)
+                return
+            if (!instabilityPanel.experimentData || Number(instabilityPanel.experimentData.id) !== Number(experimentId))
+                return
+
+            instabilityPanel.customRequestId = 0
+            instabilityPanel.applyCustomPayload(payload)
+        }
+        onInstabilityCustomSeriesRequestFailed: {
+            if (requestId !== instabilityPanel.customRequestId)
+                return
+            if (!instabilityPanel.experimentData || Number(instabilityPanel.experimentData.id) !== Number(experimentId))
+                return
+
+            instabilityPanel.customRequestId = 0
+            instabilityPanel.customLoading = false
+            console.log("[DetailInstability][custom failed]",
+                        "experimentId=", experimentId,
+                        "message=", message)
+        }
+        onInstabilityCustomSeriesRequestCancelled: {
+            if (requestId !== instabilityPanel.customRequestId)
+                return
+
+            instabilityPanel.customRequestId = 0
+            instabilityPanel.customLoading = false
+            console.log("[DetailInstability][custom cancelled]",
+                        "experimentId=", experimentId,
+                        "reason=", reason)
+        }
     }
 
     ColumnLayout {
@@ -271,7 +394,7 @@ Rectangle {
 
                 Label {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: qsTr("高度下限:")
+                    text: qsTr("楂樺害涓嬮檺:")
                     font.pixelSize: 12
                     font.family: "Microsoft YaHei"
                     color: "#2F3A4A"
@@ -294,7 +417,7 @@ Rectangle {
 
                 Label {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: qsTr("高度上限:")
+                    text: qsTr("楂樺害涓婇檺:")
                     font.pixelSize: 12
                     font.family: "Microsoft YaHei"
                     color: "#2F3A4A"
@@ -327,7 +450,7 @@ Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
                     width: 80
                     height: 28
-                    button_text: qsTr("应用")
+                    button_text: qsTr("搴旂敤")
                     button_color: "#4A89DC"
                     text_color: "#FFFFFF"
                     pixelSize: 12
@@ -360,8 +483,7 @@ Rectangle {
             Text {
                 anchors.centerIn: parent
                 visible: !instabilityPanel.hasVisibleSeries()
-                text: qsTr("数据库中暂无该实验的不稳定性曲线数据")
-                font.pixelSize: 15
+                text: qsTr("\u6570\u636e\u5e93\u4e2d\u6682\u65e0\u8be5\u5b9e\u9a8c\u7684\u4e0d\u7a33\u5b9a\u6027\u66f2\u7ebf\u6570\u636e")
                 font.family: "Microsoft YaHei"
                 color: "#7A8CA5"
             }
@@ -409,9 +531,9 @@ Rectangle {
                                 topMargin: 18
                                 yAxisTitleOffset: 64
                                 dataPoints: modelData.points
-                                lineColor: modelData.title === qsTr("底部") ? "#2F7CF6"
-                                          : modelData.title === qsTr("中部") ? "#21A366"
-                                          : modelData.title === qsTr("顶部") ? "#F28C28"
+                                lineColor: modelData.title === qsTr("搴曢儴") ? "#2F7CF6"
+                                          : modelData.title === qsTr("涓儴") ? "#21A366"
+                                          : modelData.title === qsTr("椤堕儴") ? "#F28C28"
                                           : "#2F7CF6"
                                 minXValue: modelData.chartMinX
                                 maxXValue: modelData.chartMaxX
@@ -420,7 +542,7 @@ Rectangle {
                                 xAxisTickValues: modelData.xAxisTickValues
                                 yAxisLabels: modelData.yAxisLabels
                                 yAxisTitle: "Ius"
-                                xAxisTitle: qsTr("时间(min)")
+                                xAxisTitle: qsTr("鏃堕棿(min)")
                                 formatXLabel: function(value) {
                                     return detailPage ? detailPage.formatNumber(value, 1) : Number(value).toFixed(1)
                                 }
@@ -434,12 +556,45 @@ Rectangle {
                     visible: instabilityPanel.currentModeIndex === 3
 
                     InstabilityRadarChart {
-                        // 总览模式使用雷达图展示同一时间点在四个高度区间的横向对比。
+                        // 鎬昏妯″紡浣跨敤闆疯揪鍥惧睍绀哄悓涓€鏃堕棿鐐瑰湪鍥涗釜楂樺害鍖洪棿鐨勬í鍚戝姣斻€?
                         anchors.fill: parent
                         polygons: instabilityPanel.radarPolygons
                         maxValue: instabilityPanel.radarMaxValue
                         tickCount: 6
-                        axisLabels: [qsTr("Ius - 整体"), qsTr("Ius - 底部"), qsTr("Ius - 中部"), qsTr("Ius - 顶部")]
+                        axisLabels: [qsTr("Ius - 鏁翠綋"), qsTr("Ius - 搴曢儴"), qsTr("Ius - 涓儴"), qsTr("Ius - 椤堕儴")]
+                    }
+                }
+            }
+
+            Item {
+                anchors.fill: parent
+                visible: instabilityPanel.overviewLoading || instabilityPanel.customLoading
+                z: 10
+
+                Rectangle {
+                    anchors.fill: parent
+                    color: instabilityPanel.hasVisibleSeries() ? "#66FFFFFF" : "#F8FBFF"
+                }
+
+                Column {
+                    anchors.centerIn: parent
+                    spacing: 8
+
+                    BusyIndicator {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        running: parent.parent.visible
+                        width: 36
+                        height: 36
+                    }
+
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: instabilityPanel.customLoading
+                              ? qsTr("\u6b63\u5728\u52a0\u8f7d\u81ea\u5b9a\u4e49\u4e0d\u7a33\u5b9a\u6027\u6570\u636e")
+                              : qsTr("\u6b63\u5728\u52a0\u8f7d\u4e0d\u7a33\u5b9a\u6027\u66f2\u7ebf")
+                        font.pixelSize: 12
+                        font.family: "Microsoft YaHei"
+                        color: "#4A5D75"
                     }
                 }
             }

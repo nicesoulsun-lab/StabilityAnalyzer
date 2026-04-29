@@ -7,24 +7,17 @@
 #include <QMetaObject>
 #include "Analysis/AdvancedCalculationEngine.h"
 #include "Analysis/CurveChartAnalysisEngine.h"
-#include "Analysis/LightCurveAnalysisEngine.h"
 #include <QThread>
 #include <QTimer>
 #include <QUuid>
 #include <QtMath>
-#include <QPointF>
 #include <QStringList>
 #include <new>
-#include <algorithm>
-#include <limits>
 
 namespace {
 
 constexpr int kImportBatchSize = 256;
 constexpr int kImportScanPageSize = 256;
-constexpr int kRealtimeCurvePointLimit = 1200;
-constexpr int kRealtimeCurveMaxScansPerExperiment = 48;
-constexpr int kRealtimeCurveMaxExperimentCaches = 4;
 
 double effectiveScanEndMm(const QVariantMap &experiment)
 {
@@ -35,208 +28,6 @@ double effectiveScanEndMm(const QVariantMap &experiment)
         return qMax(startMm, endMm - stepMm);
     }
     return qMax(startMm, endMm);
-}
-
-void trimRealtimeLightCurveCache(QHash<int, QHash<int, QVariantMap>> &cache, int activeExperimentId)
-{
-    auto activeIt = cache.find(activeExperimentId);
-    if (activeIt != cache.end()) {
-        QList<int> scanIds = activeIt->keys();
-        std::sort(scanIds.begin(), scanIds.end());
-        while (scanIds.size() > kRealtimeCurveMaxScansPerExperiment) {
-            activeIt->remove(scanIds.takeFirst());
-        }
-        if (activeIt->isEmpty()) {
-            cache.erase(activeIt);
-        }
-    }
-
-    if (cache.size() <= kRealtimeCurveMaxExperimentCaches) {
-        return;
-    }
-
-    QList<int> experimentIds = cache.keys();
-    std::sort(experimentIds.begin(), experimentIds.end());
-    for (int experimentId : experimentIds) {
-        if (cache.size() <= kRealtimeCurveMaxExperimentCaches) {
-            break;
-        }
-        if (experimentId == activeExperimentId) {
-            continue;
-        }
-        cache.remove(experimentId);
-    }
-}
-
-LightCurveAnalysisCacheKey makeLightCurveCacheKey(int experimentId, int pointsPerCurve, int referenceScanId,
-                                                  double lowerMm, double upperMm, bool useReference)
-{
-    // 高度区间按微米级整数参与 key，避免浮点直接比较带来的缓存抖动。
-    LightCurveAnalysisCacheKey key;
-    key.experimentId = experimentId;
-    key.pointsPerCurve = pointsPerCurve;
-    key.referenceScanId = referenceScanId;
-    key.lowerMilli = qRound64(lowerMm * 1000.0);
-    key.upperMilli = qRound64(upperMm * 1000.0);
-    key.useReference = useReference;
-    return key;
-}
-
-struct RealtimeLightCurveRow {
-    double heightMm = 0.0;
-    double backscatter = 0.0;
-    double transmission = 0.0;
-};
-
-QVariantList makeRealtimePointList(const QVector<QPointF> &points)
-{
-    QVariantList result;
-    result.reserve(points.size());
-    for (const QPointF &point : points) {
-        QVariantList pair;
-        pair.reserve(2);
-        pair.append(point.x());
-        pair.append(point.y());
-        result.append(QVariant(pair));
-    }
-    return result;
-}
-
-QVariantList downsampleRealtimeCurvePoints(const QVector<RealtimeLightCurveRow> &rows,
-                                           bool useTransmission,
-                                           int maxPoints)
-{
-    if (rows.isEmpty()) {
-        return QVariantList();
-    }
-
-    if (maxPoints <= 2 || rows.size() <= maxPoints) {
-        QVector<QPointF> points;
-        points.reserve(rows.size());
-        for (const RealtimeLightCurveRow &row : rows) {
-            points.append(QPointF(row.heightMm, useTransmission ? row.transmission : row.backscatter));
-        }
-        return makeRealtimePointList(points);
-    }
-
-    const int bucketCount = qMax(1, maxPoints / 2);
-    QVector<QPointF> sampled;
-    sampled.reserve(bucketCount * 2 + 2);
-    sampled.append(QPointF(rows.first().heightMm, useTransmission ? rows.first().transmission : rows.first().backscatter));
-
-    const int innerCount = rows.size() - 2;
-    for (int bucket = 0; bucket < bucketCount; ++bucket) {
-        const int startIndex = 1 + bucket * innerCount / bucketCount;
-        const int endIndex = 1 + (bucket + 1) * innerCount / bucketCount;
-        if (startIndex >= rows.size() - 1) {
-            break;
-        }
-
-        const int safeEnd = qMax(startIndex + 1, qMin(endIndex, rows.size() - 1));
-        int minIndex = startIndex;
-        int maxIndex = startIndex;
-        double minValue = useTransmission ? rows.at(startIndex).transmission : rows.at(startIndex).backscatter;
-        double maxValue = minValue;
-
-        for (int i = startIndex + 1; i < safeEnd; ++i) {
-            const double value = useTransmission ? rows.at(i).transmission : rows.at(i).backscatter;
-            if (value < minValue) {
-                minValue = value;
-                minIndex = i;
-            }
-            if (value > maxValue) {
-                maxValue = value;
-                maxIndex = i;
-            }
-        }
-
-        if (minIndex <= maxIndex) {
-            sampled.append(QPointF(rows.at(minIndex).heightMm, useTransmission ? rows.at(minIndex).transmission : rows.at(minIndex).backscatter));
-            if (maxIndex != minIndex) {
-                sampled.append(QPointF(rows.at(maxIndex).heightMm, useTransmission ? rows.at(maxIndex).transmission : rows.at(maxIndex).backscatter));
-            }
-        } else {
-            sampled.append(QPointF(rows.at(maxIndex).heightMm, useTransmission ? rows.at(maxIndex).transmission : rows.at(maxIndex).backscatter));
-            sampled.append(QPointF(rows.at(minIndex).heightMm, useTransmission ? rows.at(minIndex).transmission : rows.at(minIndex).backscatter));
-        }
-    }
-
-    sampled.append(QPointF(rows.last().heightMm, useTransmission ? rows.last().transmission : rows.last().backscatter));
-    std::sort(sampled.begin(), sampled.end(), [](const QPointF &left, const QPointF &right) {
-        if (qFuzzyCompare(left.x(), right.x())) {
-            return left.y() < right.y();
-        }
-        return left.x() < right.x();
-    });
-    return makeRealtimePointList(sampled);
-}
-
-QVariantMap buildRealtimeLightCurve(int scanId, const QVariantList &rows)
-{
-    QVariantMap curve;
-    if (scanId < 0 || rows.isEmpty()) {
-        return curve;
-    }
-
-    QVector<RealtimeLightCurveRow> curveRows;
-    curveRows.reserve(rows.size());
-
-    int minTimestamp = std::numeric_limits<int>::max();
-    int maxElapsedMs = 0;
-    double minHeightMm = std::numeric_limits<double>::max();
-    double maxHeightMm = std::numeric_limits<double>::lowest();
-    double minBackscatter = std::numeric_limits<double>::max();
-    double maxBackscatter = std::numeric_limits<double>::lowest();
-    double minTransmission = std::numeric_limits<double>::max();
-    double maxTransmission = std::numeric_limits<double>::lowest();
-
-    for (const QVariant &rowVariant : rows) {
-        const QVariantMap row = rowVariant.toMap();
-        RealtimeLightCurveRow curveRow;
-        curveRow.heightMm = row.value(QStringLiteral("height")).toDouble() / 1000.0;
-        curveRow.backscatter = row.value(QStringLiteral("backscatter_intensity")).toDouble();
-        curveRow.transmission = row.value(QStringLiteral("transmission_intensity")).toDouble();
-        curveRows.append(curveRow);
-
-        minTimestamp = qMin(minTimestamp, row.value(QStringLiteral("timestamp"), 0).toInt());
-        maxElapsedMs = qMax(maxElapsedMs, row.value(QStringLiteral("scan_elapsed_ms"), 0).toInt());
-        minHeightMm = qMin(minHeightMm, curveRow.heightMm);
-        maxHeightMm = qMax(maxHeightMm, curveRow.heightMm);
-        minBackscatter = qMin(minBackscatter, curveRow.backscatter);
-        maxBackscatter = qMax(maxBackscatter, curveRow.backscatter);
-        minTransmission = qMin(minTransmission, curveRow.transmission);
-        maxTransmission = qMax(maxTransmission, curveRow.transmission);
-    }
-
-    if (curveRows.isEmpty()) {
-        return curve;
-    }
-
-    std::sort(curveRows.begin(), curveRows.end(), [](const RealtimeLightCurveRow &left, const RealtimeLightCurveRow &right) {
-        if (qFuzzyCompare(left.heightMm, right.heightMm)) {
-            if (qFuzzyCompare(left.backscatter, right.backscatter)) {
-                return left.transmission < right.transmission;
-            }
-            return left.backscatter < right.backscatter;
-        }
-        return left.heightMm < right.heightMm;
-    });
-
-    curve.insert(QStringLiteral("scan_id"), scanId);
-    curve.insert(QStringLiteral("timestamp"), minTimestamp == std::numeric_limits<int>::max() ? 0 : minTimestamp);
-    curve.insert(QStringLiteral("scan_elapsed_ms"), maxElapsedMs);
-    curve.insert(QStringLiteral("point_count"), curveRows.size());
-    curve.insert(QStringLiteral("min_height_mm"), minHeightMm);
-    curve.insert(QStringLiteral("max_height_mm"), maxHeightMm);
-    curve.insert(QStringLiteral("min_backscatter"), minBackscatter);
-    curve.insert(QStringLiteral("max_backscatter"), maxBackscatter);
-    curve.insert(QStringLiteral("min_transmission"), minTransmission);
-    curve.insert(QStringLiteral("max_transmission"), maxTransmission);
-    curve.insert(QStringLiteral("backscatter_points"),
-                 downsampleRealtimeCurvePoints(curveRows, false, kRealtimeCurvePointLimit));
-    curve.insert(QStringLiteral("transmission_points"),
-                 downsampleRealtimeCurvePoints(curveRows, true, kRealtimeCurvePointLimit));
-    return curve;
 }
 
 }
@@ -265,92 +56,9 @@ void dataCtrl::setDataTransmitController(DataTransmitController *controller)
         return;
     }
 
-    if (m_dataTransmitCtrl) {
-        disconnect(m_dataTransmitCtrl, &DataTransmitController::streamMessageReceived,
-                   this, &dataCtrl::handleStreamMessage);
-    }
-
     m_dataTransmitCtrl = controller;
-    if (m_dataTransmitCtrl) {
-        connect(m_dataTransmitCtrl, &DataTransmitController::streamMessageReceived,
-                this, &dataCtrl::handleStreamMessage);
-    }
-}
-
-void dataCtrl::handleStreamMessage(const QVariantMap &message)
-{
-    if (message.value(QStringLiteral("type")).toString() != QStringLiteral("experiment_scan_data")) {
-        return;
-    }
-
-    const int experimentId = message.value(QStringLiteral("experiment_id")).toInt();
-    const int channel = message.value(QStringLiteral("channel"), -1).toInt();
-    const int scanId = message.value(QStringLiteral("scan_id")).toInt();
-    const bool scanCompleted = message.value(QStringLiteral("scan_completed")).toBool();
-    const QVariantList rows = message.value(QStringLiteral("rows")).toList();
-    if (experimentId <= 0 || rows.isEmpty()) {
-        return;
-    }
-
-    const QVariantMap realtimeCurve = buildRealtimeLightCurve(scanId, rows);
-    if (!realtimeCurve.isEmpty()) {
-        m_realtimeLightCurveCache[experimentId].insert(scanId, realtimeCurve);
-        trimRealtimeLightCurveCache(m_realtimeLightCurveCache, experimentId);
-        qDebug() << "[RealtimeLight][stream->cache]"
-                 << "channel=" << channel
-                 << "experimentId=" << experimentId
-                 << "scanId=" << scanId
-                 << "scanCompleted=" << scanCompleted
-                 << "rows=" << rows.size()
-                 << "pointCount=" << realtimeCurve.value(QStringLiteral("point_count")).toInt();
-        emit realtimeLightCurveReady(channel, experimentId, realtimeCurve, scanCompleted);
-    } else {
-        qWarning() << "[RealtimeLight][stream->cache] curve build failed"
-                   << "channel=" << channel
-                   << "experimentId=" << experimentId
-                   << "scanId=" << scanId
-                   << "rows=" << rows.size();
-    }
-
-    QVector<QVariantMap> dataRows;
-    dataRows.reserve(rows.size());
-    for (const QVariant &rowVariant : rows) {
-        QVariantMap row = rowVariant.toMap();
-        row.insert(QStringLiteral("experiment_id"), experimentId);
-        if (!row.contains(QStringLiteral("scan_id"))) {
-            row.insert(QStringLiteral("scan_id"), scanId);
-        }
-        dataRows.append(row);
-    }
-
-    if (scanCompleted && scanId >= 0
-            && !m_dbManager->deleteExperimentDataByExperimentAndScan(experimentId, scanId)) {
-        emit operationFailed(tr("实时实验数据覆盖失败"));
-        qWarning() << "[dataCtrl] clear existing scan data failed, experimentId=" << experimentId
-                   << "scanId=" << scanId;
-        return;
-    }
-
-    if (!m_dbManager->batchAddExperimentData(dataRows)) {
-        emit operationFailed(tr("实时实验数据写入失败"));
-        qWarning() << "[dataCtrl] stream scan data insert failed, experimentId=" << experimentId
-                   << "scanId=" << scanId
-                   << "rows=" << dataRows.size();
-        return;
-    }
-
-    m_lightCurveAnalysisCache.clearExperiment(experimentId);
-    qDebug() << "[RealtimeLight][emit signals]"
-             << "channel=" << channel
-             << "experimentId=" << experimentId
-             << "scanId=" << scanId
-             << "scanCompleted=" << scanCompleted
-             << "cachedScanCount=" << m_realtimeLightCurveCache.value(experimentId).size();
-    emit dataBatchAdded(dataRows.size(), experimentId);
-    emit scanDataChanged(channel, experimentId, scanId, scanCompleted);
-    if (scanCompleted) {
-        emit scanDataAdded(experimentId, scanId);
-    }
+    qDebug() << "[dataCtrl] data transmit controller updated for request/response only"
+             << "available=" << (m_dataTransmitCtrl != nullptr);
 }
 
 bool dataCtrl::addProject(QString name, QString note)
@@ -524,11 +232,11 @@ QVariantMap dataCtrl::importSingleExperimentFromDeviceInternal(int deviceExperim
             QVariantMap scanResponse;
             if (!sendRequestAndWait(QStringLiteral("get_experiment_scan_export"),
                                     QVariantMap{
-                                        {QStringLiteral("experiment_id"), deviceExperimentId},
-                                        {QStringLiteral("scan_id"), scanId},
-                                        {QStringLiteral("offset"), pageOffset},
-                                        {QStringLiteral("limit"), kImportScanPageSize}
-                                    },
+            {QStringLiteral("experiment_id"), deviceExperimentId},
+            {QStringLiteral("scan_id"), scanId},
+            {QStringLiteral("offset"), pageOffset},
+            {QStringLiteral("limit"), kImportScanPageSize}
+        },
                                     &scanResponse,
                                     30000)) {
                 m_dbManager->rollbackTransaction();
@@ -608,9 +316,9 @@ QVariantMap dataCtrl::importSingleExperimentFromDeviceInternal(int deviceExperim
     QString warningMessage;
     if (!sendRequestAndWait(QStringLiteral("mark_experiment_imported"),
                             QVariantMap{
-                                {QStringLiteral("experiment_id"), deviceExperimentId},
-                                {QStringLiteral("status"), 1}
-                            },
+    {QStringLiteral("experiment_id"), deviceExperimentId},
+    {QStringLiteral("status"), 1}
+},
                             &markResponse)) {
         warningMessage = markResponse.value(QStringLiteral("message")).toString();
         if (warningMessage.isEmpty()) {
@@ -821,7 +529,6 @@ bool dataCtrl::addData(int experimentId, int timestamp, double height,
     
     if (success) {
         emit dataAdded(timestamp, experimentId);
-        m_lightCurveAnalysisCache.clearExperiment(experimentId);
         qDebug() << "[dataCtrl] 添加实验数据成功，实验 ID:" << experimentId << "时间戳:" << timestamp;
     } else {
         emit operationFailed("添加实验数据失败");
@@ -843,7 +550,6 @@ bool dataCtrl::batchAddData(const QVector<QVariantMap>& dataList)
     
     if (success) {
         int experimentId = dataList.first().value("experiment_id").toInt();
-        m_lightCurveAnalysisCache.clearExperiment(experimentId);
         emit dataBatchAdded(dataList.size(), experimentId);
         qDebug() << "[dataCtrl] 批量添加实验数据成功，数量:" << dataList.size();
     } else {
@@ -913,7 +619,6 @@ bool dataCtrl::deleteData(int dataId)
     bool success = m_dbManager->deleteExperimentData(dataId);
     
     if (success) {
-        m_lightCurveAnalysisCache.clear();
         qDebug() << "[dataCtrl] 删除实验数据成功，ID:" << dataId;
     } else {
         emit operationFailed("删除实验数据失败");
@@ -934,7 +639,6 @@ bool dataCtrl::deleteDataByExperiment(int experimentId)
     bool success = m_dbManager->deleteExperimentDataByExperiment(experimentId);
     
     if (success) {
-        m_lightCurveAnalysisCache.clearExperiment(experimentId);
         qDebug() << "[dataCtrl] 删除实验数据成功，实验 ID:" << experimentId;
     } else {
         emit operationFailed("删除实验数据失败");
@@ -1154,245 +858,6 @@ QVariantList dataCtrl::getDeletedExperiments()
     return result;
 }
 
-QVariantList dataCtrl::getLightIntensityCurves(int experimentId, int pointsPerCurve)
-{
-    if (experimentId <= 0) {
-        qWarning() << "[dataCtrl] invalid experiment id for light intensity curves";
-        return QVariantList();
-    }
-
-    try {
-        // 这里直接透传数据库层的曲线聚合结果，QML 不再自己按 scan_id 分组。
-        const QVector<QVariantMap> rows = m_dbManager->getLightIntensityCurvesByExperiment(experimentId, pointsPerCurve);
-        QVariantList result;
-        result.reserve(rows.size());
-        for (const QVariantMap &row : rows) {
-            result.append(row);
-        }
-        return result;
-    } catch (const std::bad_alloc &) {
-        qWarning() << "[dataCtrl] insufficient memory while loading light intensity curves"
-                   << "experimentId=" << experimentId
-                   << "pointsPerCurve=" << pointsPerCurve;
-        return QVariantList();
-    }
-}
-
-QVariantList dataCtrl::getLightIntensityScanIds(int experimentId)
-{
-    QVariantList result;
-    if (experimentId <= 0) {
-        qWarning() << "[dataCtrl] invalid experiment id for light intensity scan ids";
-        return result;
-    }
-
-    const QVector<int> scanIds = m_dbManager->getExperimentScanIds(experimentId);
-    result.reserve(scanIds.size());
-    for (int scanId : scanIds) {
-        result.append(scanId);
-    }
-    qDebug() << "[LightIntensity][scan ids]"
-             << "experimentId=" << experimentId
-             << "scanCount=" << result.size();
-    return result;
-}
-
-QVariantList dataCtrl::getLightIntensityCurve(int experimentId, int scanId, int pointsPerCurve)
-{
-    if (experimentId <= 0 || scanId < 0) {
-        qWarning() << "[dataCtrl] invalid id for light intensity curve"
-                   << "experimentId:" << experimentId << "scanId:" << scanId;
-        return QVariantList();
-    }
-
-    try {
-        const QVector<QVariantMap> rows = m_dbManager->getLightIntensityCurveByScan(experimentId, scanId, pointsPerCurve);
-        QVariantList result;
-        result.reserve(rows.size());
-        for (const QVariantMap &row : rows) {
-            result.append(row);
-        }
-        qDebug() << "[LightIntensity][scan curve]"
-                 << "experimentId=" << experimentId
-                 << "scanId=" << scanId
-                 << "curveCount=" << result.size();
-        return result;
-    } catch (const std::bad_alloc &) {
-        qWarning() << "[dataCtrl] insufficient memory while loading light intensity scan curve"
-                   << "experimentId=" << experimentId
-                   << "scanId=" << scanId
-                   << "pointsPerCurve=" << pointsPerCurve;
-        return QVariantList();
-    }
-}
-
-QVariantMap dataCtrl::getRealtimeLightIntensityCurve(int experimentId, int scanId) const
-{
-    if (experimentId <= 0 || scanId < 0) {
-        qWarning() << "[RealtimeLight][cache->qml] invalid request"
-                   << "experimentId=" << experimentId
-                   << "scanId=" << scanId;
-        return QVariantMap();
-    }
-
-    const auto experimentIt = m_realtimeLightCurveCache.constFind(experimentId);
-    if (experimentIt == m_realtimeLightCurveCache.constEnd()) {
-        qDebug() << "[RealtimeLight][cache->qml] miss experiment"
-                 << "experimentId=" << experimentId
-                 << "scanId=" << scanId;
-        return QVariantMap();
-    }
-
-    const QVariantMap curve = experimentIt->value(scanId);
-    if (curve.isEmpty()) {
-        qDebug() << "[RealtimeLight][cache->qml] miss scan"
-                 << "experimentId=" << experimentId
-                 << "scanId=" << scanId;
-    } else {
-        qDebug() << "[RealtimeLight][cache->qml] hit"
-                 << "experimentId=" << experimentId
-                 << "scanId=" << scanId
-                 << "pointCount=" << curve.value(QStringLiteral("point_count")).toInt();
-    }
-    return curve;
-}
-
-QVariantList dataCtrl::getRealtimeLightIntensityCurves(int experimentId) const
-{
-    QVariantList result;
-    if (experimentId <= 0) {
-        qWarning() << "[RealtimeLight][cache->qml] invalid experiment list request"
-                   << "experimentId=" << experimentId;
-        return result;
-    }
-
-    const auto experimentIt = m_realtimeLightCurveCache.constFind(experimentId);
-    if (experimentIt == m_realtimeLightCurveCache.constEnd()) {
-        qDebug() << "[RealtimeLight][cache->qml] list miss experiment"
-                 << "experimentId=" << experimentId;
-        return result;
-    }
-
-    QList<int> scanIds = experimentIt->keys();
-    std::sort(scanIds.begin(), scanIds.end());
-    result.reserve(scanIds.size());
-    for (int scanId : scanIds) {
-        const QVariantMap curve = experimentIt->value(scanId);
-        if (!curve.isEmpty()) {
-            result.append(curve);
-        }
-    }
-
-    qDebug() << "[RealtimeLight][cache->qml] list hit"
-             << "experimentId=" << experimentId
-             << "curveCount=" << result.size();
-    return result;
-}
-
-QString dataCtrl::getRealtimeLightIntensityCurveSignature(int experimentId) const
-{
-    if (experimentId <= 0) {
-        return QString();
-    }
-
-    const auto experimentIt = m_realtimeLightCurveCache.constFind(experimentId);
-    if (experimentIt == m_realtimeLightCurveCache.constEnd()) {
-        return QString();
-    }
-
-    QList<int> scanIds = experimentIt->keys();
-    std::sort(scanIds.begin(), scanIds.end());
-
-    QStringList parts;
-    parts.reserve(scanIds.size() + 1);
-    parts.append(QString());
-    int curveCount = 0;
-    for (int scanId : scanIds) {
-        const auto curveIt = experimentIt->constFind(scanId);
-        if (curveIt == experimentIt->constEnd()) {
-            continue;
-        }
-
-        const QVariantMap &curve = curveIt.value();
-        if (curve.isEmpty()) {
-            continue;
-        }
-
-        ++curveCount;
-        parts.append(QStringLiteral("%1:%2:%3")
-                         .arg(scanId)
-                         .arg(curve.value(QStringLiteral("point_count")).toInt())
-                         .arg(curve.value(QStringLiteral("timestamp")).toInt()));
-    }
-
-    parts[0] = QString::number(curveCount);
-    return parts.join(QStringLiteral("|"));
-}
-
-void dataCtrl::clearExperimentRuntimeResources(int experimentId)
-{
-    if (experimentId <= 0) {
-        qWarning() << "[dataCtrl] ignore runtime resource cleanup for invalid experiment"
-                   << "experimentId=" << experimentId;
-        return;
-    }
-
-    const int cachedScanCount = m_realtimeLightCurveCache.value(experimentId).size();
-
-    m_realtimeLightCurveCache.remove(experimentId);
-    m_lightCurveAnalysisCache.clearExperiment(experimentId);
-
-    qDebug() << "[dataCtrl] cleared experiment runtime resources"
-             << "experimentId=" << experimentId
-             << "cachedScanCount=" << cachedScanCount
-             << "analysisCacheCleared=" << true;
-
-    emit experimentRuntimeResourcesCleared(experimentId);
-}
-
-QVariantList dataCtrl::getProcessedLightIntensityCurves(int experimentId, int pointsPerCurve, int referenceScanId,
-                                                        double lowerMm, double upperMm, bool useReference)
-{
-    if (experimentId <= 0) {
-        qWarning() << "[dataCtrl] invalid experiment id for processed light intensity curves";
-        return QVariantList();
-    }
-
-    try {
-        const LightCurveAnalysisCacheKey cacheKey = makeLightCurveCacheKey(experimentId, pointsPerCurve, referenceScanId,
-                                                                           lowerMm, upperMm, useReference);
-        if (m_lightCurveAnalysisCache.contains(cacheKey)) {
-            return m_lightCurveAnalysisCache.value(cacheKey);
-        }
-
-        // data_ctrl 现在只负责调度：
-        // 先取原始曲线，再交给分析引擎处理，最后写回缓存。
-        const QVector<QVariantMap> rawCurves = m_dbManager->getLightIntensityCurvesByExperiment(experimentId, pointsPerCurve);
-        const QVector<LightCurveAnalysisCurve> parsedCurves = LightCurveAnalysisEngine::fromVariantMaps(rawCurves);
-        // QML 传过来的是当前曲线列表索引，这里映射成真实 scan_id 再交给分析层。
-        const int safeReferenceIndex = parsedCurves.isEmpty() ? 0 : qBound(0, referenceScanId, parsedCurves.size() - 1);
-        const int actualReferenceScanId = parsedCurves.isEmpty() ? 0 : parsedCurves.at(safeReferenceIndex).scanId;
-        const QVector<QVariantMap> rows = LightCurveAnalysisEngine::processCurves(parsedCurves, actualReferenceScanId,
-                                                                                  lowerMm, upperMm, useReference);
-        QVariantList result;
-        result.reserve(rows.size());
-        for (const QVariantMap &row : rows) {
-            result.append(row);
-        }
-        m_lightCurveAnalysisCache.insert(cacheKey, result);
-        return result;
-    } catch (const std::bad_alloc &) {
-        qWarning() << "[dataCtrl] insufficient memory while processing light intensity curves"
-                   << "experimentId=" << experimentId
-                   << "pointsPerCurve=" << pointsPerCurve
-                   << "referenceIndex=" << referenceScanId
-                   << "lowerMm=" << lowerMm
-                   << "upperMm=" << upperMm
-                   << "useReference=" << useReference;
-        return QVariantList();
-    }
-}
-
 QVariantMap dataCtrl::getUniformityChartData(int experimentId)
 {
     // 均匀度页入口：从结果表取数后，统一转成页面图表结构。
@@ -1402,7 +867,7 @@ QVariantMap dataCtrl::getUniformityChartData(int experimentId)
     }
 
     return CurveChartAnalysisEngine::buildUniformityChartData(
-        m_dbManager->getUniformityIndicesByExperiment(experimentId));
+                m_dbManager->getUniformityIndicesByExperiment(experimentId));
 }
 
 QVariantMap dataCtrl::getLightIntensityAverageChartData(int experimentId)
@@ -1414,7 +879,7 @@ QVariantMap dataCtrl::getLightIntensityAverageChartData(int experimentId)
     }
 
     return CurveChartAnalysisEngine::buildLightIntensityAverageChartData(
-        m_dbManager->getLightIntensityAveragesByExperiment(experimentId));
+                m_dbManager->getLightIntensityAveragesByExperiment(experimentId));
 }
 
 QVariantMap dataCtrl::getSeparationLayerChartData(int experimentId)
@@ -1426,45 +891,7 @@ QVariantMap dataCtrl::getSeparationLayerChartData(int experimentId)
     }
 
     return CurveChartAnalysisEngine::buildSeparationLayerChartData(
-        m_dbManager->getSeparationLayerDataByExperiment(experimentId));
-}
-
-QVariantMap dataCtrl::getInstabilitySeriesChartData(int experimentId, double lowerMm, double upperMm,
-                                                    const QString& segmentKey, const QString& title)
-{
-    // 不稳定性单图入口：整体走默认缓存表，局部和自定义走按高度区间的缓存表。
-    if (experimentId <= 0) {
-        qWarning() << "[dataCtrl] invalid experiment id for instability series chart";
-        return QVariantMap();
-    }
-
-    const QVector<QVariantMap> rows = segmentKey == QStringLiteral("overall")
-        ? m_dbManager->getOrComputeInstabilityCurveDataByExperiment(experimentId)
-        : m_dbManager->getOrComputeInstabilityCurveDataByHeightRange(experimentId, lowerMm, upperMm, segmentKey);
-    return CurveChartAnalysisEngine::buildInstabilitySeriesChartData(rows, title, lowerMm, upperMm);
-}
-
-QVariantMap dataCtrl::getInstabilityRadarChartData(int experimentId)
-{
-    // 总览雷达图入口：先拆出整体、底部、中部、顶部四条曲线，再合成雷达图层。
-    if (experimentId <= 0) {
-        qWarning() << "[dataCtrl] invalid experiment id for instability radar chart";
-        return QVariantMap();
-    }
-
-    const QVariantMap experiment = m_dbManager->getExperimentById(experimentId);
-    const double minHeight = experiment.value("scan_range_start").toDouble() / 1000.0;
-    const double maxHeight = effectiveScanEndMm(experiment);
-    const double sectionHeight = qMax((maxHeight - minHeight) / 3.0, 0.0);
-    const double firstSplit = minHeight + sectionHeight;
-    const double secondSplit = minHeight + sectionHeight * 2.0;
-
-    const QVariantMap overallSeries = getInstabilitySeriesChartData(experimentId, minHeight, maxHeight, QStringLiteral("overall"), QStringLiteral("整体"));
-    const QVariantMap bottomSeries = getInstabilitySeriesChartData(experimentId, minHeight, firstSplit, QStringLiteral("bottom"), QStringLiteral("底部"));
-    const QVariantMap middleSeries = getInstabilitySeriesChartData(experimentId, firstSplit, secondSplit, QStringLiteral("middle"), QStringLiteral("中部"));
-    const QVariantMap topSeries = getInstabilitySeriesChartData(experimentId, secondSplit, maxHeight, QStringLiteral("top"), QStringLiteral("顶部"));
-
-    return CurveChartAnalysisEngine::buildInstabilityRadarChartData(overallSeries, bottomSeries, middleSeries, topSeries);
+                m_dbManager->getSeparationLayerDataByExperiment(experimentId));
 }
 
 QVariantMap dataCtrl::getPeakThicknessChartData(int experimentId, int intensityMode, double lowerMm, double upperMm, double thresholdValue)
@@ -1477,11 +904,11 @@ QVariantMap dataCtrl::getPeakThicknessChartData(int experimentId, int intensityM
 
     try {
         return m_dbManager->getPeakThicknessChartDataByExperiment(
-            experimentId,
-            intensityMode,
-            lowerMm,
-            upperMm,
-            thresholdValue);
+                    experimentId,
+                    intensityMode,
+                    lowerMm,
+                    upperMm,
+                    thresholdValue);
     } catch (const std::bad_alloc &) {
         qWarning() << "[dataCtrl] insufficient memory while loading peak thickness chart"
                    << "experimentId=" << experimentId
@@ -1501,8 +928,8 @@ QVariantMap dataCtrl::calculateMigrationRate(const QVariantMap& params)
     }
 
     return AdvancedCalculationEngine::calculateMigrationRate(
-        params,
-        m_dbManager->getSeparationLayerDataByExperiment(experimentId));
+                params,
+                m_dbManager->getSeparationLayerDataByExperiment(experimentId));
 }
 
 QVariantMap dataCtrl::calculateHydrodynamic(const QVariantMap& params)
@@ -1526,7 +953,6 @@ bool dataCtrl::deleteExperiment(int experimentId)
     bool success = m_dbManager->deleteExperiment(experimentId);
     
     if (success) {
-        m_lightCurveAnalysisCache.clearExperiment(experimentId);
         qDebug() << "[dataCtrl] 删除实验成功，ID:" << experimentId;
         emit operationInfo(tr("已移入回收站，7天后自动清理"));
 
@@ -1554,7 +980,6 @@ bool dataCtrl::restoreExperiment(int experimentId)
     bool success = m_dbManager->restoreExperiment(experimentId);
 
     if (success) {
-        m_lightCurveAnalysisCache.clearExperiment(experimentId);
         qDebug() << "[dataCtrl] 恢复实验成功，ID:" << experimentId;
         emit operationInfo(tr("已恢复实验"));
 
@@ -1591,7 +1016,6 @@ bool dataCtrl::hardDeleteExperiment(int experimentId)
     bool success = m_dbManager->hardDeleteExperiment(experimentId);
 
     if (success) {
-        m_lightCurveAnalysisCache.clearExperiment(experimentId);
         qDebug() << "[dataCtrl] 彻底删除实验成功，ID:" << experimentId;
         emit operationInfo(tr("已彻底删除实验"));
 
@@ -1620,7 +1044,6 @@ bool dataCtrl::deleteExperiments(const QVariantList& experimentIds)
     for (const auto& idVariant : experimentIds) {
         int expId = idVariant.toInt();
         if (expId > 0 && m_dbManager->deleteExperiment(expId)) {
-            m_lightCurveAnalysisCache.clearExperiment(expId);
             successCount++;
         }
     }
@@ -1665,7 +1088,6 @@ bool dataCtrl::hardDeleteExperiments(const QVariantList& experimentIds)
         }
 
         if (m_dbManager->hardDeleteExperiment(expId)) {
-            m_lightCurveAnalysisCache.clearExperiment(expId);
             successCount++;
         }
     }

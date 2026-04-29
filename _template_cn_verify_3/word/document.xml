@@ -1,0 +1,473 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:w10="urn:schemas-microsoft-com:office:word" xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml" xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk" xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" xmlns:wpsCustomData="http://www.wps.cn/officeDocument/2013/wpsCustomData" mc:Ignorable="w14 w15 wp14">
+  <w:body>
+    <w:p w14:paraId="10000001">
+      <w:pPr>
+        <w:jc w:val="center"/>
+        <w:spacing w:before="120" w:after="360"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:b/>
+          <w:sz w:val="32"/>
+          <w:szCs w:val="32"/>
+        </w:rPr>
+        <w:t>&#20998;&#25955;&#20307;&#31995;&#31283;&#23450;&#24615;&#27979;&#35797;&#25253;&#21578;</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="10000002">
+      <w:pPr>
+        <w:spacing w:after="200"/>
+      </w:pPr>
+    </w:p>
+    <w:p w14:paraId="10000003">
+      <w:pPr>
+        <w:spacing w:before="120" w:after="160"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:b/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t>C.1&#12288;&#26679;&#21697;&#20449;&#24687;</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="10000004">
+      <w:pPr>
+        <w:spacing w:after="80"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t xml:space="preserve">&#12288;&#12288;&#25152;&#23646;&#24037;&#31243;&#65306;{{project_name}}</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="100000041">
+      <w:pPr>
+        <w:spacing w:after="80"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t xml:space="preserve">&#12288;&#12288;&#23454;&#39564;&#32534;&#21495;&#65306;{{id}}</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="100000042">
+      <w:pPr>
+        <w:spacing w:after="80"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t xml:space="preserve">&#12288;&#12288;&#26679;&#21697;&#21517;&#31216;&#65306;{{sample_name}}</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="100000043">
+      <w:pPr>
+        <w:spacing w:after="240"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t xml:space="preserve">&#12288;&#12288;&#22791;&#27880;&#20449;&#24687;&#65306;{{description}}</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="10000005">
+      <w:pPr>
+        <w:spacing w:before="120" w:after="160"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:b/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t>C.2&#12288;&#27979;&#35797;&#20449;&#24687;</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="10000006">
+      <w:pPr>
+        <w:spacing w:after="80"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t xml:space="preserve">&#12288;&#12288;&#27979;&#35797;&#24320;&#22987;&#26102;&#38388;&#65306;{{created_at}}</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="10000007">
+      <w:pPr>
+        <w:spacing w:after="80"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t xml:space="preserve">&#12288;&#12288;&#27979;&#35797;&#20154;&#21592;&#65306;{{operator_name}}</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="10000008">
+      <w:pPr>
+        <w:spacing w:after="80"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t xml:space="preserve">&#12288;&#12288;&#27979;&#35797;&#25345;&#32493;&#26102;&#38388;&#65306;{{duration}} &#31186;</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="10000009">
+      <w:pPr>
+        <w:spacing w:after="80"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t xml:space="preserve">&#12288;&#12288;&#37319;&#26679;&#38388;&#38548;&#65306;{{interval}} &#31186;</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="10000010">
+      <w:pPr>
+        <w:spacing w:after="80"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t xml:space="preserve">&#12288;&#12288;&#25195;&#25551;&#27425;&#25968;&#65306;{{count}}</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="100000101">
+      <w:pPr>
+        <w:spacing w:after="80"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t xml:space="preserve">&#12288;&#12288;&#28201;&#25511;&#29366;&#24577;&#65306;{{temperature_control}}</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="100000102">
+      <w:pPr>
+        <w:spacing w:after="80"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t xml:space="preserve">&#12288;&#12288;&#30446;&#26631;&#28201;&#24230;&#65306;{{target_temp}} &#8451;</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="100000103">
+      <w:pPr>
+        <w:spacing w:after="80"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t xml:space="preserve">&#12288;&#12288;&#25195;&#25551;&#21306;&#38388;&#65306;{{scan_range_start}} ~ {{scan_range_end}}</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="10000011">
+      <w:pPr>
+        <w:spacing w:after="280"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t xml:space="preserve">&#12288;&#12288;&#25195;&#25551;&#27493;&#38271;&#65306;{{scan_step}}</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="10000012">
+      <w:pPr>
+        <w:spacing w:before="120" w:after="160"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:b/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t>C.3&#12288;&#27979;&#35797;&#32467;&#26524;</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="10000013">
+      <w:pPr>
+        <w:spacing w:after="200"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t>C.3.1&#12288;&#20809;&#24378;&#21407;&#22987;&#26354;&#32447;&#25130;&#22270;&#22914;&#22270; C.1 &#25152;&#31034;&#12290;</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="10000014">
+      <w:pPr>
+        <w:jc w:val="center"/>
+        <w:spacing w:after="120"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+        </w:rPr>
+        <w:drawing>
+          <wp:inline distT="0" distB="0" distL="114300" distR="114300">
+            <wp:extent cx="5369560" cy="2447925"/>
+            <wp:effectExtent l="0" t="0" r="2540" b="9525"/>
+            <wp:docPr id="5" name="Figure 1" descr="figure_c1"/>
+            <wp:cNvGraphicFramePr>
+              <a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/>
+            </wp:cNvGraphicFramePr>
+            <a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                <pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                  <pic:nvPicPr>
+                    <pic:cNvPr id="5" name="Figure 1" descr="figure_c1"/>
+                    <pic:cNvPicPr>
+                      <a:picLocks noChangeAspect="1"/>
+                    </pic:cNvPicPr>
+                  </pic:nvPicPr>
+                  <pic:blipFill>
+                    <a:blip r:embed="rId5"/>
+                    <a:stretch>
+                      <a:fillRect/>
+                    </a:stretch>
+                  </pic:blipFill>
+                  <pic:spPr>
+                    <a:xfrm>
+                      <a:off x="0" y="0"/>
+                      <a:ext cx="5369560" cy="2447925"/>
+                    </a:xfrm>
+                    <a:prstGeom prst="rect">
+                      <a:avLst/>
+                    </a:prstGeom>
+                  </pic:spPr>
+                </pic:pic>
+              </a:graphicData>
+            </a:graphic>
+          </wp:inline>
+        </w:drawing>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="10000015">
+      <w:pPr>
+        <w:jc w:val="center"/>
+        <w:spacing w:after="240"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t>&#22270; C.1&#12288;&#20809;&#24378;&#21407;&#22987;&#26354;&#32447;&#25130;&#22270;</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="10000016">
+      <w:r>
+        <w:br w:type="page"/>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="100000161">
+      <w:pPr>
+        <w:spacing w:after="180"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t>C.3.2&#12288;&#20809;&#24378;&#21442;&#27604;&#26354;&#32447;&#25130;&#22270;&#22914;&#22270; C.2 &#25152;&#31034;&#12290;</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="10000017">
+      <w:pPr>
+        <w:jc w:val="center"/>
+        <w:spacing w:after="120"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+        </w:rPr>
+        <w:drawing>
+          <wp:inline distT="0" distB="0" distL="114300" distR="114300">
+            <wp:extent cx="5370830" cy="2265045"/>
+            <wp:effectExtent l="0" t="0" r="1270" b="1905"/>
+            <wp:docPr id="6" name="Figure 2" descr="figure_c2"/>
+            <wp:cNvGraphicFramePr>
+              <a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/>
+            </wp:cNvGraphicFramePr>
+            <a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                <pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                  <pic:nvPicPr>
+                    <pic:cNvPr id="6" name="Figure 2" descr="figure_c2"/>
+                    <pic:cNvPicPr>
+                      <a:picLocks noChangeAspect="1"/>
+                    </pic:cNvPicPr>
+                  </pic:nvPicPr>
+                  <pic:blipFill>
+                    <a:blip r:embed="rId6"/>
+                    <a:stretch>
+                      <a:fillRect/>
+                    </a:stretch>
+                  </pic:blipFill>
+                  <pic:spPr>
+                    <a:xfrm>
+                      <a:off x="0" y="0"/>
+                      <a:ext cx="5370830" cy="2265045"/>
+                    </a:xfrm>
+                    <a:prstGeom prst="rect">
+                      <a:avLst/>
+                    </a:prstGeom>
+                  </pic:spPr>
+                </pic:pic>
+              </a:graphicData>
+            </a:graphic>
+          </wp:inline>
+        </w:drawing>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="10000018">
+      <w:pPr>
+        <w:jc w:val="center"/>
+        <w:spacing w:after="180"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t>&#22270; C.2&#12288;&#20809;&#24378;&#21442;&#27604;&#26354;&#32447;&#25130;&#22270;</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="10000019">
+      <w:pPr>
+        <w:spacing w:after="180"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t>C.3.3&#12288;&#19981;&#31283;&#23450;&#24615;&#26354;&#32447;&#25130;&#22270;&#22914;&#22270; C.3 &#25152;&#31034;&#12290;</w:t>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="10000020">
+      <w:pPr>
+        <w:jc w:val="center"/>
+        <w:spacing w:after="120"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+        </w:rPr>
+        <w:drawing>
+          <wp:inline distT="0" distB="0" distL="114300" distR="114300">
+            <wp:extent cx="5369560" cy="2447925"/>
+            <wp:effectExtent l="0" t="0" r="2540" b="9525"/>
+            <wp:docPr id="7" name="Figure 3" descr="figure_c3"/>
+            <wp:cNvGraphicFramePr>
+              <a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/>
+            </wp:cNvGraphicFramePr>
+            <a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                <pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                  <pic:nvPicPr>
+                    <pic:cNvPr id="7" name="Figure 3" descr="figure_c3"/>
+                    <pic:cNvPicPr>
+                      <a:picLocks noChangeAspect="1"/>
+                    </pic:cNvPicPr>
+                  </pic:nvPicPr>
+                  <pic:blipFill>
+                    <a:blip r:embed="rId7"/>
+                    <a:stretch>
+                      <a:fillRect/>
+                    </a:stretch>
+                  </pic:blipFill>
+                  <pic:spPr>
+                    <a:xfrm>
+                      <a:off x="0" y="0"/>
+                      <a:ext cx="5369560" cy="2447925"/>
+                    </a:xfrm>
+                    <a:prstGeom prst="rect">
+                      <a:avLst/>
+                    </a:prstGeom>
+                  </pic:spPr>
+                </pic:pic>
+              </a:graphicData>
+            </a:graphic>
+          </wp:inline>
+        </w:drawing>
+      </w:r>
+    </w:p>
+    <w:p w14:paraId="10000021">
+      <w:pPr>
+        <w:jc w:val="center"/>
+      </w:pPr>
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="SimSun"/>
+          <w:sz w:val="24"/>
+          <w:szCs w:val="24"/>
+        </w:rPr>
+        <w:t>&#22270; C.3&#12288;&#19981;&#31283;&#23450;&#24615;&#26354;&#32447;&#25130;&#22270;</w:t>
+      </w:r>
+    </w:p>
+    <w:sectPr>
+      <w:footerReference r:id="rId3" w:type="default"/>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:pgMar w:top="567" w:right="567" w:bottom="567" w:left="567" w:header="851" w:footer="992" w:gutter="0"/>
+      <w:pgNumType w:fmt="decimal"/>
+      <w:cols w:space="425" w:num="1"/>
+      <w:docGrid w:type="lines" w:linePitch="312" w:charSpace="0"/>
+    </w:sectPr>
+  </w:body>
+</w:document>

@@ -73,10 +73,12 @@ Item {
             return
         }
 
-        var experimentData = data_ctrl ? data_ctrl.getExperimentById(experimentId) : ({})
-        if (!experimentData || experimentData.id === undefined) {
-            experimentData = ({ id: experimentId })
-        }
+        var experimentData = ({ id: experimentId })
+
+        console.log("[HomePage][open realtime]",
+                    "channelIndex=", channelIndex,
+                    "experimentId=", experimentId,
+                    "hasExperimentRange=", experimentData && experimentData.scan_range_start !== undefined)
 
         currentPageKey = "realtime"
         mainLoader.setSource("qrc:/qml/RealtimeExperimentPage.qml", {

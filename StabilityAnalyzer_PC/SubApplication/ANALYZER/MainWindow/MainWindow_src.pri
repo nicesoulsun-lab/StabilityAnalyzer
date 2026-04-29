@@ -4,12 +4,13 @@ INCLUDEPATH += $$PWD/inc/ \
 HEADERS += \
         $$PWD/inc/Analysis/AdvancedCalculationEngine.h \
         $$PWD/inc/Analysis/CurveChartAnalysisEngine.h \
-        $$PWD/inc/Analysis/LightCurveAnalysisCache.h \
         $$PWD/inc/Analysis/LightCurveAnalysisEngine.h \
         $$PWD/inc/Common/systemdata.h \
         $$PWD/inc/Common/update_apk.h \
         $$PWD/inc/Controller/controllerManager.h \
+        $$PWD/inc/Controller/detail_ctrl.h \
         $$PWD/inc/Controller/experiment_ctrl.h \
+        $$PWD/inc/Controller/realtime_ctrl.h \
         $$PWD/inc/Controller/systemsetting_ctrl.h \
         $$PWD/inc/Controller/user_ctrl.h \
         $$PWD/inc/Controller/data_ctrl.h \
@@ -18,15 +19,17 @@ HEADERS += \
         $$PWD/inc/mainwindow_global.h \
         $$PWD/inc/MainWindow.h \
         $$PWD/inc/CurveItem.h \
-        $$PWD/inc/CurveDataModel.h
+        $$PWD/inc/CurveDataModel.h \
+		
 SOURCES += \
         $$PWD/src/Analysis/AdvancedCalculationEngine.cpp \
         $$PWD/src/Analysis/CurveChartAnalysisEngine.cpp \
-        $$PWD/src/Analysis/LightCurveAnalysisCache.cpp \
         $$PWD/src/Analysis/LightCurveAnalysisEngine.cpp \
         $$PWD/src/Common/systemdata.cpp \
         $$PWD/src/Common/update_apk.cpp \
+        $$PWD/src/Controller/detail_ctrl.cpp \
         $$PWD/src/Controller/experiment_ctrl.cpp \
+        $$PWD/src/Controller/realtime_ctrl.cpp \
         $$PWD/src/Controller/systemsetting_ctrl.cpp \
         $$PWD/src/Controller/user_ctrl.cpp \
         $$PWD/src/Controller/data_ctrl.cpp \
@@ -35,7 +38,7 @@ SOURCES += \
         $$PWD/src/main.cpp \
         $$PWD/src/MainWindow.cpp \
         $$PWD/src/CurveItem.cpp \
-        $$PWD/src/CurveDataModel.cpp
+        $$PWD/src/CurveDataModel.cpp \
 
 FORMS += \
        $$PWD/ui/MainWindow.ui

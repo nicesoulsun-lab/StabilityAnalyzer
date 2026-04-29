@@ -17,16 +17,18 @@ Item {
     property real maxLightValue: 100
     property int lightCurveCount: 0
     property int lightCurvesVersion: 0
-    property string lastRealtimeCurveSignature: ""
-    property int maxVisibleCurveCount: 48
+    property bool lightCurvesLoading: false
+    property int maxVisibleCurveCount: 20
+    property bool realtimeSessionActive: false
 
     signal backRequested()
 
     readonly property int experimentId: experimentData && experimentData.id !== undefined ? Number(experimentData.id) : 0
+    readonly property bool isRealtimeChartTab: currentTabIndex >= 0 && currentTabIndex <= 2
     readonly property var realtimeTabs: [
-        { title: qsTr("光强") },
-        { title: qsTr("不稳定性") },
-        { title: qsTr("均匀度指数") }
+        { title: qsTr("\u5149\u5f3a") },
+        { title: qsTr("\u4e0d\u7a33\u5b9a\u6027") },
+        { title: qsTr("\u5747\u5300\u5ea6\u6307\u6570") }
     ]
 
     function openTab(tabIndex) {
@@ -123,8 +125,15 @@ Item {
             maxHeightValue = minHeightValue + 10
     }
 
-    function pointsPerCurve() {
-        return Math.max(280, Math.min(600, Math.round((realtimePage.width > 0 ? realtimePage.width : 1000) * 0.5)))
+    function resetRealtimeCurves(reason) {
+        lightCurves = []
+        lightCurveCount = 0
+        lightCurvesVersion += 1
+        applyExperimentHeightFallback()
+        console.log("[RealtimeLight][reset]",
+                    "channelIndex=", channelIndex,
+                    "experimentId=", experimentId,
+                    "reason=", reason)
     }
 
     function pointX(point) {
@@ -150,17 +159,6 @@ Item {
         }
     }
 
-    function buildRealtimeCurveSignature(curves) {
-        if (!curves || curves.length === 0)
-            return ""
-
-        var parts = [String(curves.length)]
-        for (var i = 0; i < curves.length; ++i) {
-            var curve = curves[i]
-            parts.push(String(curve.scan_id) + ":" + String(curve.point_count) + ":" + String(curve.timestamp))
-        }
-        return parts.join("|")
-    }
 
     function applyLightCurves(curves) {
         minLightValue = 0
@@ -181,8 +179,14 @@ Item {
                 return timeDiff
             return realtimePage.toNumber(a.scan_id, 0) - realtimePage.toNumber(b.scan_id, 0)
         })
-        if (sortedCurves.length > maxVisibleCurveCount)
+        if (sortedCurves.length > maxVisibleCurveCount) {
+            console.log("[RealtimeLight][curve trim]",
+                        "channelIndex=", channelIndex,
+                        "experimentId=", experimentId,
+                        "inputCurveCount=", sortedCurves.length,
+                        "maxVisibleCurveCount=", maxVisibleCurveCount)
             sortedCurves = sortedCurves.slice(sortedCurves.length - maxVisibleCurveCount)
+        }
 
         var normalizedCurves = []
         var minHeight = Number.POSITIVE_INFINITY
@@ -251,121 +255,57 @@ Item {
     }
 
     function loadLightIntensityData() {
-        lightCurves = []
-        lightCurveCount = 0
-        lightCurvesVersion += 1
-        lastRealtimeCurveSignature = ""
-        applyExperimentHeightFallback()
-
-        if (experimentId <= 0 || !data_ctrl)
+        var targetExperimentId = activeRealtimeExperimentId()
+        if (targetExperimentId <= 0 || !realtime_ctrl) {
+            resetRealtimeCurves("invalidExperiment")
             return
+        }
 
-        var curves = data_ctrl.getLightIntensityCurves(experimentId, pointsPerCurve())
+        var curves = realtime_ctrl.getLightCurves(targetExperimentId)
+        console.log("[RealtimeLight][load curves]",
+                    "channelIndex=", channelIndex,
+                    "experimentId=", targetExperimentId,
+                    "curveCount=", curves ? curves.length : 0)
         applyLightCurves(curves)
     }
 
-    function loadLightIntensityScanData(scanId) {
-        if (experimentId <= 0 || !data_ctrl || scanId < 0)
+    function updateRealtimeSubscription(reason) {
+        var targetExperimentId = activeRealtimeExperimentId()
+        var shouldActivate = visible && isRealtimeChartTab && channelIndex >= 0 && targetExperimentId > 0
+        if (!realtime_ctrl) {
+            realtimeSessionActive = false
             return
-
-        var curves = data_ctrl.getLightIntensityCurve(experimentId, scanId, pointsPerCurve())
-        if (!curves || curves.length === 0)
-            return
-
-        var mergedCurves = []
-        var replaced = false
-        for (var i = 0; i < lightCurves.length; ++i) {
-            if (Number(lightCurves[i].scan_id) === Number(scanId)) {
-                mergedCurves.push(curves[0])
-                replaced = true
-            } else {
-                mergedCurves.push(lightCurves[i])
-            }
         }
-        if (!replaced)
-            mergedCurves.push(curves[0])
 
-        applyLightCurves(mergedCurves)
-    }
-
-    function mergeRealtimeLightCurve(curve) {
-        if (!curve || curve.scan_id === undefined)
-            return
-
-        var mergedCurves = []
-        var replaced = false
-        for (var i = 0; i < lightCurves.length; ++i) {
-            if (Number(lightCurves[i].scan_id) === Number(curve.scan_id)) {
-                mergedCurves.push(curve)
-                replaced = true
-            } else {
-                mergedCurves.push(lightCurves[i])
-            }
-        }
-        if (!replaced)
-            mergedCurves.push(curve)
-
-        var signature = buildRealtimeCurveSignature(mergedCurves)
-        console.log("[RealtimeLight][qml merge]",
-                    "experimentId=", experimentId,
-                    "channelIndex=", channelIndex,
-                    "scanId=", curve.scan_id,
-                    "replaced=", replaced,
-                    "beforeCount=", lightCurves.length,
-                    "afterCount=", mergedCurves.length,
-                    "pointCount=", curve.point_count)
-        applyLightCurves(mergedCurves)
-        lastRealtimeCurveSignature = signature
-    }
-
-    function loadRealtimeLightIntensityScanData(scanId) {
-        if (experimentId <= 0 || !data_ctrl || scanId < 0)
-            return false
-
-        var curve = data_ctrl.getRealtimeLightIntensityCurve(experimentId, scanId)
-        if (!curve || curve.scan_id === undefined) {
-            console.log("[RealtimeLight][qml cache miss]",
-                        "experimentId=", experimentId,
+        realtime_ctrl.setActiveSession(channelIndex, targetExperimentId, currentTabIndex, shouldActivate)
+        realtimeSessionActive = shouldActivate
+        if (shouldActivate) {
+            console.log("[RealtimeLight][subscribe active]",
                         "channelIndex=", channelIndex,
-                        "scanId=", scanId)
-            return false
+                        "experimentId=", targetExperimentId,
+                        "tabIndex=", currentTabIndex,
+                        "reason=", reason)
+            if (currentTabIndex === 0) {
+                loadLightIntensityData()
+            } else {
+                lightCurvesVersion += 1
+                console.log("[RealtimeLight][restore cached state]",
+                            "channelIndex=", channelIndex,
+                            "experimentId=", targetExperimentId,
+                            "tabIndex=", currentTabIndex,
+                            "reason=", reason)
+            }
+        } else {
+            resetRealtimeCurves(reason)
         }
-
-        console.log("[RealtimeLight][qml cache hit]",
-                    "experimentId=", experimentId,
-                    "channelIndex=", channelIndex,
-                    "scanId=", scanId,
-                    "pointCount=", curve.point_count)
-        mergeRealtimeLightCurve(curve)
-        return true
-    }
-
-    function syncRealtimeExperimentContext(targetExperimentId) {
-        if (targetExperimentId <= 0 || Number(targetExperimentId) === Number(realtimePage.experimentId))
-            return
-
-        console.log("[RealtimeLight][qml sync experiment]",
-                    "oldExperimentId=", realtimePage.experimentId,
-                    "newExperimentId=", targetExperimentId,
-                    "channelIndex=", realtimePage.channelIndex)
-
-        var latestExperiment = data_ctrl ? data_ctrl.getExperimentById(targetExperimentId) : null
-        realtimePage.experimentData = latestExperiment && latestExperiment.id !== undefined
-                ? latestExperiment
-                : ({ "id": targetExperimentId })
-        realtimePage.lightCurves = []
-        realtimePage.lightCurveCount = 0
-        realtimePage.lightCurvesVersion += 1
-        realtimePage.lastRealtimeCurveSignature = ""
-        realtimePage.applyExperimentHeightFallback()
     }
 
     function currentTabSource() {
         if (currentTabIndex === 1)
-            return "curve/InstabilityCurvePage.qml"
+            return "curve/RealtimeInstabilityCurvePage.qml"
         if (currentTabIndex === 2)
-            return "curve/UniformityIndexPage.qml"
-        return "curve/LightIntensityCurvePage.qml"
+            return "curve/RealtimeUniformityIndexPage.qml"
+        return "curve/RealtimeLightIntensityPage.qml"
     }
 
     function activeRealtimeExperimentId() {
@@ -376,64 +316,6 @@ Item {
                 activeExperimentId = currentExperimentId
         }
         return activeExperimentId
-    }
-
-    function pollRealtimeCurveUpdates() {
-        var activeExperimentId = activeRealtimeExperimentId()
-        if (activeExperimentId <= 0 || !data_ctrl)
-            return
-
-        var signature = data_ctrl.getRealtimeLightIntensityCurveSignature(activeExperimentId)
-        if (!signature || signature === lastRealtimeCurveSignature)
-            return
-
-        realtimePage.syncRealtimeExperimentContext(activeExperimentId)
-        var curves = data_ctrl.getRealtimeLightIntensityCurves(activeExperimentId)
-        if (!curves || curves.length === 0)
-            return
-
-        console.log("[RealtimeLight][qml poll sync]",
-                    "experimentId=", activeExperimentId,
-                    "channelIndex=", channelIndex,
-                    "curveCount=", curves.length,
-                    "signature=", signature)
-        applyLightCurves(curves)
-        lastRealtimeCurveSignature = signature
-
-        if (realtimeContentLoader.item && realtimeContentLoader.item.resetAnalysisDefaults)
-            realtimeContentLoader.item.resetAnalysisDefaults()
-        else if (realtimeContentLoader.item && realtimeContentLoader.item.loadDisplayedCurves)
-            realtimeContentLoader.item.loadDisplayedCurves()
-    }
-
-    function refreshRealtimeData() {
-        if (experimentId > 0 && data_ctrl && experimentData.scan_range_start === undefined) {
-            var latestExperiment = data_ctrl.getExperimentById(experimentId)
-            if (latestExperiment && latestExperiment.id !== undefined)
-                experimentData = latestExperiment
-        }
-        loadLightIntensityData()
-    }
-
-    function refreshRealtimeScan(scanId, reloadAnalysis) {
-        console.log("[RealtimeLight][qml refresh]",
-                    "experimentId=", experimentId,
-                    "channelIndex=", channelIndex,
-                    "scanId=", scanId,
-                    "reloadAnalysis=", reloadAnalysis,
-                    "currentCurveCount=", lightCurves.length)
-        if (experimentId > 0 && data_ctrl && experimentData.scan_range_start === undefined) {
-            var latestExperiment = data_ctrl.getExperimentById(experimentId)
-            if (latestExperiment && latestExperiment.id !== undefined)
-                experimentData = latestExperiment
-        }
-
-        if (!loadRealtimeLightIntensityScanData(scanId))
-            loadLightIntensityScanData(scanId)
-
-        if (reloadAnalysis && realtimeContentLoader.item
-                && realtimeContentLoader.item.loadDisplayedCurves)
-            realtimeContentLoader.item.loadDisplayedCurves()
     }
 
     function releaseFinishedExperimentResources(stoppedChannel, stoppedExperimentId) {
@@ -456,142 +338,63 @@ Item {
                     "stoppedExperimentId=", finishedExperimentId,
                     "curveCount=", lightCurves.length)
 
-        lightCurves = []
-        lightCurveCount = 0
-        lightCurvesVersion += 1
-        lastRealtimeCurveSignature = ""
-        experimentData = ({})
-        applyExperimentHeightFallback()
+        resetRealtimeCurves("stopped")
+        realtimeSessionActive = false
     }
 
-    onExperimentDataChanged: refreshRealtimeData()
+    onExperimentDataChanged: {
+        applyExperimentHeightFallback()
+        updateRealtimeSubscription("experimentDataChanged")
+    }
+
+    onVisibleChanged: updateRealtimeSubscription("visibleChanged")
+    onCurrentTabIndexChanged: updateRealtimeSubscription("tabChanged")
+    onChannelIndexChanged: updateRealtimeSubscription("channelChanged")
 
     Component.onCompleted: {
-        refreshRealtimeData()
+        applyExperimentHeightFallback()
+        updateRealtimeSubscription("completed")
     }
 
-    Timer {
-        id: realtimeCurvePollTimer
-        interval: 400
-        repeat: true
-        running: realtimePage.visible
-        triggeredOnStart: true
-        onTriggered: realtimePage.pollRealtimeCurveUpdates()
+    Component.onDestruction: {
+        if (realtime_ctrl)
+            realtime_ctrl.setActiveSession(channelIndex, activeRealtimeExperimentId(), currentTabIndex, false)
     }
 
-    /*
-    Connections {
-        target: data_ctrl
-        ignoreUnknownSignals: true
-        function onRealtimeLightCurveReady(channel, experimentId, curve, scanCompleted) {
-            console.log("[RealtimeLight][signal realtimeLightCurveReady]",
-                        "pageExperimentId=", realtimePage.experimentId,
-                        "signalExperimentId=", experimentId,
-                        "pageChannelIndex=", realtimePage.channelIndex,
-                        "signalChannel=", channel,
-                        "scanId=", curve && curve.scan_id !== undefined ? curve.scan_id : -1,
-                        "scanCompleted=", scanCompleted)
-            if (channel !== realtimePage.channelIndex)
-                return
-
-            realtimePage.syncRealtimeExperimentContext(experimentId)
-
-            realtimePage.mergeRealtimeLightCurve(curve)
-
-            if (scanCompleted && currentTabIndex !== 0
-                    && realtimeContentLoader.item
-                    && realtimeContentLoader.item.loadDisplayedCurves)
-                realtimeContentLoader.item.loadDisplayedCurves()
-        }
-        function onScanDataChanged(channel, experimentId, scanId, scanCompleted) {
-            console.log("[RealtimeLight][signal scanDataChanged]",
-                        "pageExperimentId=", realtimePage.experimentId,
-                        "signalExperimentId=", experimentId,
-                        "pageChannelIndex=", realtimePage.channelIndex,
-                        "signalChannel=", channel,
-                        "scanId=", scanId,
-                        "scanCompleted=", scanCompleted)
-            if (channel !== realtimePage.channelIndex)
-                return
-
-            realtimePage.syncRealtimeExperimentContext(experimentId)
-            if (currentTabIndex === 0) {
-                if (!realtimePage.loadRealtimeLightIntensityScanData(scanId))
-                    realtimePage.loadLightIntensityScanData(scanId)
-                return
-            }
-
-            if (scanCompleted && realtimeContentLoader.item
-                    && realtimeContentLoader.item.loadDisplayedCurves)
-                realtimeContentLoader.item.loadDisplayedCurves()
-        }
-        function onDataBatchAdded(count, experimentId) {
-            // 实时页改为以 scan_id 为单位增量刷新，避免每批数据到达时整场实验全量重查。
-        }
-        }
-    }
-
-    */
 
     Connections {
-        target: data_ctrl
+        target: realtime_ctrl
         ignoreUnknownSignals: true
-        function onRealtimeLightCurveReady(channel, experimentId, curve, scanCompleted) {
-            console.log("[RealtimeLight][signal realtimeLightCurveReady]",
-                        "pageExperimentId=", realtimePage.experimentId,
-                        "signalExperimentId=", experimentId,
-                        "pageChannelIndex=", realtimePage.channelIndex,
-                        "signalChannel=", channel,
-                        "scanId=", curve && curve.scan_id !== undefined ? curve.scan_id : -1,
-                        "scanCompleted=", scanCompleted)
+        onLightCurvesChanged: {
+            if (channel !== realtimePage.channelIndex)
+                return
+            if (!realtimePage.visible || experimentId <= 0 || !realtimePage.realtimeSessionActive)
+                return
+            if (Number(experimentId) !== Number(realtimePage.activeRealtimeExperimentId()))
+                return
+
+            console.log("[RealtimeLight][signal curves changed]",
+                        "channelIndex=", realtimePage.channelIndex,
+                        "experimentId=", experimentId,
+                        "curveCount=", curveCount)
+            if (realtimePage.currentTabIndex === 0) {
+                realtimePage.loadLightIntensityData()
+            } else {
+                realtimePage.lightCurvesVersion += 1
+            }
+        }
+        onExperimentSessionCleared: {
             if (channel !== realtimePage.channelIndex)
                 return
 
-            realtimePage.syncRealtimeExperimentContext(experimentId)
-            realtimePage.mergeRealtimeLightCurve(curve)
-
-            if (currentTabIndex === 0) {
-                if (realtimeContentLoader.item && realtimeContentLoader.item.resetAnalysisDefaults)
-                    realtimeContentLoader.item.resetAnalysisDefaults()
-                else if (realtimeContentLoader.item && realtimeContentLoader.item.loadDisplayedCurves)
-                    realtimeContentLoader.item.loadDisplayedCurves()
-                return
-            }
-
-            if (scanCompleted && realtimeContentLoader.item
-                    && realtimeContentLoader.item.loadDisplayedCurves)
-                realtimeContentLoader.item.loadDisplayedCurves()
-        }
-        function onScanDataChanged(channel, experimentId, scanId, scanCompleted) {
-            console.log("[RealtimeLight][signal scanDataChanged]",
-                        "pageExperimentId=", realtimePage.experimentId,
-                        "signalExperimentId=", experimentId,
-                        "pageChannelIndex=", realtimePage.channelIndex,
-                        "signalChannel=", channel,
-                        "scanId=", scanId,
-                        "scanCompleted=", scanCompleted)
-            if (channel !== realtimePage.channelIndex)
-                return
-
-            realtimePage.syncRealtimeExperimentContext(experimentId)
-            if (currentTabIndex === 0) {
-                realtimePage.refreshRealtimeScan(scanId, true)
-                return
-            }
-
-            if (scanCompleted && realtimeContentLoader.item
-                    && realtimeContentLoader.item.loadDisplayedCurves)
-                realtimeContentLoader.item.loadDisplayedCurves()
-        }
-        function onDataBatchAdded(count, experimentId) {
-            // Realtime light refresh now happens per completed scan.
+            realtimePage.releaseFinishedExperimentResources(channel, experimentId)
         }
     }
 
     Connections {
         target: experiment_ctrl
         ignoreUnknownSignals: true
-        function onExperimentStopped(channel, experimentId) {
+        onExperimentStopped: {
             realtimePage.releaseFinishedExperimentResources(channel, experimentId)
         }
     }
@@ -668,7 +471,7 @@ Item {
 
                     Text {
                         Layout.preferredWidth: 160
-                        text: lightCurveCount > 0 ? qsTr("已加载 ") + lightCurveCount + qsTr(" 次扫描") : qsTr("等待实验数据")
+                        text: lightCurveCount > 0 ? qsTr("\u5df2\u52a0\u8f7d ") + lightCurveCount + qsTr(" \u6b21\u626b\u63cf") : qsTr("\u7b49\u5f85\u5b9e\u9a8c\u6570\u636e")
                         font.pixelSize: 12
                         font.family: "Microsoft YaHei"
                         color: "#6E8096"
@@ -686,14 +489,21 @@ Item {
 
                 onLoaded: {
                     if (item) {
+                        console.log("[RealtimePage][tab loaded]",
+                                    "channelIndex=", realtimePage.channelIndex,
+                                    "experimentId=", realtimePage.activeRealtimeExperimentId(),
+                                    "tabIndex=", realtimePage.currentTabIndex,
+                                    "source=", realtimeContentLoader.source)
                         try {
                             item.detailPage = realtimePage
-                            if (item.resetAnalysisDefaults) {
-                                item.resetAnalysisDefaults()
-                            } else if (item.loadDisplayedCurves) {
-                                item.loadDisplayedCurves()
+                            if (item.loadRealtimeData) {
+                                item.loadRealtimeData()
                             }
                         } catch (error) {
+                            console.log("[RealtimePage][tab load error]",
+                                        "tabIndex=", realtimePage.currentTabIndex,
+                                        "source=", realtimeContentLoader.source,
+                                        "message=", error)
                         }
                     }
                 }

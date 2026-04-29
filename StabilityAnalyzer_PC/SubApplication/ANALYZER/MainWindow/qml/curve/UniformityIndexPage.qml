@@ -11,7 +11,7 @@ Rectangle {
     property var detailPage
     readonly property var experimentData: detailPage ? detailPage.experimentData : ({})
     property int currentModeIndex: 0
-    property var modeTitles: [qsTr("背射光"), qsTr("透射光"), qsTr("背射光+透射光")]
+    property var modeTitles: [qsTr("\u80cc\u5c04\u5149"), qsTr("\u900f\u5c04\u5149"), qsTr("\u80cc\u5c04\u5149/\u900f\u5c04\u5149")]
     property var rows: []
     property var bsPoints: []
     property var tPoints: []
@@ -60,7 +60,7 @@ Rectangle {
 
     Connections {
         target: detailPage
-        function onExperimentDataChanged() { uniformityPanel.loadUniformityData() }
+        onExperimentDataChanged: uniformityPanel.loadUniformityData()
     }
 
     ColumnLayout {
@@ -105,7 +105,7 @@ Rectangle {
             Text {
                 anchors.centerIn: parent
                 visible: uniformityPanel.rows.length === 0
-                text: qsTr("数据库中暂无该实验的均匀度数据")
+                text: qsTr("\u6570\u636e\u5e93\u4e2d\u6682\u65e0\u8be5\u5b9e\u9a8c\u7684\u5747\u5300\u5ea6\u6570\u636e")
                 font.pixelSize: 15
                 font.family: "Microsoft YaHei"
                 color: "#7A8CA5"

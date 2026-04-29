@@ -15,7 +15,7 @@ Rectangle {
     readonly property var lightCurves: detailPage ? detailPage.lightCurves : []
     readonly property bool lightCurvesLoading: !!(detailPage && detailPage.lightCurvesLoading)
     property int currentLightModeIndex: 0
-    property var lightModeTitles: [qsTr("透射光"), qsTr("背射光"), qsTr("透射光+背射光")]
+    property var lightModeTitles: [qsTr("\u900f\u5c04\u5149"), qsTr("\u80cc\u5c04\u5149"), qsTr("\u900f\u5c04\u5149/\u80cc\u5c04\u5149")]
     property int currentDataModeIndex: 0
     property var dataModeTitles: [qsTr("原始数据"), qsTr("参比数据")]
     property int referenceCurveIndex: 0
@@ -251,7 +251,12 @@ Rectangle {
     }
 
     function loadDisplayedCurves() {
-        if (!detailPage || !detailPage.experimentData || detailPage.experimentData.id === undefined || !data_ctrl) {
+        if (!detailPage || !detailPage.experimentData || detailPage.experimentData.id === undefined) {
+            processedCurves = []
+            lastDisplaySignature = ""
+            return
+        }
+        if (!detail_ctrl) {
             processedCurves = []
             lastDisplaySignature = ""
             return
@@ -277,10 +282,11 @@ Rectangle {
         }
 
         // 其余情况统一走 data_ctrl，由后端分析层完成裁剪/参比处理。
-        var curves = data_ctrl.getProcessedLightIntensityCurves(
+        var referenceCurve = displayedCurveAt(clampReferenceIndex(referenceCurveIndex))
+        var referenceScanId = referenceCurve ? Number(referenceCurve.scan_id) : 0
+        var curves = detail_ctrl.getProcessedLightIntensityCurves(
                     Number(detailPage.experimentData.id),
-                    detailPage.pointsPerCurve ? detailPage.pointsPerCurve() : 3000,
-                    referenceCurveIndex,
+                    referenceScanId,
                     safeHeightLowerBound,
                     safeHeightUpperBound,
                     currentDataModeIndex === 1)
@@ -337,12 +343,16 @@ Rectangle {
     Connections {
         target: detailPage
         ignoreUnknownSignals: true
-        function onExperimentDataChanged() {
+        onExperimentDataChanged: {
             lightIntensityPanel.lastDisplaySignature = ""
             lightIntensityPanel.resetAnalysisDefaults()
         }
-        function onLightCurvesVersionChanged() {
+        onLightCurvesVersionChanged: {
             if (detailPage && !detailPage.lightCurvesLoading) {
+                console.log("[LightIntensity][version changed]",
+                            "curveCount=", lightCurves ? lightCurves.length : 0,
+                            "loading=", detailPage.lightCurvesLoading,
+                            "currentDataModeIndex=", currentDataModeIndex)
                 lightIntensityPanel.lastDisplaySignature = ""
                 lightIntensityPanel.resetAnalysisDefaults()
             }
@@ -485,7 +495,7 @@ Rectangle {
 
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: qsTr("正在加载光强曲线，请稍候")
+                        text: qsTr("\u6b63\u5728\u52a0\u8f7d\u5149\u5f3a\u66f2\u7ebf\uff0c\u8bf7\u7a0d\u5019")
                         font.pixelSize: 15
                         font.family: "Microsoft YaHei"
                         color: "#7A8CA5"
@@ -878,7 +888,7 @@ Rectangle {
 
                                     Connections {
                                         target: lightIntensityPanel
-                                        function onDisplayedCurvesChanged() { lightIntensityPanel.requestHeatLegendPaint("displayedCurvesChanged") }
+                                        onDisplayedCurvesChanged: lightIntensityPanel.requestHeatLegendPaint("displayedCurvesChanged")
                                     }
 
                                     onVisibleChanged: lightIntensityPanel.requestHeatLegendPaint("visibleChanged")
@@ -993,7 +1003,7 @@ Rectangle {
                     Text {
                         width: 78
                         anchors.verticalCenter: parent.verticalCenter
-                        text: qsTr("参比线")
+                        text: qsTr("\u53c2\u6bd4\u7ebf")
                         font.pixelSize: 13
                         font.family: "Microsoft YaHei"
                         //font.bold: true
@@ -1109,7 +1119,7 @@ Rectangle {
                     Text {
                         width: 78
                         anchors.verticalCenter: parent.verticalCenter
-                        text: qsTr("自定义高度分段")
+                        text: qsTr("\u81ea\u5b9a\u4e49\u9ad8\u5ea6\u5206\u6bb5")
                         font.pixelSize: 13
                         font.family: "Microsoft YaHei"
                         color: "#2F3A4A"

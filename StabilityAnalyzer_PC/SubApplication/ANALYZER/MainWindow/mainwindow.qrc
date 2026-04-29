@@ -26,9 +26,12 @@
         <file>qml/curve/TrendChart.qml</file>
         <file>qml/curve/PlaceholderPage.qml</file>
         <file>qml/curve/LightIntensityCurvePage.qml</file>
+        <file>qml/curve/RealtimeLightIntensityPage.qml</file>
         <file>qml/curve/InstabilityCurvePage.qml</file>
+        <file>qml/curve/RealtimeInstabilityCurvePage.qml</file>
         <file>qml/curve/InstabilityRadarChart.qml</file>
         <file>qml/curve/UniformityIndexPage.qml</file>
+        <file>qml/curve/RealtimeUniformityIndexPage.qml</file>
         <file>qml/curve/LightIntensityAveragePage.qml</file>
         <file>qml/curve/PeakThicknessPage.qml</file>
         <file>qml/curve/SeparationLayerPage.qml</file>

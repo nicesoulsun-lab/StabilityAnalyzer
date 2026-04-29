@@ -2,12 +2,10 @@
 #define DATA_CTRL_H
 
 #include <QObject>
-#include <QHash>
 #include <QPointer>
 #include <QThread>
 #include <QVariantMap>
 #include <QVector>
-#include "Analysis/LightCurveAnalysisCache.h"
 #include "mainwindow_global.h"
 
 class SqlOrmManager;
@@ -82,33 +80,12 @@ public:
     Q_INVOKABLE QVariantList getDataByRange(int experimentId, int startTimestamp, int endTimestamp);
     // 查询数据库中的全部原始实验数据。
     Q_INVOKABLE QVariantList getAllData();
-    // 获取实验实际存在的 scan_id 列表，详情页按真实 scan_id 分批加载曲线。
-    Q_INVOKABLE QVariantList getLightIntensityScanIds(int experimentId);
-    // 获取光强页使用的整帧曲线数据，后端已完成降采样。
-    Q_INVOKABLE QVariantList getLightIntensityCurves(int experimentId, int pointsPerCurve);
-    // 获取单个完整 scan 的光强曲线数据，供实时页按 scan 增量刷新。
-    Q_INVOKABLE QVariantList getLightIntensityCurve(int experimentId, int scanId, int pointsPerCurve);
-    // 获取实时流在内存中的单条曲线，供实时页直接绘制，不走数据库回查。
-    Q_INVOKABLE QVariantMap getRealtimeLightIntensityCurve(int experimentId, int scanId) const;
-    // 获取当前实验已缓存的全部实时曲线，供实时页定时同步，不走数据库回查。
-    Q_INVOKABLE QVariantList getRealtimeLightIntensityCurves(int experimentId) const;
-    // 获取实时曲线缓存的轻量签名，供 QML 判断是否需要拉取完整点集。
-    Q_INVOKABLE QString getRealtimeLightIntensityCurveSignature(int experimentId) const;
-    // 实验结束后清理实时缓存和分析缓存，释放前台不再需要的运行期内存。
-    Q_INVOKABLE void clearExperimentRuntimeResources(int experimentId);
-    // 按参比帧和高度区间生成处理后的光强曲线数据。
-    Q_INVOKABLE QVariantList getProcessedLightIntensityCurves(int experimentId, int pointsPerCurve, int referenceScanId,
-                                                             double lowerMm, double upperMm, bool useReference);
     // 获取均匀度页面直接可绑定的图表数据结构。
     Q_INVOKABLE QVariantMap getUniformityChartData(int experimentId);
     // 获取光强平均值页面直接可绑定的图表数据结构。
     Q_INVOKABLE QVariantMap getLightIntensityAverageChartData(int experimentId);
     // 获取分层厚度页面直接可绑定的图表数据结构。
     Q_INVOKABLE QVariantMap getSeparationLayerChartData(int experimentId);
-    // 获取不稳定性单图页面使用的趋势图数据结构。
-    Q_INVOKABLE QVariantMap getInstabilitySeriesChartData(int experimentId, double lowerMm, double upperMm, const QString& segmentKey, const QString& title);
-    // 获取不稳定性总览雷达图使用的数据结构。
-    Q_INVOKABLE QVariantMap getInstabilityRadarChartData(int experimentId);
     // 获取峰厚度页面使用的趋势图数据结构。
     Q_INVOKABLE QVariantMap getPeakThicknessChartData(int experimentId, int intensityMode, double lowerMm, double upperMm, double thresholdValue);
     // 计算颗粒迁移速度，返回统一结果结构供高级计算页使用。
@@ -134,13 +111,6 @@ signals:
     //  experimentId 所属实验 ID
     void dataBatchAdded(int count, int experimentId);
 
-    // 单个 scan_id 的数据写入完成后触发，实时页据此刷新曲线。
-    void scanDataAdded(int experimentId, int scanId);
-    // 单个 scan_id 有新数据片段写入后触发，实时页据此增量刷新正在采集的曲线。
-    void scanDataChanged(int channel, int experimentId, int scanId, bool scanCompleted);
-    // 实时流原始数据已转换为可直接绘制的曲线，前端无需再回查数据库。
-    void realtimeLightCurveReady(int channel, int experimentId, QVariantMap curve, bool scanCompleted);
-    
     // 操作失败信号
     //  message 错误信息
     void operationFailed(const QString& message);
@@ -151,12 +121,10 @@ signals:
     void deviceImportRunningChanged();
     void lastDeviceImportResultChanged();
     void deviceImportFinished(QVariantMap result);
-    void experimentRuntimeResourcesCleared(int experimentId);
 
 private:
     QVariantMap importSingleExperimentFromDeviceInternal(int deviceExperimentId);
     void finishDeviceImportWorker(const QVariantMap &result);
-    void handleStreamMessage(const QVariantMap &message);
     bool sendRequestAndWait(const QString &command,
                             const QVariantMap &payload,
                             QVariantMap *response = nullptr,
@@ -169,9 +137,6 @@ private:
     QPointer<QThread> m_deviceImportThread;
     bool m_deviceImportRunning = false;
     QVariantMap m_lastDeviceImportResult;
-    QHash<int, QHash<int, QVariantMap>> m_realtimeLightCurveCache;
-    // 光强处理结果的内存缓存，避免同一组参数反复触发后端分析。
-    LightCurveAnalysisCache m_lightCurveAnalysisCache;
 };
 
 #endif // DATA_CTRL_H
