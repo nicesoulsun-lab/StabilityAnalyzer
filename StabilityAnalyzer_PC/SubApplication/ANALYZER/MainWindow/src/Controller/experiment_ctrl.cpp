@@ -336,6 +336,7 @@ void ExperimentCtrl::syncExperimentChannelsFromDevice()
         const QVariantMap channelStatus = channels.at(channelIndex).toMap();
         const bool running = channelStatus.value(QStringLiteral("running")).toBool();
         const int reportedExperimentId = channelStatus.value(QStringLiteral("experiment_id")).toInt();
+        const int cachedExperimentId = m_experimentIds.value(channel, 0);
 
         if (running) {
             m_runningFlags[channel] = true;
@@ -345,10 +346,14 @@ void ExperimentCtrl::syncExperimentChannelsFromDevice()
             continue;
         }
 
-        const int experimentId = reportedExperimentId > 0
-                ? reportedExperimentId
-                : m_experimentIds.value(channel, 0);
-        if (m_runningFlags.value(channel, false) || experimentId > 0) {
+        if (!m_runningFlags.value(channel, false) && cachedExperimentId <= 0) {
+            continue;
+        }
+
+        const int experimentId = cachedExperimentId > 0
+                ? cachedExperimentId
+                : reportedExperimentId;
+        if (experimentId > 0 || m_runningFlags.value(channel, false)) {
             finalizeStoppedChannel(channel, channelIndex, experimentId, experimentId > 0);
         }
     }

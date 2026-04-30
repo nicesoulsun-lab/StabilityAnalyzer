@@ -8,6 +8,7 @@ HEADERS += \
         $$PWD/inc/Common/systemdata.h \
         $$PWD/inc/Common/update_apk.h \
         $$PWD/inc/Controller/controllerManager.h \
+        $$PWD/inc/Controller/compare_ctrl.h \
         $$PWD/inc/Controller/detail_ctrl.h \
         $$PWD/inc/Controller/experiment_ctrl.h \
         $$PWD/inc/Controller/realtime_ctrl.h \
@@ -27,6 +28,7 @@ SOURCES += \
         $$PWD/src/Analysis/LightCurveAnalysisEngine.cpp \
         $$PWD/src/Common/systemdata.cpp \
         $$PWD/src/Common/update_apk.cpp \
+        $$PWD/src/Controller/compare_ctrl.cpp \
         $$PWD/src/Controller/detail_ctrl.cpp \
         $$PWD/src/Controller/experiment_ctrl.cpp \
         $$PWD/src/Controller/realtime_ctrl.cpp \

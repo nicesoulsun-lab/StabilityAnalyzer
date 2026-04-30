@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QQmlContext>
 #include "datatransmitcontroller.h"
+#include "compare_ctrl.h"
 #include "systemsetting_ctrl.h"
 #include "user_ctrl.h"
 #include "data_ctrl.h"
@@ -24,6 +25,7 @@ public:
         , m_sysSettingCtrl(new systemSettingCtrl(this))
         , m_userCtrl(new userCtrl(this))
         , m_dataCtrl(new dataCtrl(this))
+        , m_compareCtrl(new compareCtrl(this))
         , m_detailCtrl(new detailCtrl(this))
         , m_experimentCtrl(new ExperimentCtrl(this))
         , m_realtimeCtrl(new realtimeCtrl(this))
@@ -49,6 +51,7 @@ public:
         context->setContextProperty("system_ctrl", m_sysSettingCtrl);
         context->setContextProperty("user_ctrl", m_userCtrl);
         context->setContextProperty("data_ctrl", m_dataCtrl);
+        context->setContextProperty("compare_ctrl", m_compareCtrl);
         context->setContextProperty("detail_ctrl", m_detailCtrl);
         context->setContextProperty("experiment_ctrl", m_experimentCtrl);
         context->setContextProperty("realtime_ctrl", m_realtimeCtrl);
@@ -61,6 +64,7 @@ public:
     systemSettingCtrl* getSystemSettingCtrl() const { return m_sysSettingCtrl; }
     userCtrl* getUserCtrl() const { return m_userCtrl; }
     dataCtrl* getDataCtrl() const { return m_dataCtrl; }
+    compareCtrl* getCompareCtrl() const { return m_compareCtrl; }
     detailCtrl* getDetailCtrl() const { return m_detailCtrl; }
     ExperimentCtrl* getExperimentCtrl() const { return m_experimentCtrl; }
     realtimeCtrl* getRealtimeCtrl() const { return m_realtimeCtrl; }
@@ -74,6 +78,7 @@ private:
     systemSettingCtrl* m_sysSettingCtrl = nullptr;
     userCtrl* m_userCtrl = nullptr;
     dataCtrl* m_dataCtrl = nullptr;
+    compareCtrl* m_compareCtrl = nullptr;
     detailCtrl* m_detailCtrl = nullptr;
     ExperimentCtrl* m_experimentCtrl = nullptr;
     realtimeCtrl* m_realtimeCtrl = nullptr;

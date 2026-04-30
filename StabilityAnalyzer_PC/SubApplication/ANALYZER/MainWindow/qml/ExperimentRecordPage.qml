@@ -11,6 +11,8 @@ Item {
     property string recordContentPageUrl: "qrc:/qml/component/ExperimentRecordListContent.qml"
     property int selectedRow: -1
     property var selectedExperiment: ({})
+    property var comparedExperiments: []
+    readonly property bool isComparePage: recordContentPageUrl === "qrc:/qml/ExperimentComparePage.qml"
 
     function openRecordContentPage(pageUrl) {
         if (pageUrl === undefined || pageUrl === null || pageUrl === "")
@@ -21,6 +23,18 @@ Item {
     function resetSelection() {
         selectedRow = -1
         selectedExperiment = ({})
+    }
+
+    function applyLoadedPageContext() {
+        if (!recordContentLoader.item)
+            return
+
+        if (recordContentLoader.item.hasOwnProperty("experimentData")) {
+            recordContentLoader.item.experimentData = pageRoot.selectedExperiment
+        }
+        if (recordContentLoader.item.hasOwnProperty("experimentDataList")) {
+            recordContentLoader.item.experimentDataList = pageRoot.comparedExperiments
+        }
     }
 
     function selectExperiment(row) {
@@ -43,6 +57,19 @@ Item {
         }
 
         return -1
+    }
+
+    function checkedExperiments() {
+        var experiments = []
+        if (!experiment_list_model)
+            return experiments
+
+        for (var row = 0; row < experiment_list_model.count(); ++row) {
+            var rowData = experiment_list_model.getRow(row)
+            if (rowData.checked)
+                experiments.push(rowData)
+        }
+        return experiments
     }
 
     // 根据复选框选中的唯一实验进入详情页，行点击高亮不参与详情打开。
@@ -127,6 +154,9 @@ Item {
             info_pop.openDialog(qsTr("请至少勾选两条实验记录"))
             return
         }
+
+        comparedExperiments = checkedExperiments()
+        openRecordContentPage("qrc:/qml/ExperimentComparePage.qml")
         console.log(qsTr("比较实验记录:"), checkedIds)
     }
 
@@ -204,12 +234,7 @@ Item {
                     anchors.fill: parent
                     source: pageRoot.recordContentPageUrl
 
-                    // 详情页加载完成后，把当前实验数据注入进去，后续真实图表可直接复用。
-                    onLoaded: {
-                        if (item && item.hasOwnProperty("experimentData")) {
-                            item.experimentData = pageRoot.selectedExperiment
-                        }
-                    }
+                    onLoaded: pageRoot.applyLoadedPageContext()
                 }
 
                 Connections {
@@ -222,15 +247,20 @@ Item {
                     onCompareRequested: pageRoot.tryCompare()
                     onExportRequested: pageRoot.tryExport()
                     onCheckRequested: pageRoot.openCheckedExperimentDetail()
-                    // 详情页内部返回时，切回记录列表页。
-                    onBackRequested: pageRoot.openRecordContentPage("qrc:/qml/component/ExperimentRecordListContent.qml")
+                    onBackRequested: {
+                        pageRoot.comparedExperiments = []
+                        pageRoot.openRecordContentPage("qrc:/qml/component/ExperimentRecordListContent.qml")
+                    }
                 }
             }
 
 
             // 实验记录-详细信息
             Rectangle {
-                Layout.preferredWidth: 228
+                visible: !pageRoot.isComparePage
+                Layout.preferredWidth: pageRoot.isComparePage ? 0 : 228
+                Layout.minimumWidth: pageRoot.isComparePage ? 0 : 228
+                Layout.maximumWidth: pageRoot.isComparePage ? 0 : 228
                 Layout.fillHeight: true
                 color: "#FAFBFD"
                 border.color: "#EEF1F5"
@@ -472,4 +502,7 @@ Item {
             experiment_list_model.reloadFromDb()
         }
     }
+
+    onSelectedExperimentChanged: applyLoadedPageContext()
+    onComparedExperimentsChanged: applyLoadedPageContext()
 }

@@ -338,6 +338,30 @@ QSGNode *CurveItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *data)
     return node;
 }
 
+void CurveItem::geometryChanged(const QRectF &newGeometry, const QRectF &oldGeometry)
+{
+    QQuickItem::geometryChanged(newGeometry, oldGeometry);
+
+    if (newGeometry.size() == oldGeometry.size()) {
+        return;
+    }
+
+    if (!m_points.isEmpty()) {
+        m_geometryDirty = true;
+        update();
+    }
+}
+
+void CurveItem::itemChange(ItemChange change, const ItemChangeData &value)
+{
+    QQuickItem::itemChange(change, value);
+
+    if (change == ItemVisibleHasChanged && value.boolValue && !m_points.isEmpty()) {
+        m_geometryDirty = true;
+        update();
+    }
+}
+
 void CurveItem::updateGeometry()
 {
     calculateBounds();

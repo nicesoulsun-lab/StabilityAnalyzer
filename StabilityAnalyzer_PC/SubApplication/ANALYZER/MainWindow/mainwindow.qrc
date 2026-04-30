@@ -22,7 +22,13 @@
         <file>qml/ExperimentRecordPage.qml</file>
         <file>qml/RecycleBinPage.qml</file>
         <file>qml/ExperimentDetailPage.qml</file>
+        <file>qml/ExperimentComparePage.qml</file>
         <file>qml/RealtimeExperimentPage.qml</file>
+        <file>qml/compare/CompareTrendChart.qml</file>
+        <file>qml/compare/CompareLegendPanel.qml</file>
+        <file>qml/compare/InstabilityComparePage.qml</file>
+        <file>qml/compare/UniformityComparePage.qml</file>
+        <file>qml/compare/LightIntensityAverageComparePage.qml</file>
         <file>qml/curve/TrendChart.qml</file>
         <file>qml/curve/PlaceholderPage.qml</file>
         <file>qml/curve/LightIntensityCurvePage.qml</file>

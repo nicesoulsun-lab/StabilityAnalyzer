@@ -27,6 +27,7 @@
 #include <QFile>
 #include <QDir>
 #include <QCoreApplication>
+#include <QThread>
 #include <QUuid>
 #include <QtMath>
 #include <limits>
@@ -261,6 +262,9 @@ namespace {
 
 QSqlDatabase openReadOnlyDb(const QString& dbPath, const QString& connectionName, QString* errorMessage = nullptr) {
     if (QSqlDatabase::contains(connectionName)) {
+        qWarning() << "[SqlOrmManager][openReadOnlyDb] reusing existing connection name"
+                   << "thread=" << reinterpret_cast<quintptr>(QThread::currentThreadId())
+                   << "connectionName=" << connectionName;
         QSqlDatabase::removeDatabase(connectionName);
     }
 
@@ -2348,10 +2352,20 @@ QVector<QVariantMap> SqlOrmManager::getLightIntensityAveragesByExperiment(int ex
     QString openError;
     QSqlDatabase db = openReadOnlyDb(d->dbPath, connectionName, &openError);
     if (!db.isOpen()) {
+        qWarning() << "[SqlOrmManager][lightAvg query open failed]"
+                   << "thread=" << reinterpret_cast<quintptr>(QThread::currentThreadId())
+                   << "experimentId=" << experimentId
+                   << "connectionName=" << connectionName
+                   << "message=" << openError;
         emit errorOccurred(openError);
         closeReadOnlyDb(connectionName);
         return result;
     }
+
+    qDebug() << "[SqlOrmManager][lightAvg query start]"
+             << "thread=" << reinterpret_cast<quintptr>(QThread::currentThreadId())
+             << "experimentId=" << experimentId
+             << "connectionName=" << connectionName;
 
     QSqlQuery query(db);
     query.prepare(
@@ -2364,6 +2378,11 @@ QVector<QVariantMap> SqlOrmManager::getLightIntensityAveragesByExperiment(int ex
     query.addBindValue(experimentId);
 
     if (!query.exec()) {
+        qWarning() << "[SqlOrmManager][lightAvg query exec failed]"
+                   << "thread=" << reinterpret_cast<quintptr>(QThread::currentThreadId())
+                   << "experimentId=" << experimentId
+                   << "connectionName=" << connectionName
+                   << "message=" << query.lastError().text();
         emit errorOccurred(query.lastError().text());
         closeReadOnlyDb(connectionName);
         return result;
@@ -2378,6 +2397,11 @@ QVector<QVariantMap> SqlOrmManager::getLightIntensityAveragesByExperiment(int ex
         result.append(row);
     }
 
+    qDebug() << "[SqlOrmManager][lightAvg query result]"
+             << "thread=" << reinterpret_cast<quintptr>(QThread::currentThreadId())
+             << "experimentId=" << experimentId
+             << "connectionName=" << connectionName
+             << "rowCount=" << result.size();
     closeReadOnlyDb(connectionName);
     return result;
 }
@@ -2392,10 +2416,20 @@ QVector<QVariantMap> SqlOrmManager::getUniformityIndicesByExperiment(int experim
     QString openError;
     QSqlDatabase db = openReadOnlyDb(d->dbPath, connectionName, &openError);
     if (!db.isOpen()) {
+        qWarning() << "[SqlOrmManager][uniformity query open failed]"
+                   << "thread=" << reinterpret_cast<quintptr>(QThread::currentThreadId())
+                   << "experimentId=" << experimentId
+                   << "connectionName=" << connectionName
+                   << "message=" << openError;
         emit errorOccurred(openError);
         closeReadOnlyDb(connectionName);
         return result;
     }
+
+    qDebug() << "[SqlOrmManager][uniformity query start]"
+             << "thread=" << reinterpret_cast<quintptr>(QThread::currentThreadId())
+             << "experimentId=" << experimentId
+             << "connectionName=" << connectionName;
 
     QSqlQuery query(db);
     query.prepare(
@@ -2410,6 +2444,11 @@ QVector<QVariantMap> SqlOrmManager::getUniformityIndicesByExperiment(int experim
     query.addBindValue(experimentId);
 
     if (!query.exec()) {
+        qWarning() << "[SqlOrmManager][uniformity query exec failed]"
+                   << "thread=" << reinterpret_cast<quintptr>(QThread::currentThreadId())
+                   << "experimentId=" << experimentId
+                   << "connectionName=" << connectionName
+                   << "message=" << query.lastError().text();
         emit errorOccurred(query.lastError().text());
         closeReadOnlyDb(connectionName);
         return result;
@@ -2434,6 +2473,11 @@ QVector<QVariantMap> SqlOrmManager::getUniformityIndicesByExperiment(int experim
         result.append(row);
     }
 
+    qDebug() << "[SqlOrmManager][uniformity query result]"
+             << "thread=" << reinterpret_cast<quintptr>(QThread::currentThreadId())
+             << "experimentId=" << experimentId
+             << "connectionName=" << connectionName
+             << "rowCount=" << result.size();
     closeReadOnlyDb(connectionName);
     return result;
 }
