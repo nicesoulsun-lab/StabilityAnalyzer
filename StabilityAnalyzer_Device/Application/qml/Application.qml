@@ -1,6 +1,6 @@
-import QtQuick 2.12
-import QtQuick.Controls 2.12
-import QtQuick.Layouts 1.12
+﻿import QtQuick 2.9
+import QtQuick.Controls 2.2
+import QtQuick.Layouts 1.3
 
 ApplicationWindow {
     id: mainApplicationWindow
@@ -11,7 +11,7 @@ ApplicationWindow {
     minimumHeight: 600
     maximumWidth: 1024
     maximumHeight: 600
-    title: "稳定性分析仪"
+    title: "绋冲畾鎬у垎鏋愪华"
     visible: true
 
     property var mainStackView: null
@@ -23,24 +23,24 @@ ApplicationWindow {
         width: parent.width; height: parent.height
         color: "transparent"
 
-        // 嵌套子项目的界面
+        // 宓屽瀛愰」鐩殑鐣岄潰
         Loader {
             id: main_loader
             anchors.fill: parent
             source: "qrc:/qml/MainWindow.qml"
 
-            // 2. 关键：在加载完成后，将内部的对象赋值给外部变量
+            // 2. 鍏抽敭锛氬湪鍔犺浇瀹屾垚鍚庯紝灏嗗唴閮ㄧ殑瀵硅薄璧嬪€肩粰澶栭儴鍙橀噺
             onLoaded: {
-                console.log("子项目界面加载完成")
+                console.log("瀛愰」鐩晫闈㈠姞杞藉畬鎴?)
                 if (item) {
                     mainStackView = item.mainStackView;
-                    console.log("MainStackView 已绑定:", mainStackView);
+                    console.log("MainStackView 宸茬粦瀹?", mainStackView);
                 }
             }
 
             onStatusChanged: {
                 if (status === Loader.Error) {
-                    console.log("加载子项目界面失败:", source)
+                    console.log("鍔犺浇瀛愰」鐩晫闈㈠け璐?", source)
                 }
             }
         }
@@ -68,3 +68,4 @@ ApplicationWindow {
 //        root: root
 //    }
 }
+

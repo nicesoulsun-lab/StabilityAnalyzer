@@ -1,8 +1,8 @@
 #include "inc/Controller/experiment_ctrl.h"
 
-#include "../../../SqlOrm/inc/SqlOrmManager.h"
 #include "../../../DataTransmit/inc/Controller/datatransmitcontroller.h"
 #include "../../../TaskScheduler/inc/modbustaskscheduler.h"
+#include "../../../../../CommonData/inc/deviceprofile.h"
 //#include "datatransmitcontroller.h"
 
 #include <QCoreApplication>
@@ -14,12 +14,14 @@
 #include <QDebug>
 
 namespace {
-
-constexpr int kChannelCount = 4;
+int configuredChannelCount()
+{
+    return deviceProfile().channelCount;
+}
 
 bool isValidChannelIndex(int channel)
 {
-    return channel >= 0 && channel < kChannelCount;
+    return channel >= 0 && channel < configuredChannelCount();
 }
 
 bool isChannelRunningOnDevice(DataTransmitController *controller, int channel)
@@ -36,28 +38,13 @@ bool isChannelRunningOnDevice(DataTransmitController *controller, int channel)
     return experimentChannels.at(channel).toMap().value(QStringLiteral("running")).toBool();
 }
 
-int findLatestExperimentId(SqlOrmManager *dbManager)
-{
-    if (!dbManager) {
-        return 0;
-    }
-
-    int maxId = 0;
-    const QVector<QVariantMap> experiments = dbManager->getAllExperiments();
-    for (const QVariantMap &experiment : experiments) {
-        maxId = qMax(maxId, experiment.value(QStringLiteral("id")).toInt());
-    }
-    return maxId;
-}
-
 }
 
 ExperimentCtrl::ExperimentCtrl(QObject *parent)
     : QObject(parent)
-    , m_dbManager(SqlOrmManager::instance())
     , m_scheduler(ModbusTaskScheduler::instance())
 {
-    for (int i = 0; i < kChannelCount; ++i) {
+    for (int i = 0; i < configuredChannelCount(); ++i) {
         const Channel channel = static_cast<Channel>(i);
         m_scanTimers[channel] = new QTimer(this);
         m_experimentTimers[channel] = new QTimer(this);
@@ -68,12 +55,7 @@ ExperimentCtrl::ExperimentCtrl(QObject *parent)
         m_slaveIds[channel] = i + 1;
 
         SerialConfig serialCfg;
-        switch (channel) {
-        case ChannelA: serialCfg.portName = "COM1"; break;
-        case ChannelB: serialCfg.portName = "COM2"; break;
-        case ChannelC: serialCfg.portName = "COM3"; break;
-        case ChannelD: serialCfg.portName = "COM4"; break;
-        }
+        serialCfg.portName = QStringLiteral("COM%1").arg(i + 1);
         serialCfg.baudRate = 9600;
         serialCfg.dataBits = 8;
         serialCfg.parity = "NoParity";
@@ -89,14 +71,14 @@ ExperimentCtrl::ExperimentCtrl(QObject *parent)
         });
     }
 
-    for (int i = 0; i < kChannelCount; ++i) {
+    for (int i = 0; i < configuredChannelCount(); ++i) {
         loadSerialConfig(i);
     }
 }
 
 ExperimentCtrl::~ExperimentCtrl()
 {
-    for (int i = 0; i < kChannelCount; ++i) {
+    for (int i = 0; i < configuredChannelCount(); ++i) {
         const Channel channel = static_cast<Channel>(i);
         if (m_scanTimers.value(channel)) {
             m_scanTimers[channel]->stop();
@@ -251,22 +233,7 @@ bool ExperimentCtrl::startExperiment(int channel, int creatorId)
         return false;
     }
 
-    const int deviceExperimentId = response.value(QStringLiteral("experiment_id"), 0).toInt();
-    QVariantMap experimentData = buildExperimentData(params, creatorId);
-    if (deviceExperimentId > 0) {
-        experimentData.insert(QStringLiteral("id"), deviceExperimentId);
-    }
-
-    const int previousLatestExperimentId = findLatestExperimentId(m_dbManager);
-    const bool added = m_dbManager ? m_dbManager->addExperiment(experimentData) : false;
-    int experimentId = deviceExperimentId;
-    if (!added) {
-        emit operationFailed(tr("创建本地实验记录失败"));
-        return false;
-    }
-    if (experimentId <= 0 || experimentId <= previousLatestExperimentId) {
-        experimentId = findLatestExperimentId(m_dbManager);
-    }
+    const int experimentId = response.value(QStringLiteral("experiment_id"), 0).toInt();
     if (experimentId <= 0) {
         emit operationFailed(tr("创建实验失败"));
         return false;
@@ -309,10 +276,6 @@ bool ExperimentCtrl::stopExperiment(int channel)
     }
 
     const int experimentId = m_experimentIds.value(ch, 0);
-    if (experimentId > 0 && m_dbManager) {
-        m_dbManager->updateExperimentStatus(experimentId, 1);
-    }
-
     m_runningFlags[ch] = false;
     m_currentScanCounts[ch] = 0;
     m_startTimes[ch] = 0;
@@ -331,7 +294,9 @@ void ExperimentCtrl::syncExperimentChannelsFromDevice()
     }
 
     const QVariantList channels = m_dataTransmitCtrl->experimentChannels();
-    for (int channelIndex = 0; channelIndex < channels.size() && channelIndex < kChannelCount; ++channelIndex) {
+    for (int channelIndex = 0;
+         channelIndex < channels.size() && channelIndex < configuredChannelCount();
+         ++channelIndex) {
         const Channel channel = static_cast<Channel>(channelIndex);
         const QVariantMap channelStatus = channels.at(channelIndex).toMap();
         const bool running = channelStatus.value(QStringLiteral("running")).toBool();
@@ -359,6 +324,26 @@ void ExperimentCtrl::syncExperimentChannelsFromDevice()
     }
 }
 
+int ExperimentCtrl::channelCount() const
+{
+    return configuredChannelCount();
+}
+
+QString ExperimentCtrl::channelName(int channel) const
+{
+    if (!isValidChannelIndex(channel)) {
+        return QString();
+    }
+
+    return deviceProfile().channelName(channel);
+}
+
+QString ExperimentCtrl::channelDisplayName(int channel) const
+{
+    const QString name = channelName(channel);
+    return name.isEmpty() ? QString() : tr("%1通道").arg(name);
+}
+
 void ExperimentCtrl::finalizeStoppedChannel(Channel channel, int channelIndex, int experimentId, bool emitSignal)
 {
     if (m_scanTimers.value(channel)) {
@@ -366,10 +351,6 @@ void ExperimentCtrl::finalizeStoppedChannel(Channel channel, int channelIndex, i
     }
     if (m_experimentTimers.value(channel)) {
         m_experimentTimers[channel]->stop();
-    }
-
-    if (experimentId > 0 && m_dbManager) {
-        m_dbManager->updateExperimentStatus(experimentId, 1);
     }
 
     m_runningFlags[channel] = false;
@@ -540,13 +521,7 @@ int ExperimentCtrl::calculateTotalSeconds(int days, int hours, int minutes, int 
 
 QString ExperimentCtrl::getChannelKey(int channel) const
 {
-    switch (channel) {
-    case 0: return QStringLiteral("ChannelA");
-    case 1: return QStringLiteral("ChannelB");
-    case 2: return QStringLiteral("ChannelC");
-    case 3: return QStringLiteral("ChannelD");
-    default: return QStringLiteral("Unknown");
-    }
+    return deviceProfile().channelKey(channel);
 }
 
 QString ExperimentCtrl::getDeviceId(int channel) const
@@ -649,32 +624,6 @@ bool ExperimentCtrl::sendRequestAndWait(const QString &command,
         *response = replyPayload;
     }
     return success;
-}
-
-QVariantMap ExperimentCtrl::buildExperimentData(const ExperimentParams &params, int creatorId) const
-{
-    QVariantMap experimentData;
-    experimentData.insert("project_id", params.projectId);
-    experimentData.insert("sample_name", params.sampleName);
-    experimentData.insert("operator_name", params.operatorName);
-    experimentData.insert("description", params.description);
-    experimentData.insert("creator_id", creatorId);
-    experimentData.insert("duration", calculateTotalSeconds(params.durationDays,
-                                                            params.durationHours,
-                                                            params.durationMinutes,
-                                                            params.durationSeconds));
-    experimentData.insert("interval", calculateTotalSeconds(0,
-                                                            params.intervalHours,
-                                                            params.intervalMinutes,
-                                                            params.intervalSeconds));
-    experimentData.insert("count", params.scanCount);
-    experimentData.insert("temperature_control", params.temperatureControl);
-    experimentData.insert("target_temp", params.targetTemperature);
-    experimentData.insert("scan_range_start", params.scanRangeStart);
-    experimentData.insert("scan_range_end", params.scanRangeEnd);
-    experimentData.insert("scan_step", params.scanStep);
-    experimentData.insert("status", 0);
-    return experimentData;
 }
 
 ExperimentCtrl::ExperimentParams ExperimentCtrl::paramsFromVariantMap(const QVariantMap &params) const

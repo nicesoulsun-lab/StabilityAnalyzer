@@ -1,5 +1,6 @@
 import QtQuick 2.12
 import QtQuick.Controls 2.12
+import QtQuick.Dialogs 1.2
 import QtQuick.Layouts 1.12
 import "component"
 
@@ -22,6 +23,17 @@ Item {
     property int lightCurveRequestId: 0
     property int lightCurveTotalCount: 0
     property bool lightCurvesTruncated: false
+    property bool autoStartExport: false
+    property bool reportExporting: false
+    property bool reportSelectingOutputDirectory: false
+    property int reportPreviousTabIndex: -1
+    property string reportStage: ""
+    property string reportTempDirectory: ""
+    property string reportRawCurvePath: ""
+    property string reportReferenceCurvePath: ""
+    property string reportInstabilityPath: ""
+    property string reportOutputDirectory: ""
+    readonly property bool reportBusy: reportExporting || reportSelectingOutputDirectory
 
     signal backRequested()
 
@@ -252,7 +264,8 @@ Item {
     function currentTabSource() {
         // 统一在这里维护页签和子页面的映射，子页面创建时通过 Loader 注入 detailPage。
         if (currentTabIndex === 1)
-            return "curve/InstabilityCurvePage.qml"
+            if (currentTabIndex === 1)
+                return "curve/InstabilityCurvePage.qml"
         if (currentTabIndex === 2)
             return "curve/UniformityIndexPage.qml"
         if (currentTabIndex === 3)
@@ -266,6 +279,209 @@ Item {
         if (currentTabIndex === 0)
             return "curve/LightIntensityCurvePage.qml"
         return "curve/PlaceholderPage.qml"
+    }
+
+    function currentExperimentId() {
+        return experimentData && experimentData.id !== undefined ? Number(experimentData.id) : 0
+    }
+
+    function currentDetailTabItem() {
+        return detailContentLoader ? detailContentLoader.item : null
+    }
+
+    function restoreReportTab() {
+        if (reportPreviousTabIndex >= 0 && currentTabIndex !== reportPreviousTabIndex)
+            openTab(reportPreviousTabIndex)
+        reportPreviousTabIndex = -1
+    }
+
+    function stopReportSequence() {
+        reportStage = ""
+        reportExportTimer.stop()
+    }
+
+    function failReportExport(message) {
+        stopReportSequence()
+        reportExporting = false
+        autoStartExport = false
+        restoreReportTab()
+        if (message)
+            info_pop.openDialog(message)
+    }
+
+    function captureReportImage(item, targetPath, nextStage, failureMessage) {
+        if (!item || !targetPath) {
+            failReportExport(failureMessage)
+            return
+        }
+
+        reportStage = "capturing"
+        item.grabToImage(function(result) {
+            var saved = result && result.saveToFile(targetPath)
+            if (!saved) {
+                detailPage.failReportExport(failureMessage)
+                return
+            }
+            detailPage.reportStage = nextStage
+        })
+    }
+
+    function beginReportExport(outputDirectory) {
+        if (reportBusy)
+            return
+        if (!outputDirectory) {
+            info_pop.openDialog(qsTr("\u8bf7\u5148\u9009\u62e9\u62a5\u544a\u5bfc\u51fa\u76ee\u5f55"))
+            autoStartExport = false
+            return
+        }
+
+        reportTempDirectory = report_ctrl.prepareReportTempDirectory(currentExperimentId())
+        if (!reportTempDirectory) {
+            info_pop.openDialog(qsTr("鏃犳硶鍒涘缓鎶ュ憡涓存椂鐩綍"))
+            autoStartExport = false
+            return
+        }
+
+        reportRawCurvePath = reportTempDirectory + "/image1.png"
+        reportReferenceCurvePath = reportTempDirectory + "/image2.png"
+        reportInstabilityPath = reportTempDirectory + "/image3.png"
+        reportOutputDirectory = outputDirectory
+        reportPreviousTabIndex = currentTabIndex
+        reportExporting = true
+        autoStartExport = false
+        reportStage = "prepareRawLight"
+        reportExportTimer.start()
+    }
+
+    function requestReportOutputDirectory() {
+        if (reportBusy)
+            return
+        if (currentExperimentId() <= 0) {
+            info_pop.openDialog(qsTr("\u5f53\u524d\u5b9e\u9a8c\u8bb0\u5f55\u65e0\u6548\uff0c\u65e0\u6cd5\u5bfc\u51fa\u62a5\u544a"))
+            autoStartExport = false
+            return
+        }
+        if (!report_ctrl) {
+            info_pop.openDialog(qsTr("导出服务不可用"))
+            autoStartExport = false
+            return
+        }
+
+        var initialDirectory = reportOutputDirectory
+        if (!initialDirectory && report_ctrl.defaultReportOutputDirectory)
+            initialDirectory = report_ctrl.defaultReportOutputDirectory()
+        if (initialDirectory && report_ctrl.toFileUrl)
+            reportOutputDialog.folder = report_ctrl.toFileUrl(initialDirectory)
+
+        reportSelectingOutputDirectory = true
+        reportOutputDialog.open()
+    }
+
+    function startReportExport() {
+        requestReportOutputDirectory()
+    }
+
+    function maybeStartAutoExport() {
+        if (!autoStartExport || reportBusy)
+            return
+        if (currentExperimentId() <= 0)
+            return
+        startReportExport()
+    }
+
+    function advanceReportExport() {
+        if (!reportExporting) {
+            stopReportSequence()
+            return
+        }
+
+        if (reportStage === "capturing" || reportStage === "waitingExporter")
+            return
+
+        if (reportStage === "prepareRawLight") {
+            if (currentTabIndex !== 0) {
+                openTab(0)
+                return
+            }
+
+            var rawLightPage = currentDetailTabItem()
+            if (!rawLightPage || !rawLightPage.prepareReportMode)
+                return
+            rawLightPage.prepareReportMode(0)
+            reportStage = "captureRawLight"
+            return
+        }
+
+        if (reportStage === "captureRawLight") {
+            var rawPage = currentDetailTabItem()
+            if (!rawPage || !rawPage.reportDataReady)
+                return
+            captureReportImage(rawPage,
+                               reportRawCurvePath,
+                               "prepareReferenceLight",
+                               qsTr("导出失败：原始光强图抓取失败"))
+            return
+        }
+
+        if (reportStage === "prepareReferenceLight") {
+            if (currentTabIndex !== 0) {
+                openTab(0)
+                return
+            }
+
+            var referenceLightPage = currentDetailTabItem()
+            if (!referenceLightPage || !referenceLightPage.prepareReportMode)
+                return
+            referenceLightPage.prepareReportMode(1)
+            reportStage = "captureReferenceLight"
+            return
+        }
+
+        if (reportStage === "captureReferenceLight") {
+            var referencePage = currentDetailTabItem()
+            if (!referencePage || !referencePage.reportDataReady)
+                return
+            captureReportImage(referencePage,
+                               reportReferenceCurvePath,
+                               "prepareInstability",
+                               qsTr("导出失败：参比光强图抓取失败"))
+            return
+        }
+
+        if (reportStage === "prepareInstability") {
+            if (currentTabIndex !== 1) {
+                openTab(1)
+                return
+            }
+
+            var instabilityPage = currentDetailTabItem()
+            if (!instabilityPage || !instabilityPage.prepareReportMode)
+                return
+            instabilityPage.prepareReportMode()
+            reportStage = "captureInstability"
+            return
+        }
+
+        if (reportStage === "captureInstability") {
+            var instabilityCapturePage = currentDetailTabItem()
+            if (!instabilityCapturePage || !instabilityCapturePage.reportDataReady)
+                return
+            captureReportImage(instabilityCapturePage,
+                               reportInstabilityPath,
+                               "invokeExporter",
+                               qsTr("导出失败：不稳定性图抓取失败"))
+            return
+        }
+
+        if (reportStage === "invokeExporter") {
+            reportStage = "waitingExporter"
+            reportExportTimer.stop()
+            report_ctrl.startExportExperimentReport(currentExperimentId(),
+                                                    reportRawCurvePath,
+                                                    reportReferenceCurvePath,
+                                                    reportInstabilityPath,
+                                                    reportOutputDirectory)
+        }
     }
 
     function initializeDetailTabItem(tabItem) {
@@ -328,8 +544,12 @@ Item {
         }
     }
 
-    onExperimentDataChanged: loadLightIntensityData()
+    onExperimentDataChanged: {
+        loadLightIntensityData()
+        maybeStartAutoExport()
+    }
     onCurrentTabIndexChanged: loadLightIntensityData()
+    onAutoStartExportChanged: maybeStartAutoExport()
     Component.onCompleted: loadLightIntensityData()
     Component.onDestruction: releaseLightIntensityData("destroyed")
 
@@ -371,6 +591,57 @@ Item {
             console.log("[DetailLight][cancelled]",
                         "experimentId=", experimentId,
                         "reason=", reason)
+        }
+    }
+
+    Connections {
+        target: report_ctrl
+        ignoreUnknownSignals: true
+        onReportExportFinished: {
+            if (result.experimentId !== undefined
+                    && detailPage.currentExperimentId() > 0
+                    && Number(result.experimentId) !== detailPage.currentExperimentId()) {
+                return
+            }
+
+            detailPage.stopReportSequence()
+            detailPage.reportExporting = false
+            detailPage.autoStartExport = false
+            detailPage.restoreReportTab()
+            info_pop.openDialog(result && result.message ? result.message : qsTr("报告导出已结束"))
+        }
+    }
+
+    Timer {
+        id: reportExportTimer
+        interval: 180
+        repeat: true
+        onTriggered: detailPage.advanceReportExport()
+    }
+
+    FileDialog {
+        id: reportOutputDialog
+        title: qsTr("\u9009\u62e9\u62a5\u544a\u5bfc\u51fa\u76ee\u5f55")
+        selectFolder: true
+        selectExisting: true
+
+        onAccepted: {
+            detailPage.reportSelectingOutputDirectory = false
+            var selectedDirectory = report_ctrl && report_ctrl.normalizeDirectoryInput
+                    ? report_ctrl.normalizeDirectoryInput(fileUrl.toString())
+                    : ""
+            if (!selectedDirectory) {
+                detailPage.autoStartExport = false
+                info_pop.openDialog(qsTr("\u9009\u62e9\u7684\u5bfc\u51fa\u76ee\u5f55\u65e0\u6548"))
+                return
+            }
+
+            detailPage.beginReportExport(selectedDirectory)
+        }
+
+        onRejected: {
+            detailPage.reportSelectingOutputDirectory = false
+            detailPage.autoStartExport = false
         }
     }
 
@@ -429,6 +700,7 @@ Item {
 
                             MouseArea {
                                 anchors.fill: parent
+                                enabled: !detailPage.reportBusy
                                 onClicked: detailPage.openTab(index)
                             }
                         }
@@ -437,17 +709,45 @@ Item {
                     Item { Layout.fillWidth: true }
 
                     IconButton {
+                        id: exportButton
+                        Layout.preferredWidth: 92
+                        Layout.preferredHeight: 28
+                        Layout.rightMargin: 10
+                        Layout.alignment: Qt.AlignVCenter
+                        text: detailPage.reportExporting ? qsTr("导出中...") : qsTr("导出报告")
+                        enabled: !detailPage.reportBusy
+                        onClicked: detailPage.startReportExport()
+
+                        contentItem: Text {
+                            text: detailPage.reportSelectingOutputDirectory
+                                  ? qsTr("\u9009\u62e9\u76ee\u5f55...")
+                                  : exportButton.text
+                            color: "#FFFFFF"
+                            font.pixelSize: 13
+                            font.family: "Microsoft YaHei"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+
+                        background: Rectangle {
+                            radius: 4
+                            color: exportButton.enabled ? "#2F7CF6" : "#94B4F7"
+                        }
+                    }
+
+                    IconButton {
                         id: backButton
                         Layout.preferredWidth: 100
                         Layout.preferredHeight: 28
                         Layout.rightMargin: 20
                         Layout.alignment: Qt.AlignVCenter
                         text: qsTr("返回记录列表")
+                        enabled: !detailPage.reportBusy
                         onClicked: detailPage.backRequested()
 
                         contentItem: Text {
                             text: backButton.text
-                            color: "#2F7CF6"
+                            color: backButton.enabled ? "#2F7CF6" : "#8EA0BC"
                             font.pixelSize: 13
                             font.family: "Microsoft YaHei"
                             horizontalAlignment: Text.AlignHCenter
@@ -472,6 +772,7 @@ Item {
 
                 onLoaded: {
                     detailPage.initializeDetailTabItem(item)
+                    detailPage.maybeStartAutoExport()
                 }
             }
         }

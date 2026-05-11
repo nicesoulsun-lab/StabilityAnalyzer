@@ -31,6 +31,7 @@ Rectangle {
     property bool customLoading: false
     property int overviewRequestId: 0
     property int customRequestId: 0
+    readonly property bool reportDataReady: !overviewLoading && !customLoading && hasVisibleSeries()
 
     color: "#FFFFFF"
 
@@ -243,6 +244,11 @@ Rectangle {
         customUpperBound = detailPage.ceilToStep(detailPage.maxHeightValue, 1)
 
         requestOverviewData()
+    }
+
+    function prepareReportMode() {
+        currentModeIndex = 0
+        ensureModeData()
     }
 
     function normalizedTextToNumber(textValue, fallback) {

@@ -4,7 +4,7 @@
 # ------------------------------------------------- #
 QT += core gui widgets printsupport xml
 
-TEMPLATE = app
+TEMPLATE = lib
 TARGET = FileExporter
 
 DEFINES += $${upper($$member(TARGET))}_LIBRARY

@@ -1,7 +1,6 @@
-import QtQuick 2.12
-import QtQuick.Controls 2.12
-import QtQuick.Shapes 1.12
-import QtQuick.Layouts 1.12
+﻿import QtQuick 2.9
+import QtQuick.Controls 2.2
+import QtQuick.Layouts 1.3
 
 import "component"
 
@@ -64,7 +63,7 @@ Item {
             }
 
             IconButton {
-                button_text: qsTr("删  除")
+                button_text: qsTr("鍒? 闄?)
                 Layout.preferredWidth: 160
                 Layout.preferredHeight: 45
                 Layout.alignment: Qt.AlignHCenter
@@ -73,11 +72,11 @@ Item {
                 pixelSize: 18
 
                 onClicked: {
-                    console.log("删除选中的实验")
+                    console.log("鍒犻櫎閫変腑鐨勫疄楠?)
 
                     var checkedIds = experiment_list_model.getCheckedExpIds()
                     if (checkedIds.length === 0) {
-                        info_pop.openDialog(qsTr("请勾选实验记录"))
+                        info_pop.openDialog(qsTr("璇峰嬀閫夊疄楠岃褰?))
                         return
                     }
 
@@ -87,3 +86,4 @@ Item {
         }
     }
 }
+

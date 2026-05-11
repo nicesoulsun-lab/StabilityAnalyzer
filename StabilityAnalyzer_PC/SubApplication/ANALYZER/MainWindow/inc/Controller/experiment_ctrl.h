@@ -10,7 +10,6 @@
 #include "modbustaskscheduler.h"
 
 class DataTransmitController;
-class SqlOrmManager;
 
 /**
  * @brief PC 侧实验控制器
@@ -24,6 +23,7 @@ class SqlOrmManager;
 class MAINWINDOW_EXPORT ExperimentCtrl : public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(int channelCount READ channelCount CONSTANT)
 
 public:
     enum Channel {
@@ -82,6 +82,9 @@ public:
     Q_INVOKABLE bool isModbusConnected(int channel) const;
     Q_INVOKABLE void saveSerialConfig(int channel);
     Q_INVOKABLE void loadSerialConfig(int channel);
+    Q_INVOKABLE int channelCount() const;
+    Q_INVOKABLE QString channelName(int channel) const;
+    Q_INVOKABLE QString channelDisplayName(int channel) const;
 
     /**
      * @brief 由 ControllerManager 注入通信控制器
@@ -118,11 +121,9 @@ private:
                             const QVariantMap &payload,
                             QVariantMap *response = nullptr,
                             int timeoutMs = 5000);
-    QVariantMap buildExperimentData(const ExperimentParams &params, int creatorId) const;
     ExperimentParams paramsFromVariantMap(const QVariantMap &params) const;
 
 private:
-    SqlOrmManager *m_dbManager = nullptr;
     ModbusTaskScheduler *m_scheduler = nullptr;
     DataTransmitController *m_dataTransmitCtrl = nullptr;
     QMap<Channel, int> m_slaveIds;

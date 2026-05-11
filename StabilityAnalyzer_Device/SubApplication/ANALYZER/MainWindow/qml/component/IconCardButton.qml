@@ -1,43 +1,43 @@
-import QtQuick 2.12
-import QtQuick.Layouts 1.12
+﻿import QtQuick 2.9
+import QtQuick.Layouts 1.3
 
-// 根元素使用 Item，因为我们需要它作为一个透明的容器，内部包含 Image 和 MouseArea
+// 鏍瑰厓绱犱娇鐢?Item锛屽洜涓烘垜浠渶瑕佸畠浣滀负涓€涓€忔槑鐨勫鍣紝鍐呴儴鍖呭惈 Image 鍜?MouseArea
 Item {
     id: root
 
     // =========================
-    // 对外暴露的属性 (Properties)
+    // 瀵瑰鏆撮湶鐨勫睘鎬?(Properties)
     // =========================
     
-    // 按钮尺寸
+    // 鎸夐挳灏哄
     property int btnWidth: 170
     property int btnHeight: 90
     
-    // 图片资源
+    // 鍥剧墖璧勬簮
     property url iconSource: ""
     
-    // 是否启用悬停效果 (可选)
+    // 鏄惁鍚敤鎮仠鏁堟灉 (鍙€?
     property bool enableHover: true
 
     // =========================
-    // 对外暴露的信号 (Signals)
+    // 瀵瑰鏆撮湶鐨勪俊鍙?(Signals)
     // =========================
     
-    // 定义一个点击信号，供外部连接
+    // 瀹氫箟涓€涓偣鍑讳俊鍙凤紝渚涘閮ㄨ繛鎺?
     signal clicked()
 
     // =========================
-    // 内部实现
+    // 鍐呴儴瀹炵幇
     // =========================
 
-    // 1. 应用尺寸
+    // 1. 搴旂敤灏哄
     width: btnWidth
     height: btnHeight
 
-    // 2. 点击缩放动画逻辑
-    // 绑定到内部 mouseArea 的 pressed 状态
+    // 2. 鐐瑰嚮缂╂斁鍔ㄧ敾閫昏緫
+    // 缁戝畾鍒板唴閮?mouseArea 鐨?pressed 鐘舵€?
     scale: mouseArea.pressed ? 0.92 : 1.0
-    transformOrigin: Item.Center // 关键：以中心为轴缩放
+    transformOrigin: Item.Center // 鍏抽敭锛氫互涓績涓鸿酱缂╂斁
 
     Behavior on scale {
         NumberAnimation {
@@ -46,20 +46,20 @@ Item {
         }
     }
 
-    // 3. 背景/图标图片
+    // 3. 鑳屾櫙/鍥炬爣鍥剧墖
     Image {
         anchors.fill: parent
         source: root.iconSource
         fillMode: Image.PreserveAspectFit
         
-        // 可选：点击时稍微变暗，增加质感
+        // 鍙€夛細鐐瑰嚮鏃剁◢寰彉鏆楋紝澧炲姞璐ㄦ劅
         opacity: mouseArea.pressed ? 0.85 : 1.0
         Behavior on opacity {
             NumberAnimation { duration: 100 }
         }
     }
 
-    // 4. 鼠标交互区域
+    // 4. 榧犳爣浜や簰鍖哄煙
     MouseArea {
         id: mouseArea
         anchors.fill: parent
@@ -67,7 +67,7 @@ Item {
         cursorShape: Qt.PointingHandCursor
 
         onClicked: {
-            // 触发对外暴露的信号
+            // 瑙﹀彂瀵瑰鏆撮湶鐨勪俊鍙?
             root.clicked()
         }
     }

@@ -15,7 +15,7 @@ Popup {
     padding: 0
 
     property var projectNameList: []
-    property var channelOptions: ["A", "B", "C", "D"]
+    property var channelOptions: []
     property var availableChannelOptions: []
     property var availableChannelIndexes: []
     property var scanRangeStartModel: []
@@ -32,6 +32,18 @@ Popup {
     function refreshProjectList() {
         projectNameList = data_ctrl.getProjectName()
         projectCombo.model = projectNameList
+    }
+
+    function refreshChannelOptions() {
+        var nextOptions = []
+        var count = experiment_ctrl ? experiment_ctrl.channelCount : 4
+        for (var i = 0; i < count; ++i) {
+            if (experiment_ctrl && experiment_ctrl.channelName)
+                nextOptions.push(experiment_ctrl.channelName(i))
+            else
+                nextOptions.push(String.fromCharCode(65 + i))
+        }
+        channelOptions = nextOptions
     }
 
     function currentChannel() {
@@ -213,6 +225,7 @@ Popup {
     }
 
     Component.onCompleted: {
+        refreshChannelOptions()
         initModels()
         refreshAvailableChannels(0)
         loadChannelParams()

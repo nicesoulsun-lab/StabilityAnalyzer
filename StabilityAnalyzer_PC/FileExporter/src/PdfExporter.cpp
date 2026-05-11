@@ -1,10 +1,144 @@
 #include "PdfExporter.h"
 #include <QDebug>
+#include <QCoreApplication>
+#include <QColor>
 #include <QDateTime>
+#include <QDomDocument>
+#include <QDir>
+#include <QDirIterator>
+#include <QFile>
+#include <QFileInfo>
+#include <QProcess>
+#include <QRegularExpression>
+#include <QStandardPaths>
+#include <QTextStream>
 #include "../Quazip/inc/quazip.h"
 #include "../Quazip/inc/quazipfile.h"
 #include "../Quazip/inc/JlCompress.h"
 #include "logmanager.h"
+
+namespace {
+
+#ifdef Q_OS_WIN
+bool exportWithMicrosoftWord(const QString &docxPath, const QString &pdfPath)
+{
+    const QString generatedPdfPath = QDir(pdfPath).filePath(QFileInfo(docxPath).completeBaseName() + ".pdf");
+    QFile::remove(generatedPdfPath);
+
+    const QString cscriptPath = QStandardPaths::findExecutable(QStringLiteral("cscript.exe"));
+    if (cscriptPath.isEmpty()) {
+        qWarning() << "Unable to find cscript.exe for Microsoft Word fallback";
+#ifdef Q_OS_WIN
+        qWarning() << "Trying Microsoft Word automation fallback";
+        return exportWithMicrosoftWord(docxPath, pdfPath);
+#else
+        return false;
+#endif
+    }
+
+    const QString nativeDocxPath = QDir::toNativeSeparators(QFileInfo(docxPath).absoluteFilePath());
+    const QString nativePdfPath = QDir::toNativeSeparators(generatedPdfPath);
+    const QString logPath = QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
+                                .filePath(QStringLiteral("stability_word_export.log"));
+    const QString scriptPath = QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
+                                   .filePath(QStringLiteral("stability_word_export.vbs"));
+    QFile::remove(logPath);
+    QFile scriptFile(scriptPath);
+    if (!scriptFile.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        qWarning() << "Unable to create VBScript file for Word fallback:" << scriptPath;
+#ifdef Q_OS_WIN
+        qWarning() << "Trying Microsoft Word automation fallback";
+        return exportWithMicrosoftWord(docxPath, pdfPath);
+#else
+        return false;
+#endif
+    }
+
+    QTextStream scriptStream(&scriptFile);
+    scriptStream.setCodec("UTF-8");
+    scriptStream
+        << "On Error Resume Next\n"
+        << "Dim docPath, pdfPath, logPath, wordApp, document, fso, logFile\n"
+        << "docPath = WScript.Arguments(0)\n"
+        << "pdfPath = WScript.Arguments(1)\n"
+        << "logPath = WScript.Arguments(2)\n"
+        << "Set fso = CreateObject(\"Scripting.FileSystemObject\")\n"
+        << "Sub LogLine(msg)\n"
+        << "  WScript.Echo msg\n"
+        << "  Set logFile = fso.OpenTextFile(logPath, 8, True)\n"
+        << "  logFile.WriteLine msg\n"
+        << "  logFile.Close\n"
+        << "End Sub\n"
+        << "LogLine \"WORD_STEP:create\"\n"
+        << "Set wordApp = CreateObject(\"Word.Application\")\n"
+        << "If Err.Number <> 0 Then LogLine \"WORD_ERR:create:\" & Err.Description : WScript.Quit 10\n"
+        << "wordApp.Visible = False\n"
+        << "wordApp.DisplayAlerts = 0\n"
+        << "wordApp.ScreenUpdating = False\n"
+        << "On Error Resume Next\n"
+        << "wordApp.AutomationSecurity = 3\n"
+        << "wordApp.Options.SaveNormalPrompt = False\n"
+        << "wordApp.Options.BackgroundSave = False\n"
+        << "wordApp.Options.CheckSpellingAsYouType = False\n"
+        << "wordApp.Options.CheckGrammarAsYouType = False\n"
+        << "LogLine \"WORD_STEP:open\"\n"
+        << "Set document = wordApp.Documents.Open(docPath, False, False, False, \"\", \"\", False, \"\", \"\", 0, 0, False, True, 0, True, \"\")\n"
+        << "If Err.Number <> 0 Then LogLine \"WORD_ERR:open:\" & Err.Description : wordApp.Quit : WScript.Quit 11\n"
+        << "LogLine \"WORD_STEP:export\"\n"
+        << "document.ExportAsFixedFormat pdfPath, 17\n"
+        << "If Err.Number <> 0 Then LogLine \"WORD_ERR:export:\" & Err.Description : document.Close False : wordApp.Quit : WScript.Quit 12\n"
+        << "document.Close False\n"
+        << "wordApp.Quit\n"
+        << "LogLine \"WORD_STEP:done\"\n"
+        << "WScript.Quit 0\n";
+    scriptFile.close();
+
+    QProcess process;
+    process.start(cscriptPath,
+                  QStringList{QStringLiteral("//nologo"),
+                              QDir::toNativeSeparators(scriptPath),
+                              nativeDocxPath,
+                              nativePdfPath,
+                              QDir::toNativeSeparators(logPath)});
+    if (!process.waitForStarted(10000)) {
+        qWarning() << "Failed to start cscript Word fallback:" << process.errorString();
+        QFile::remove(scriptPath);
+        QFile::remove(logPath);
+        return false;
+    }
+
+    if (!process.waitForFinished(60000)) {
+        process.kill();
+        process.waitForFinished(5000);
+        qWarning() << "cscript Word fallback timed out:" << process.errorString();
+        qWarning() << "Word fallback partial stdout:" << process.readAllStandardOutput();
+        qWarning() << "Word fallback partial stderr:" << process.readAllStandardError();
+        QFile logFile(logPath);
+        if (logFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            qWarning() << "Word fallback stage log:" << logFile.readAll();
+            logFile.close();
+        }
+        QFile::remove(scriptPath);
+        QFile::remove(logPath);
+        return false;
+    }
+
+    QFile::remove(scriptPath);
+    qDebug() << "Word fallback exitCode:" << process.exitCode();
+    qDebug() << "Word fallback stdout:" << process.readAllStandardOutput();
+    qDebug() << "Word fallback stderr:" << process.readAllStandardError();
+    QFile logFile(logPath);
+    if (logFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qDebug() << "Word fallback stage log:" << logFile.readAll();
+        logFile.close();
+    }
+    QFile::remove(logPath);
+
+    return process.exitCode() == 0 && QFileInfo::exists(generatedPdfPath);
+}
+#endif
+
+} // namespace
 
 PdfExporter::PdfExporter()
 {
@@ -16,8 +150,8 @@ PdfExporter::~PdfExporter()
 }
 
 bool PdfExporter::exportToFile(const QString& filePath,
-                              const QList<QMap<QString, QVariant>>& data,
-                              const QMap<QString, QVariant>& options)
+                               const QList<QMap<QString, QVariant>>& data,
+                               const QMap<QString, QVariant>& options)
 {
     Q_UNUSED(data)
     Q_UNUSED(options)
@@ -66,8 +200,14 @@ bool PdfExporter::exportFromTemplate(const QString &templatePath, const QString 
 
     //替换文字占位符，对于图片的话也是这样替换，只不过需要找一下对应的xml里面的图片占位符的位置，然后这一段替换
     QString content = QString::fromUtf8(xml);
-    for (auto it = data.begin(); it != data.end(); ++it)
-        content.replace("{" + it.key() + "}", it.value().toString());
+    for (auto it = data.begin(); it != data.end(); ++it) {
+        QString placeholder = it.key();
+        if (placeholder.startsWith("{") && placeholder.endsWith("}") && placeholder.size() > 2) {
+            placeholder = placeholder.mid(1, placeholder.size() - 2);
+        }
+
+        content.replace(QString("{{%1}}").arg(placeholder), escapeXml(it.value().toString()));
+    }
 
     //以 WriteOnly 重新打开同一文件，把替换后的内容写回去
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
@@ -151,7 +291,7 @@ bool PdfExporter::exportFromTemplate(const QString &templatePath, const QString 
     }
 
     //删除不再用的文件,暂时不删除，测试看下
-//    QDir(tempDir).removeRecursively();
+    //    QDir(tempDir).removeRecursively();
     QFile::remove(tempFilePath);
 
     //导出为pdf文件
@@ -509,10 +649,10 @@ bool PdfExporter::extractFile(const QString &zipPath, const QString &targetDir)
         file.close();
 
         // 设置文件权限
-//        if (fileInfo.externalAttr != 0) {
-//            QFile::setPermissions(absPath,
-//                static_cast<QFile::Permissions>(fileInfo.externalAttr >> 16));
-//        }
+        //        if (fileInfo.externalAttr != 0) {
+        //            QFile::setPermissions(absPath,
+        //                static_cast<QFile::Permissions>(fileInfo.externalAttr >> 16));
+        //        }
 
         // 设置文件时间戳
         QDateTime dt;
@@ -522,7 +662,7 @@ bool PdfExporter::extractFile(const QString &zipPath, const QString &targetDir)
         dt.setTime(QTime(fileInfo.dateTime.time().hour(),
                          fileInfo.dateTime.time().minute(),
                          fileInfo.dateTime.time().second()));
-//        QFile(absPath).setFileTime(dt, QFileDevice::FileModificationTime);
+        //        QFile(absPath).setFileTime(dt, QFileDevice::FileModificationTime);
 
         if (totalBytes != fileInfo.uncompressedSize) {
             qWarning() << "Size mismatch for:" << absPath
@@ -565,7 +705,7 @@ bool PdfExporter::compressFile(const QString &zipPath, const QString &sourceDir)
             if (!addedDirs.contains(zipDirPath)) {
                 QuaZipFile zipFile(&newZip);
                 QuaZipNewInfo newInfo(zipDirPath);
-//                newInfo.externalAttr = (fi.permissions() | 0x10) << 16; // 保留权限+目录标志
+                //                newInfo.externalAttr = (fi.permissions() | 0x10) << 16; // 保留权限+目录标志
 
                 if (!zipFile.open(QIODevice::WriteOnly, newInfo)) {
                     qWarning() << "Failed to create directory entry:" << zipDirPath
@@ -587,7 +727,7 @@ bool PdfExporter::compressFile(const QString &zipPath, const QString &sourceDir)
 
         QuaZipFile zipFile(&newZip);
         QuaZipNewInfo newInfo(relativePath, filePath);
-//        newInfo.externalAttr = fi.permissions() << 16; // 保留文件权限
+        //        newInfo.externalAttr = fi.permissions() << 16; // 保留文件权限
 
         if (!zipFile.open(QIODevice::WriteOnly, newInfo)) {
             qWarning() << "Failed to open ZIP entry:" << relativePath
@@ -787,19 +927,54 @@ bool PdfExporter::copyFile(const QString &sourcePath, const QString &destination
 //生成pdf文件
 bool PdfExporter::docxToPdf(const QString &docxPath, const QString &pdfPath)
 {
-    QProcess process;
-    QString libreOfficeCmd = "";
+    const QString generatedPdfPath = QDir(pdfPath).filePath(QFileInfo(docxPath).completeBaseName() + ".pdf");
+    QFile::remove(generatedPdfPath);
 
-    // 根据自己的安装路径设置，一定要绝对路径，相对路径不行，会找不到soffice
+    QString libreOfficeCmd;
+    QStringList candidateCommands;
+    const QString bundledDir = QDir(QCoreApplication::applicationDirPath())
+            .filePath(QStringLiteral("LibreOffice/program"));
+
 #ifdef Q_OS_UNIX
-    libreOfficeCmd = "/opt/libreoffice25.8/program/soffice"; // Linux路径
+    candidateCommands << QDir(bundledDir).filePath(QStringLiteral("soffice"))
+                      << QStringLiteral("/opt/libreoffice25.8/program/soffice");
 #else
-//    libreOfficeCmd = "D:/soft/libreoffice/program/soffice.exe"; // Windows路径 C:\Program Files\LibreOffice
-    libreOfficeCmd = "C:/Program Files/LibreOffice/program/soffice.exe"; //window路径，打包libreoffice进exe里面，libreoffice安装路径默认为 C:\Program Files\LibreOffice
-        #endif
+    candidateCommands << QStringLiteral("C:/Program Files/LibreOffice/program/soffice.exe")
+                      << QDir(bundledDir).filePath(QStringLiteral("soffice.exe"))
+                      << QStringLiteral("C:/Program Files (x86)/LibreOffice/program/soffice.exe");
+#endif
 
-            // 测试命令：
-            // /opt/libreoffice25.8/program/soffice  --headless  -convert-to  pdf  --outdir  pdf文件输出路径   xxx.docx输入路径
+    const QString pathExecutable = QStandardPaths::findExecutable(QStringLiteral("soffice"));
+    if (!pathExecutable.isEmpty()) {
+        candidateCommands << pathExecutable;
+    }
+
+    for (const QString &candidate : candidateCommands) {
+        if (candidate.isEmpty()) {
+            continue;
+        }
+
+        QFileInfo candidateInfo(candidate);
+        if (candidateInfo.exists() && candidateInfo.isFile()) {
+            libreOfficeCmd = candidateInfo.absoluteFilePath();
+            break;
+        }
+    }
+
+    if (libreOfficeCmd.isEmpty()) {
+        qWarning() << "Unable to find LibreOffice soffice executable";
+#ifdef Q_OS_WIN
+        qWarning() << "Trying Microsoft Word automation fallback";
+        return exportWithMicrosoftWord(docxPath, pdfPath);
+#else
+        return false;
+#endif
+    }
+
+    QDir().mkpath(pdfPath);
+    QProcess process;
+    qDebug() << "Using LibreOffice executable:" << libreOfficeCmd;
+
     QStringList args = {
         "--headless",
         "--norestore",
@@ -809,17 +984,45 @@ bool PdfExporter::docxToPdf(const QString &docxPath, const QString &pdfPath)
         "--convert-to", "pdf",
         "--outdir", pdfPath,
         docxPath
-};
+    };
 
     process.start(libreOfficeCmd, args);
-    if (!process.waitForFinished(15000)) {
-        qWarning() << "PDF转换超时:" << process.errorString();
+    if (!process.waitForStarted(10000)) {
+        qWarning() << "Failed to start LibreOffice:" << process.errorString();
+#ifdef Q_OS_WIN
+        qWarning() << "Trying Microsoft Word automation fallback";
+        return exportWithMicrosoftWord(docxPath, pdfPath);
+#else
         return false;
+#endif
     }
-    qDebug()<<"llllllll"<<pdfPath<<docxPath;
-    qDebug() << "退出码:" << process.exitCode();
-    qDebug() << "标准输出:" << process.readAllStandardOutput();
-    qDebug() << "标准错误:" << process.readAllStandardError(); // 这里最关键！
-    return process.exitCode() == 0;
+
+    if (!process.waitForFinished(60000)) {
+        process.kill();
+        process.waitForFinished(5000);
+        qWarning() << "PDF转换超时:" << process.errorString();
+#ifdef Q_OS_WIN
+        qWarning() << "Trying Microsoft Word automation fallback";
+        return exportWithMicrosoftWord(docxPath, pdfPath);
+#else
+        return false;
+#endif
+    }
+    const QByteArray stdOut = process.readAllStandardOutput();
+    const QByteArray stdErr = process.readAllStandardError();
+    qDebug() << "LibreOffice exitCode:" << process.exitCode();
+    qDebug() << "LibreOffice stdout:" << stdOut;
+    qDebug() << "LibreOffice stderr:" << stdErr;
+
+    if (process.exitCode() == 0 && QFileInfo::exists(generatedPdfPath)) {
+        return true;
+    }
+
+#ifdef Q_OS_WIN
+    qWarning() << "LibreOffice conversion did not produce a PDF, trying Microsoft Word automation fallback";
+    return exportWithMicrosoftWord(docxPath, pdfPath);
+#else
+    return false;
+#endif
 
 }

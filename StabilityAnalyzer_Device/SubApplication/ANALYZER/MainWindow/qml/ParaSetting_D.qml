@@ -1,6 +1,6 @@
-import QtQuick 2.12
-import QtQuick.Controls 2.12
-import QtQuick.Layouts 1.12
+﻿import QtQuick 2.9
+import QtQuick.Controls 2.2
+import QtQuick.Layouts 1.3
 import "component"
 
 Item {
@@ -10,16 +10,16 @@ Item {
 
     objectName: "ParaSetting_D"
 
-    // 项目名称列表
+    // 椤圭洰鍚嶇О鍒楄〃
     property var nameList: data_ctrl.getProjectName()
-    // 通道标识：3-通道D
+    // 閫氶亾鏍囪瘑锛?-閫氶亾D
     property int channel: 3
-    // 单次扫描所需时间（秒），便于后续修改
+    // 鍗曟鎵弿鎵€闇€鏃堕棿锛堢锛夛紝渚夸簬鍚庣画淇敼
     property int scanTime: 20
-    // 防止循环计算的标志
+    // 闃叉寰幆璁＄畻鐨勬爣蹇?
     property bool isCalculating: false
 
-    // 获取持续时间总秒数
+    // 鑾峰彇鎸佺画鏃堕棿鎬荤鏁?
     function getDurationSeconds() {
         var days = parseInt(continue_time_day_edit.text) || 0
         var hours = parseInt(continue_time_hour_edit.text) || 0
@@ -28,7 +28,7 @@ Item {
         return days * 86400 + hours * 3600 + minutes * 60 + seconds
     }
 
-    // 获取间隔时间总秒数
+    // 鑾峰彇闂撮殧鏃堕棿鎬荤鏁?
     function getIntervalSeconds() {
         var hours = parseInt(interval_time_hour_edit.text) || 0
         var minutes = parseInt(interval_time_min_edit.text) || 0
@@ -36,20 +36,20 @@ Item {
         return hours * 3600 + minutes * 60 + seconds
     }
 
-    // 检查是否填写了所有必填字段
+    // 妫€鏌ユ槸鍚﹀～鍐欎簡鎵€鏈夊繀濉瓧娈?
     function hasAllRequiredFields() {
-        // 样品名称不能为空
+        // 鏍峰搧鍚嶇О涓嶈兘涓虹┖
         if (sample_name_edit.text === "") return false
-        // 测试者不能为空
+        // 娴嬭瘯鑰呬笉鑳戒负绌?
         if (sampler_edit.text === "") return false
-        // 持续时间必须大于0
+        // 鎸佺画鏃堕棿蹇呴』澶т簬0
         if (getDurationSeconds() <= 0) return false
-        // 间隔时间必须大于0
+        // 闂撮殧鏃堕棿蹇呴』澶т簬0
         if (getIntervalSeconds() <= 0) return false
         return true
     }
 
-    // 根据持续时间和间隔时间自动计算扫描次数
+    // 鏍规嵁鎸佺画鏃堕棿鍜岄棿闅旀椂闂磋嚜鍔ㄨ绠楁壂鎻忔鏁?
     function calculateScanCount() {
         if (isCalculating) return
         isCalculating = true
@@ -57,10 +57,10 @@ Item {
         var duration = getDurationSeconds()
         var interval = getIntervalSeconds()
 
-        // 只有当持续时间和间隔时间都大于0时才计算
+        // 鍙湁褰撴寔缁椂闂村拰闂撮殧鏃堕棿閮藉ぇ浜?鏃舵墠璁＄畻
         if (duration > 0 && interval > 0) {
             var scanCount = Math.floor(duration / interval)
-            // 确保至少扫描1次
+            // 纭繚鑷冲皯鎵弿1娆?
             if (scanCount < 1) {
                 scanCount = 1
             }
@@ -70,21 +70,21 @@ Item {
         isCalculating = false
     }
 
-    // 扫描区间下拉框数据模型（bottom：0~55）
+    // 鎵弿鍖洪棿涓嬫媺妗嗘暟鎹ā鍨嬶紙bottom锛?~55锛?
     property var scanRangeBottomModel: []
-    // 扫描区间下拉框数据模型（top：55~0）
+    // 鎵弿鍖洪棿涓嬫媺妗嗘暟鎹ā鍨嬶紙top锛?5~0锛?
     property var scanRangeTopModel: []
 
-    // 初始化扫描区间数据模型
+    // 鍒濆鍖栨壂鎻忓尯闂存暟鎹ā鍨?
     function initScanRangeModels() {
-        // bottom模型：0~55
+        // bottom妯″瀷锛?~55
         scanRangeBottomModel = []
         for (var i = 0; i <= 55; i++) {
             scanRangeBottomModel.push(i)
         }
         region_bottom_combo.model = scanRangeBottomModel
 
-        // top模型：55~0
+        // top妯″瀷锛?5~0
         scanRangeTopModel = []
         for (var j = 55; j >= 0; j--) {
             scanRangeTopModel.push(j)
@@ -92,10 +92,10 @@ Item {
         region_top_combo.model = scanRangeTopModel
     }
 
-    // 组件加载完成时，加载保存的参数
+    // 缁勪欢鍔犺浇瀹屾垚鏃讹紝鍔犺浇淇濆瓨鐨勫弬鏁?
     Component.onCompleted: {
         var params = experiment_ctrl.loadParams(channel)
-        console.log("加载通道D参数:", params)
+        console.log("鍔犺浇閫氶亾D鍙傛暟:", params)
 
         //        if (params.projectId > 0) {
         //            project_combo.currentIndex = params.projectId - 1
@@ -116,19 +116,18 @@ Item {
 
         _count_edit.text = params.scanCount || 0
 
-        // 控温值可能来自 QSettings/Variant，显式归一化为布尔值，避免 "false" 被当成真。
-        var temperatureControlEnabled = (params.temperatureControl === true
+        // 鎺ф俯鍊煎彲鑳芥潵鑷?QSettings/Variant锛屾樉寮忓綊涓€鍖栦负甯冨皵鍊硷紝閬垮厤 "false" 琚綋鎴愮湡銆?        var temperatureControlEnabled = (params.temperatureControl === true
                                          || params.temperatureControl === 1
                                          || params.temperatureControl === "true")
         temp_yes.checked = temperatureControlEnabled
         temp_no.checked = !temperatureControlEnabled
-        // 控温为否时，目标温度输入框不可用
+        // 鎺ф俯涓哄惁鏃讹紝鐩爣娓╁害杈撳叆妗嗕笉鍙敤
         target_temp_edit.enabled = temp_yes.checked
         target_temp_edit.text = params.targetTemperature || 0
 
-        // 设置扫描区间，默认为bottom=0，top=55
+        // 璁剧疆鎵弿鍖洪棿锛岄粯璁や负bottom=0锛宼op=55
         region_bottom_combo.currentIndex = params.scanRangeStart !== undefined ? params.scanRangeStart : 0
-        // top下拉框是倒序的，所以需要计算正确的索引
+        // top涓嬫媺妗嗘槸鍊掑簭鐨勶紝鎵€浠ラ渶瑕佽绠楁纭殑绱㈠紩
         var topValue = params.scanRangeEnd !== undefined ? params.scanRangeEnd : 55
         region_top_combo.currentIndex = 55 - topValue
 
@@ -144,7 +143,7 @@ Item {
         anchors.fill: parent
         Layout.topMargin: 10
 
-        // 初始化扫描区间模型（立即初始化，避免下拉框点不开）
+        // 鍒濆鍖栨壂鎻忓尯闂存ā鍨嬶紙绔嬪嵆鍒濆鍖栵紝閬垮厤涓嬫媺妗嗙偣涓嶅紑锛?
         Component.onCompleted: {
             initScanRangeModels()
         }
@@ -163,20 +162,20 @@ Item {
                 anchors.margins: 0
                 spacing: 14
 
-                // 通道标题
+                // 閫氶亾鏍囬
                 Text {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 20
                     Layout.leftMargin: 50
                     Layout.topMargin: 14
-                    text: qsTr("D通道")
+                    text: qsTr("D閫氶亾")
                     font.pixelSize: 18
                     font.bold: true
                     color: "#005BAC"
                     verticalAlignment: Text.AlignVCenter
                 }
 
-                // 分隔线
+                // 鍒嗛殧绾?
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 1
@@ -188,7 +187,7 @@ Item {
                     Layout.leftMargin: 15; Layout.rightMargin: 15; Layout.bottomMargin: 20
                     spacing: 18
 
-                    // 信息设置区域
+                    // 淇℃伅璁剧疆鍖哄煙
                     Rectangle {
                         Layout.fillHeight: true
                         Layout.preferredWidth: 285
@@ -200,12 +199,12 @@ Item {
                             Layout.fillHeight: true
                             spacing: 20
 
-                            // 信息设置标题
+                            // 淇℃伅璁剧疆鏍囬
                             Label {
                                 Layout.preferredWidth: 285
                                 Layout.preferredHeight: 36
 
-                                text: qsTr("信息设置")
+                                text: qsTr("淇℃伅璁剧疆")
                                 font.pixelSize: 16
                                 font.bold: true
                                 color: "#555557"
@@ -216,7 +215,7 @@ Item {
                                 }
                             }
 
-                            // 选择工程
+                            // 閫夋嫨宸ョ▼
                             RowLayout{
                                 Layout.preferredWidth: 285
                                 Layout.preferredHeight: 36
@@ -226,7 +225,7 @@ Item {
                                 Label {
                                     Layout.preferredWidth: 72
                                     Layout.preferredHeight: 42
-                                    text: qsTr("选择工程")
+                                    text: qsTr("閫夋嫨宸ョ▼")
                                     font.pixelSize: 18
                                     font.bold: true
                                     color: "black"
@@ -247,7 +246,7 @@ Item {
                                 Item { Layout.fillWidth: true }
                             }
 
-                            // 样品名称（必填）
+                            // 鏍峰搧鍚嶇О锛堝繀濉級
                             RowLayout{
                                 Layout.preferredWidth: 285
                                 Layout.preferredHeight: 36
@@ -257,7 +256,7 @@ Item {
                                 Label {
                                     Layout.preferredWidth: 72
                                     Layout.preferredHeight: 42
-                                    text: qsTr("样品名称")
+                                    text: qsTr("鏍峰搧鍚嶇О")
                                     font.pixelSize: 18
                                     font.bold: true
                                     color: "black"
@@ -275,7 +274,7 @@ Item {
                                 Item { Layout.fillWidth: true }
                             }
 
-                            // 测试者（必填）
+                            // 娴嬭瘯鑰咃紙蹇呭～锛?
                             RowLayout{
                                 Layout.preferredWidth: 285
                                 Layout.preferredHeight: 36
@@ -285,7 +284,7 @@ Item {
                                 Label {
                                     Layout.preferredWidth: 72
                                     Layout.preferredHeight: 42
-                                    text: qsTr("测试者")
+                                    text: qsTr("娴嬭瘯鑰?)
                                     font.pixelSize: 18
                                     font.bold: true
                                     color: "black"
@@ -303,7 +302,7 @@ Item {
                                 Item { Layout.fillWidth: true }
                             }
 
-                            // 备注（选填）
+                            // 澶囨敞锛堥€夊～锛?
                             RowLayout{
                                 Layout.preferredWidth: 285
                                 Layout.preferredHeight: 88
@@ -313,7 +312,7 @@ Item {
                                 Label {
                                     Layout.preferredWidth: 72
                                     Layout.preferredHeight: 42
-                                    text: qsTr("备注")
+                                    text: qsTr("澶囨敞")
                                     font.pixelSize: 18
                                     font.bold: true
                                     color: "black"
@@ -335,7 +334,7 @@ Item {
                         }
                     }
 
-                    // 时间设置区域
+                    // 鏃堕棿璁剧疆鍖哄煙
                     Rectangle {
                         Layout.fillHeight: true
                         Layout.preferredWidth: 300
@@ -347,11 +346,11 @@ Item {
                             Layout.fillHeight: true
                             spacing: 16
 
-                            // 时间设置标题
+                            // 鏃堕棿璁剧疆鏍囬
                             Label {
                                 Layout.preferredWidth: 300
                                 Layout.preferredHeight: 36
-                                text: qsTr("时间设置")
+                                text: qsTr("鏃堕棿璁剧疆")
                                 font.pixelSize: 16
                                 font.bold: true
                                 color: "#555557"
@@ -362,7 +361,7 @@ Item {
                                 }
                             }
 
-                            // 持续时间（必填）
+                            // 鎸佺画鏃堕棿锛堝繀濉級
                             RowLayout {
                                 Layout.fillWidth: true
                                 spacing: 8
@@ -371,7 +370,7 @@ Item {
                                 Label {
                                     Layout.preferredWidth: 72
                                     Layout.preferredHeight: 42
-                                    text: qsTr("持续时间")
+                                    text: qsTr("鎸佺画鏃堕棿")
                                     font.pixelSize: 18
                                     font.bold: true
                                     color: "black"
@@ -434,7 +433,7 @@ Item {
                                 Item { Layout.fillWidth: true }
                             }
 
-                            // 持续时间（分钟和秒）
+                            // 鎸佺画鏃堕棿锛堝垎閽熷拰绉掞級
                             RowLayout {
                                 Layout.fillWidth: true
                                 Layout.leftMargin: 14
@@ -500,7 +499,7 @@ Item {
                                 Item { Layout.fillWidth: true }
                             }
 
-                            // 间隔时间（必填）
+                            // 闂撮殧鏃堕棿锛堝繀濉級
                             RowLayout {
                                 Layout.fillWidth: true
                                 spacing: 8
@@ -509,7 +508,7 @@ Item {
                                 Label {
                                     Layout.preferredWidth: 72
                                     Layout.preferredHeight: 42
-                                    text: qsTr("间隔时间")
+                                    text: qsTr("闂撮殧鏃堕棿")
                                     font.pixelSize: 18
                                     font.bold: true
                                     color: "black"
@@ -572,7 +571,7 @@ Item {
                                 Item { Layout.fillWidth: true }
                             }
 
-                            // 间隔时间（秒）
+                            // 闂撮殧鏃堕棿锛堢锛?
                             RowLayout {
                                 Layout.fillWidth: true
                                 Layout.leftMargin: 14
@@ -612,7 +611,7 @@ Item {
                                 Item { Layout.fillWidth: true }
                             }
 
-                            // 扫描次数（自动计算）
+                            // 鎵弿娆℃暟锛堣嚜鍔ㄨ绠楋級
                             RowLayout{
                                 Layout.preferredWidth: 285
                                 Layout.preferredHeight: 36
@@ -622,7 +621,7 @@ Item {
                                 Label {
                                     Layout.preferredWidth: 72
                                     Layout.preferredHeight: 42
-                                    text: qsTr("扫描次数")
+                                    text: qsTr("鎵弿娆℃暟")
                                     font.pixelSize: 18
                                     font.bold: true
                                     color: "black"
@@ -643,7 +642,7 @@ Item {
                         }
                     }
 
-                    // 参数设置区域
+                    // 鍙傛暟璁剧疆鍖哄煙
                     Rectangle {
                         Layout.fillHeight: true
                         Layout.preferredWidth: 320
@@ -655,12 +654,12 @@ Item {
                             Layout.fillHeight: true
                             spacing: 20
 
-                            // 参数设置标题
+                            // 鍙傛暟璁剧疆鏍囬
                             Label {
                                 Layout.preferredWidth: 320
                                 Layout.preferredHeight: 36
 
-                                text: qsTr("参数设置")
+                                text: qsTr("鍙傛暟璁剧疆")
                                 font.pixelSize: 16
                                 font.bold: true
                                 color: "#555557"
@@ -671,7 +670,7 @@ Item {
                                 }
                             }
 
-                            // 控温（默认为否）
+                            // 鎺ф俯锛堥粯璁や负鍚︼級
                             RowLayout{
                                 Layout.preferredWidth: 285
                                 Layout.preferredHeight: 36
@@ -681,7 +680,7 @@ Item {
                                 Label {
                                     Layout.preferredWidth: 72
                                     Layout.preferredHeight: 42
-                                    text: qsTr("控温")
+                                    text: qsTr("鎺ф俯")
                                     font.pixelSize: 18
                                     font.bold: true
                                     color: "black"
@@ -690,19 +689,19 @@ Item {
 
                                 RadioButton {
                                     id: temp_yes
-                                    text: qsTr("是")
+                                    text: qsTr("鏄?)
                                     Layout.alignment: Qt.AlignVCenter
                                     Layout.preferredHeight: 42
                                     font.pixelSize: 16
                                     onCheckedChanged: {
-                                        // 控温为是时，目标温度输入框可用
+                                        // 鎺ф俯涓烘槸鏃讹紝鐩爣娓╁害杈撳叆妗嗗彲鐢?
                                         target_temp_edit.enabled = checked
                                     }
                                 }
 
                                 RadioButton {
                                     id: temp_no
-                                    text: qsTr("否")
+                                    text: qsTr("鍚?)
                                     Layout.alignment: Qt.AlignVCenter
                                     Layout.preferredHeight: 42
                                     font.pixelSize: 16
@@ -711,7 +710,7 @@ Item {
                                 Item { Layout.fillWidth: true }
                             }
 
-                            // 目标温度
+                            // 鐩爣娓╁害
                             RowLayout{
                                 Layout.preferredWidth: 285
                                 Layout.preferredHeight: 36
@@ -721,7 +720,7 @@ Item {
                                 Label {
                                     Layout.preferredWidth: 72
                                     Layout.preferredHeight: 42
-                                    text: qsTr("目标温度")
+                                    text: qsTr("鐩爣娓╁害")
                                     font.pixelSize: 18
                                     font.bold: true
                                     color: "black"
@@ -742,7 +741,7 @@ Item {
                                 Label {
                                     Layout.preferredWidth: 20
                                     Layout.preferredHeight: 42
-                                    text: "℃"
+                                    text: "鈩?
                                     font.pixelSize: 18
                                     font.bold: true
                                     color: "black"
@@ -751,7 +750,7 @@ Item {
                                 Item { Layout.fillWidth: true }
                             }
 
-                            // 扫描区间
+                            // 鎵弿鍖洪棿
                             RowLayout{
                                 Layout.preferredWidth: 285
                                 Layout.preferredHeight: 36
@@ -761,7 +760,7 @@ Item {
                                 Label {
                                     Layout.preferredWidth: 72
                                     Layout.preferredHeight: 42
-                                    text: qsTr("扫描区间")
+                                    text: qsTr("鎵弿鍖洪棿")
                                     font.pixelSize: 18
                                     font.bold: true
                                     color: "black"
@@ -814,7 +813,7 @@ Item {
                                 Item { Layout.fillWidth: true }
                             }
 
-                            // 扫描间隔（必填）
+                            // 鎵弿闂撮殧锛堝繀濉級
                             RowLayout {
                                 Layout.fillWidth: true
                                 spacing: 8
@@ -823,7 +822,7 @@ Item {
                                 Label {
                                     Layout.preferredWidth: 72
                                     Layout.preferredHeight: 42
-                                    text: qsTr("扫描间隔")
+                                    text: qsTr("鎵弿闂撮殧")
                                     font.pixelSize: 18
                                     font.bold: true
                                     color: "black"
@@ -861,9 +860,9 @@ Item {
             }
         }
 
-        // 应用按钮
+        // 搴旂敤鎸夐挳
         IconButton {
-            button_text: qsTr("应   用")
+            button_text: qsTr("搴?  鐢?)
             Layout.preferredWidth: 160
             Layout.preferredHeight: 45
             Layout.alignment: Qt.AlignHCenter
@@ -873,45 +872,45 @@ Item {
             pixelSize: 18
 
             onClicked: {
-                console.log("应用通道D参数设置")
+                console.log("搴旂敤閫氶亾D鍙傛暟璁剧疆")
 
-                // 验证：样品名称必须填写
+                // 楠岃瘉锛氭牱鍝佸悕绉板繀椤诲～鍐?
                 if (project_combo.currentIndex < 0) {
-                    info_pop.openDialog("请选择工程，若暂无工程请先添加工程")
+                    info_pop.openDialog("璇烽€夋嫨宸ョ▼锛岃嫢鏆傛棤宸ョ▼璇峰厛娣诲姞宸ョ▼")
                     return
                 }
                 if (sample_name_edit.text === "") {
-                    info_pop.openDialog("请填写样品名称")
+                    info_pop.openDialog("璇峰～鍐欐牱鍝佸悕绉?)
                     return
                 }
 
-                // 验证：测试者必须填写
+                // 楠岃瘉锛氭祴璇曡€呭繀椤诲～鍐?
                 if (sampler_edit.text === "") {
-                    info_pop.openDialog("请填写测试者")
+                    info_pop.openDialog("璇峰～鍐欐祴璇曡€?)
                     return
                 }
 
-                // 验证：持续时间必须填写
+                // 楠岃瘉锛氭寔缁椂闂村繀椤诲～鍐?
                 if (getDurationSeconds() <= 0) {
-                    info_pop.openDialog("请填写持续时间")
+                    info_pop.openDialog("璇峰～鍐欐寔缁椂闂?)
                     return
                 }
 
-                // 验证：间隔时间必须填写
+                // 楠岃瘉锛氶棿闅旀椂闂村繀椤诲～鍐?
                 if (getIntervalSeconds() <= 0) {
-                    info_pop.openDialog("请填写间隔时间")
+                    info_pop.openDialog("璇峰～鍐欓棿闅旀椂闂?)
                     return
                 }
 
-                // 验证：扫描区间上限必须大于下限
+                // 楠岃瘉锛氭壂鎻忓尯闂翠笂闄愬繀椤诲ぇ浜庝笅闄?
                 var rangeStart = region_bottom_combo.currentIndex
                 var rangeEnd = scanRangeTopModel[region_top_combo.currentIndex]
                 if (rangeEnd <= rangeStart) {
-                    info_pop.openDialog("扫描区间上限必须大于下限")
+                    info_pop.openDialog("鎵弿鍖洪棿涓婇檺蹇呴』澶т簬涓嬮檺")
                     return
                 }
 
-                // 构建参数对象
+                // 鏋勫缓鍙傛暟瀵硅薄
                 var params = {
                     projectId: project_combo.currentIndex + 1,
                     sampleName: sample_name_edit.text,
@@ -932,7 +931,7 @@ Item {
                     scanStep: scan_step_combo.currentText
                 }
 
-                console.log("保存参数:", params)
+                console.log("淇濆瓨鍙傛暟:", params)
                 experiment_ctrl.saveParams(channel, params)
 
                 if(mainStackView.currentItem.objectName === "ParaSetting_D")
@@ -944,3 +943,4 @@ Item {
         }
     }
 }
+

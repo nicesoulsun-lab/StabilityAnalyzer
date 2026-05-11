@@ -1,80 +1,81 @@
-import QtQuick 2.12
-import QtQuick.Controls 2.12
-import QtQuick.Layouts 1.12
+﻿import QtQuick 2.9
+import QtQuick.Controls 2.2
+import QtQuick.Layouts 1.3
 
 RowLayout {
     id: control
     spacing: 10
 
-    // --- 公共属性 ---
-    // true = 无限滚动模式 (默认), false = 进度条百分比模式
+    // --- 鍏叡灞炴€?---
+    // true = 鏃犻檺婊氬姩妯″紡 (榛樿), false = 杩涘害鏉＄櫨鍒嗘瘮妯″紡
     property bool indeterminate: true
-    // 进度值 0.0 - 1.0
+    // 杩涘害鍊?0.0 - 1.0
     property real value: 0.0
 
-    // --- 样式属性 ---
+    // --- 鏍峰紡灞炴€?---
     property color colorBackground: "#f0f0f0"
-    property color colorFill: "#3498db" // 蓝色
-    property color colorText: "#999999" // 灰色文字
+    property color colorFill: "#3498db" // 钃濊壊
+    property color colorText: "#999999" // 鐏拌壊鏂囧瓧
     property int barHeight: 6
 
-    // 进度条轨道容器
+    // 杩涘害鏉¤建閬撳鍣?
     Item {
         Layout.fillWidth: true
         Layout.preferredHeight: control.barHeight
-        clip: true // 防止动画溢出
+        clip: true // 闃叉鍔ㄧ敾婧㈠嚭
 
-        // 1. 背景槽
+        // 1. 鑳屾櫙妲?
         Rectangle {
             anchors.fill: parent
             color: control.colorBackground
             radius: height / 2
         }
 
-        // 2. 填充块 (两种模式共用一个Rectangle，行为不同)
+        // 2. 濉厖鍧?(涓ょ妯″紡鍏辩敤涓€涓猂ectangle锛岃涓轰笉鍚?
         Rectangle {
             id: fillRect
             height: parent.height
             radius: height / 2
             color: control.colorFill
 
-            // --- 宽度逻辑 ---
-            // 模式1(无限): 固定宽度 100
-            // 模式2(进度): 根据 value 动态计算
+            // --- 瀹藉害閫昏緫 ---
+            // 妯″紡1(鏃犻檺): 鍥哄畾瀹藉害 100
+            // 妯″紡2(杩涘害): 鏍规嵁 value 鍔ㄦ€佽绠?
             width: control.indeterminate ? 100 : (parent.width * control.value)
 
-            // --- X轴逻辑 ---
-            // 模式1: 由动画控制
-            // 模式2: 固定在左边 0
+            // --- X杞撮€昏緫 ---
+            // 妯″紡1: 鐢卞姩鐢绘帶鍒?
+            // 妯″紡2: 鍥哄畾鍦ㄥ乏杈?0
             x: control.indeterminate ? x : 0
         }
 
-        // 3. 无限循环动画 (仅在 indeterminate 为 true 时运行)
+        // 3. 鏃犻檺寰幆鍔ㄧ敾 (浠呭湪 indeterminate 涓?true 鏃惰繍琛?
         SequentialAnimation {
             id: marqueeAnim
             running: control.indeterminate && control.visible
             loops: Animation.Infinite
 
-            // 每次循环开始前重置位置到最左边外部
+            // 姣忔寰幆寮€濮嬪墠閲嶇疆浣嶇疆鍒版渶宸﹁竟澶栭儴
             ScriptAction { script: fillRect.x = -fillRect.width }
 
             NumberAnimation {
                 target: fillRect
                 property: "x"
-                from: -100 // 从左侧外部进入
-                to: fillRect.parent.width // 移动到最右侧
+                from: -100 // 浠庡乏渚у閮ㄨ繘鍏?
+                to: fillRect.parent.width // 绉诲姩鍒版渶鍙充晶
                 duration: 1500
                 easing.type: Easing.InOutQuad
             }
         }
     }
 
-    // 4. 百分比文字 (仅在 indeterminate 为 false 时显示)
+    // 4. 鐧惧垎姣旀枃瀛?(浠呭湪 indeterminate 涓?false 鏃舵樉绀?
     UiText {
         visible: !control.indeterminate
-        Layout.preferredWidth: 40 // 预留宽度防止跳动
+        Layout.preferredWidth: 40 // 棰勭暀瀹藉害闃叉璺冲姩
         Layout.alignment: Qt.AlignVCenter
         text: Math.floor(control.value * 100) + "%"
         horizontalAlignment: Text.AlignRight
     }
 }
+

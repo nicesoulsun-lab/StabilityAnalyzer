@@ -12,5 +12,4 @@ SOURCES += \
     $$PWD/src/ExcelExporter.cpp \
     $$PWD/src/ExportManager.cpp \
     $$PWD/src/PdfExporter.cpp \
-    $$PWD/src/TextExporter.cpp \
-    $$PWD/src/main.cpp
+    $$PWD/src/TextExporter.cpp

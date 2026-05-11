@@ -1,11 +1,11 @@
-import QtQuick 2.12
-import QtQuick.Controls 2.12
+﻿import QtQuick 2.9
+import QtQuick.Controls 2.2
 
 Button {
     id: root
 
     // =========================
-    // 自定义属性 (保持不变)
+    // 鑷畾涔夊睘鎬?(淇濇寔涓嶅彉)
     // =========================
     property string button_text: ""
     property color button_color: "transparent"
@@ -20,23 +20,23 @@ Button {
 
     property int pixelSize: 14
     property color text_color: "#005EB6"
-    property string family: "Microsoft YaHei" // 建议给个默认字体，防报错
+    property string family: "Microsoft YaHei" // 寤鸿缁欎釜榛樿瀛椾綋锛岄槻鎶ラ敊
 
     property bool vertical: false
     property color border_color: "transparent"
     property int border_width: 0
 
     // ============================================================
-    // 【核心修复】 动画逻辑重写
+    // 銆愭牳蹇冧慨澶嶃€?鍔ㄧ敾閫昏緫閲嶅啓
     // ============================================================
 
-    // 1. 绑定缩放比例到按钮的按下状态 (down)
-    //    down 是 Button 的原生属性：按下为 true，松开为 false
-    //    按下时变小 (0.92)，松开恢复 (1.0)
+    // 1. 缁戝畾缂╂斁姣斾緥鍒版寜閽殑鎸変笅鐘舵€?(down)
+    //    down 鏄?Button 鐨勫師鐢熷睘鎬э細鎸変笅涓?true锛屾澗寮€涓?false
+    //    鎸変笅鏃跺彉灏?(0.92)锛屾澗寮€鎭㈠ (1.0)
     scale: root.down ? 0.92 : 1.0
 
-    // 2. 使用 Behavior 自动平滑过渡
-    //    无论你点击多快，Qt 都会自动处理数值的过渡，不会卡顿
+    // 2. 浣跨敤 Behavior 鑷姩骞虫粦杩囨浮
+    //    鏃犺浣犵偣鍑诲蹇紝Qt 閮戒細鑷姩澶勭悊鏁板€肩殑杩囨浮锛屼笉浼氬崱椤?
     Behavior on scale {
         NumberAnimation {
             duration: 100
@@ -44,16 +44,16 @@ Button {
         }
     }
 
-    // (移除了原来的 transform: Scale 和 SequentialAnimation 代码)
+    // (绉婚櫎浜嗗師鏉ョ殑 transform: Scale 鍜?SequentialAnimation 浠ｇ爜)
 
     // =========================
-    // 背景样式
+    // 鑳屾櫙鏍峰紡
     // =========================
     background: Rectangle {
         anchors.fill: parent
         radius: root.button_radius
 
-        // 自动处理颜色变化：按下变深，悬停变浅，默认用 button_color
+        // 鑷姩澶勭悊棰滆壊鍙樺寲锛氭寜涓嬪彉娣憋紝鎮仠鍙樻祬锛岄粯璁ょ敤 button_color
         color: root.down ? Qt.darker(root.button_color, 1.1) :
                            (root.hovered ? Qt.lighter(root.button_color, 1.05) : root.button_color)
 
@@ -61,7 +61,7 @@ Button {
         border.color: root.border_color
         border.width: root.border_width
 
-        // 背景图片支持
+        // 鑳屾櫙鍥剧墖鏀寔
         Image {
             id: bgImage
             anchors.fill: parent
@@ -73,7 +73,7 @@ Button {
     }
 
     // =========================
-    // 内容布局 (Loader 动态加载横/竖布局)
+    // 鍐呭甯冨眬 (Loader 鍔ㄦ€佸姞杞芥í/绔栧竷灞€)
     // =========================
     contentItem: Item {
         anchors.fill: parent
@@ -84,7 +84,7 @@ Button {
             sourceComponent: root.vertical ? columnComponent : rowComponent
         }
     }
-    // --- 横向布局组件 (图标在左，文字在右) ---
+    // --- 妯悜甯冨眬缁勪欢 (鍥炬爣鍦ㄥ乏锛屾枃瀛楀湪鍙? ---
     Component {
         id: rowComponent
         Row {
@@ -98,7 +98,7 @@ Button {
                 height: root.icon_source_height
                 fillMode: Image.PreserveAspectFit
                 visible: source !== ""
-                anchors.verticalCenter: parent.verticalCenter // 确保图标也垂直居中
+                anchors.verticalCenter: parent.verticalCenter // 纭繚鍥炬爣涔熷瀭鐩村眳涓?
             }
 
             Text {
@@ -109,8 +109,8 @@ Button {
                 font.family: root.family
                 anchors.verticalCenter: parent.verticalCenter
 
-                // --- 换行核心逻辑 ---
-                // 计算 8 个字符的大致宽度限制
+                // --- 鎹㈣鏍稿績閫昏緫 ---
+                // 璁＄畻 8 涓瓧绗︾殑澶ц嚧瀹藉害闄愬埗
                 width: text.length > 8 ? font.pixelSize * 8 : undefined
                 wrapMode: Text.WrapAnywhere
                 horizontalAlignment: Text.AlignHCenter
@@ -118,7 +118,7 @@ Button {
         }
     }
 
-    // --- 纵向布局组件 (图标在上，文字在下) ---
+    // --- 绾靛悜甯冨眬缁勪欢 (鍥炬爣鍦ㄤ笂锛屾枃瀛楀湪涓? ---
     Component {
         id: columnComponent
         Column {
@@ -143,8 +143,8 @@ Button {
                 font.family: root.family
                 anchors.horizontalCenter: parent.horizontalCenter
 
-                // --- 换行核心逻辑 ---
-                // 纵向布局下，换行通常需要更明确的对齐
+                // --- 鎹㈣鏍稿績閫昏緫 ---
+                // 绾靛悜甯冨眬涓嬶紝鎹㈣閫氬父闇€瑕佹洿鏄庣‘鐨勫榻?
                 width: text.length > 8 ? font.pixelSize * 8 : undefined
                 wrapMode: Text.WrapAnywhere
                 horizontalAlignment: Text.AlignHCenter
@@ -152,3 +152,4 @@ Button {
         }
     }
 }
+

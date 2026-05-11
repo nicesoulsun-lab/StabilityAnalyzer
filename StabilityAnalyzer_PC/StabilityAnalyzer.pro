@@ -17,10 +17,10 @@ SUBDIRS += \
     CommonData \
     LoggerMonitor\
 #    ConfigManager \
-#    FileExporter \
-    QModbusRTUUnit\
+    FileExporter \
+#    QModbusRTUUnit\
     Algorithm\
-#    Quazip\
+    Quazip\
 #    plot\
     DataTransmit \
 #    DataSaver \

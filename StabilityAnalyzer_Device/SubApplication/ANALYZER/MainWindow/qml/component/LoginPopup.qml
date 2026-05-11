@@ -1,6 +1,6 @@
-import QtQuick 2.12
-import QtQuick.Controls 2.12
-import QtQuick.Layouts 1.12
+﻿import QtQuick 2.9
+import QtQuick.Controls 2.2
+import QtQuick.Layouts 1.3
 
 Popup {
     id: root
@@ -14,8 +14,8 @@ Popup {
 
     parent: rootRectangle
 
-    property string confirmText: qsTr("确定")
-    property string cancelText: qsTr("取消")
+    property string confirmText: qsTr("纭畾")
+    property string cancelText: qsTr("鍙栨秷")
     property int buttonWidth: 120
     property int buttonHeight: 40
     property int buttonSpacing: 60
@@ -58,14 +58,14 @@ Popup {
 
             LineEdit {
                 id: usernameInput
-                placeholderText: qsTr("请输入账号")
+                placeholderText: qsTr("璇疯緭鍏ヨ处鍙?)
                 Layout.fillWidth: true
                 Layout.preferredHeight: 60
             }
 
             LineEdit {
                 id: passwordInput
-                placeholderText: qsTr("请输入密码")
+                placeholderText: qsTr("璇疯緭鍏ュ瘑鐮?)
                 Layout.fillWidth: true
                 Layout.preferredHeight: 60
             }
@@ -79,7 +79,7 @@ Popup {
                     text: root.cancelText
                     Layout.preferredWidth: 95
                     Layout.preferredHeight: 40
-                    button_text: qsTr("取消")
+                    button_text: qsTr("鍙栨秷")
                     button_color: "#FFFFFF"
                     text_color: "#19191A"
                     pixelSize: 16
@@ -97,7 +97,7 @@ Popup {
                     text: root.confirmText
                     Layout.preferredWidth: 95
                     Layout.preferredHeight: 40
-                    button_text: qsTr("确认")
+                    button_text: qsTr("纭")
                     button_color: "#3B87E4"
                     text_color: "#FFFFFF"
                     pixelSize: 16
@@ -111,3 +111,4 @@ Popup {
         }
     }
 }
+

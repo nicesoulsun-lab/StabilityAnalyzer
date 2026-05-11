@@ -1,0 +1,5 @@
+{
+    "deviceModel": "four_tower",
+    "channelCount": 4,
+    "channelNames": ["A", "B", "C", "D"]
+}

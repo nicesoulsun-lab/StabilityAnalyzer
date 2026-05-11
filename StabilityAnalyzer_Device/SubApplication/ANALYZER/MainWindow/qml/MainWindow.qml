@@ -1,7 +1,7 @@
-import QtQuick 2.12
-import QtQuick.Window 2.12
-import QtQuick.Controls 2.12
-import QtQuick.Layouts 1.12
+﻿import QtQuick 2.9
+import QtQuick.Window 2.2
+import QtQuick.Controls 2.2
+import QtQuick.Layouts 1.3
 import "component"
 
 Item  {
@@ -15,8 +15,7 @@ Item  {
     property alias rootRectangle: root
     property bool main_loading:false
     property bool home_show: stackView.depth > 2
-    property int user_level: -1  // 1表示普通用户，2表示高级用户 3表示管理员
-    property string user_name: ""
+    property int user_level: -1  // 1琛ㄧず鏅€氱敤鎴凤紝2琛ㄧず楂樼骇鐢ㄦ埛 3琛ㄧず绠＄悊鍛?    property string user_name: ""
 
     Timer{
         interval: 2000
@@ -44,7 +43,7 @@ Item  {
             height: parent.height
             visible: !main_loading
 
-            // 顶部Logo (保持原位置不变，或者你可以根据需要调整)
+            // 椤堕儴Logo (淇濇寔鍘熶綅缃笉鍙橈紝鎴栬€呬綘鍙互鏍规嵁闇€瑕佽皟鏁?
             Item {
 
                 anchors{
@@ -64,9 +63,9 @@ Item  {
 
             UiText{
                 id: titleText
-                text: qsTr("稳定性分析仪")
+                text: qsTr("绋冲畾鎬у垎鏋愪华")
                 anchors.centerIn: parent
-                //向上偏移50像素
+                //鍚戜笂鍋忕Щ50鍍忕礌
                 pixelSize: 55
                 anchors.verticalCenterOffset: -50
             }
@@ -104,3 +103,4 @@ Item  {
         }
     }
 }
+

@@ -1,6 +1,6 @@
-import QtQuick 2.12
-import QtQuick.Controls 2.12
-import QtQuick.Layouts 1.12
+﻿import QtQuick 2.9
+import QtQuick.Controls 2.2
+import QtQuick.Layouts 1.3
 
 ComboBox {
     id: comboBox
@@ -16,7 +16,7 @@ ComboBox {
     property real popHeight: 0
 
 
-    // 主显示内容
+    // 涓绘樉绀哄唴瀹?
     contentItem: Item {
         anchors.fill: parent
         Text{
@@ -35,7 +35,7 @@ ComboBox {
         }
     }
 
-    // 主控件背景（输入框）
+    // 涓绘帶浠惰儗鏅紙杈撳叆妗嗭級
     background: Rectangle {
         implicitWidth: parent.width
         implicitHeight: parent.height
@@ -80,7 +80,7 @@ ComboBox {
                     anchors.left: parent.left
                     anchors.leftMargin: 10
 
-                    // 自定义单选按钮
+                    // 鑷畾涔夊崟閫夋寜閽?
                     Item {
                         width: 20
                         height: 20
@@ -99,11 +99,11 @@ ComboBox {
 
                             Rectangle {
                                 id: radioInner
-                                width: 8   // ← 改小了
-                                height: 8  // ← 改小了
-                                x: 4       // ← 调整居中：(16 - 8) / 2 = 4，但注意外框在 (x=2,y=2)，所以这里相对于 radioOuter 的坐标
+                                width: 8   // 鈫?鏀瑰皬浜?
+                                height: 8  // 鈫?鏀瑰皬浜?
+                                x: 4       // 鈫?璋冩暣灞呬腑锛?16 - 8) / 2 = 4锛屼絾娉ㄦ剰澶栨鍦?(x=2,y=2)锛屾墍浠ヨ繖閲岀浉瀵逛簬 radioOuter 鐨勫潗鏍?
                                 y: 4
-                                radius: 4  // 半径为宽高的一半，保持圆形
+                                radius: 4  // 鍗婂緞涓哄楂樼殑涓€鍗婏紝淇濇寔鍦嗗舰
                                 visible: index === comboBox.currentIndex
                                 color: "#1976D2"
                             }
@@ -133,3 +133,4 @@ ComboBox {
     }
 
 }
+

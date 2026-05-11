@@ -10,6 +10,7 @@
 #include "data_ctrl.h"
 #include "detail_ctrl.h"
 #include "experiment_ctrl.h"
+#include "report_ctrl.h"
 #include "realtime_ctrl.h"
 #include "DataModel/user_sql_listmodel.h"
 #include "DataModel/experiment_listmodel.h"
@@ -28,6 +29,7 @@ public:
         , m_compareCtrl(new compareCtrl(this))
         , m_detailCtrl(new detailCtrl(this))
         , m_experimentCtrl(new ExperimentCtrl(this))
+        , m_reportCtrl(new reportCtrl(this))
         , m_realtimeCtrl(new realtimeCtrl(this))
         , m_userListmodel(new user_sql_listmodel(this))
         , m_experimentListmodel(new experiment_listmodel(this))
@@ -54,6 +56,7 @@ public:
         context->setContextProperty("compare_ctrl", m_compareCtrl);
         context->setContextProperty("detail_ctrl", m_detailCtrl);
         context->setContextProperty("experiment_ctrl", m_experimentCtrl);
+        context->setContextProperty("report_ctrl", m_reportCtrl);
         context->setContextProperty("realtime_ctrl", m_realtimeCtrl);
         context->setContextProperty("user_list_model", m_userListmodel);
         context->setContextProperty("experiment_list_model", m_experimentListmodel);
@@ -67,6 +70,7 @@ public:
     compareCtrl* getCompareCtrl() const { return m_compareCtrl; }
     detailCtrl* getDetailCtrl() const { return m_detailCtrl; }
     ExperimentCtrl* getExperimentCtrl() const { return m_experimentCtrl; }
+    reportCtrl* getReportCtrl() const { return m_reportCtrl; }
     realtimeCtrl* getRealtimeCtrl() const { return m_realtimeCtrl; }
 
     user_sql_listmodel * getUserListmodel() const { return m_userListmodel; }
@@ -81,6 +85,7 @@ private:
     compareCtrl* m_compareCtrl = nullptr;
     detailCtrl* m_detailCtrl = nullptr;
     ExperimentCtrl* m_experimentCtrl = nullptr;
+    reportCtrl* m_reportCtrl = nullptr;
     realtimeCtrl* m_realtimeCtrl = nullptr;
     user_sql_listmodel* m_userListmodel = nullptr;
     experiment_listmodel* m_experimentListmodel = nullptr;

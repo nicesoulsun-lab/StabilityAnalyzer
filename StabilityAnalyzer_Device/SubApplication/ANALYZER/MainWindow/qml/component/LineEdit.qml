@@ -1,8 +1,8 @@
-﻿import QtQuick 2.12
-import QtQuick.Window 2.12
-import QtQuick.Controls 2.12
-import QtQuick.Controls.impl 2.12
-import QtQuick.Templates 2.12 as T
+﻿import QtQuick 2.9
+import QtQuick.Window 2.2
+import QtQuick.Controls 2.2
+import QtQuick.Controls.impl 2.2
+import QtQuick.Templates 2.2 as T
 
 TextField {
     id: tf
@@ -133,3 +133,4 @@ TextField {
         return {"x": positionX, "y": positionY}
     }
 }
+

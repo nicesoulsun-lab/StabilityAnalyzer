@@ -1,4 +1,4 @@
-﻿import QtQuick 2.12
+import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Layouts 1.12
 
@@ -13,6 +13,36 @@ Popup {
     modal: true
     closePolicy: Popup.CloseOnEscape
 
+    property var channelStates: []
+
+    function channelTitle(index) {
+        if (experiment_ctrl && experiment_ctrl.channelDisplayName)
+            return experiment_ctrl.channelDisplayName(index)
+        return qsTr("通道") + " " + (index + 1)
+    }
+
+    function channelPage(index) {
+        var suffix = experiment_ctrl && experiment_ctrl.channelName
+                ? experiment_ctrl.channelName(index)
+                : String.fromCharCode(65 + index)
+        return "qrc:/qml/ParaSetting_" + suffix + ".qml"
+    }
+
+    function hasSelectedChannel() {
+        for (var i = 0; i < channelStates.length; ++i) {
+            if (channelStates[i])
+                return true
+        }
+        return false
+    }
+
+    onOpened: {
+        var count = experiment_ctrl ? experiment_ctrl.channelCount : 4
+        channelStates = []
+        for (var i = 0; i < count; ++i)
+            channelStates.push(false)
+    }
+
     background: Rectangle {
         color: "white"
         radius: 5
@@ -24,121 +54,52 @@ Popup {
         anchors.fill: parent
         spacing: 50
 
-        // CheckBox 网格：不 fillWidth，改用居中对齐
         GridLayout {
             Layout.topMargin: 80
-            rows: 2; columns: 2
+            rows: Math.ceil((experiment_ctrl ? experiment_ctrl.channelCount : 4) / 2)
+            columns: 2
             rowSpacing: 50
             columnSpacing: 30
-            // 移除 Layout.fillWidth，避免拉伸
             Layout.preferredHeight: 128
-            Layout.alignment: Qt.AlignHCenter  // 水平居中
+            Layout.alignment: Qt.AlignHCenter
 
+            Repeater {
+                model: experiment_ctrl ? experiment_ctrl.channelCount : 4
 
-            RowLayout {
-                Layout.row: 0; Layout.column: 0
-                Layout.preferredHeight: 51
-                CheckBox {
-                    id: channel_A_check
-                    checked: false
-                    text: qsTr("A通道")
-                    font.pixelSize: 24
-                    font.bold: true
+                delegate: RowLayout {
+                    Layout.row: Math.floor(index / 2)
+                    Layout.column: index % 2
+                    Layout.preferredHeight: 51
 
-                    onCheckStateChanged: {
+                    CheckBox {
+                        checked: !!selectionPopup.channelStates[index]
+                        text: selectionPopup.channelTitle(index)
+                        font.pixelSize: 24
+                        font.bold: true
 
+                        onCheckedChanged: {
+                            var states = selectionPopup.channelStates.slice()
+                            states[index] = checked
+                            selectionPopup.channelStates = states
+                        }
                     }
-                }
 
-                IconButton {
-                    button_text: qsTr("设置参数")
-                    Layout.preferredWidth: 128; Layout.preferredHeight: 42
-                    button_color: "#3B87E4"; text_color: "#FFFFFF"
-                    onClicked: {
-                        console.log("设置参数：A通道")
-                        mainStackView.push(Qt.resolvedUrl("qrc:/qml/ParaSetting_A.qml"))
-                        close()
-                    }
-                }
-            }
-            RowLayout {
-                Layout.row: 0; Layout.column: 1
-                Layout.preferredHeight: 51
-                CheckBox {
-                    id: channel_B_check
-                    checked: false
-                    text: qsTr("B通道")
-                    font.pixelSize: 24
-                    font.bold: true
-
-                    onCheckStateChanged: {
-
-                    }
-                }
-                IconButton {
-                    button_text: qsTr("设置参数")
-                    Layout.preferredWidth: 128; Layout.preferredHeight: 42
-                    button_color: "#3B87E4"; text_color: "#FFFFFF"
-                    onClicked: {
-                        console.log("设置参数：B通道")
-                        mainStackView.push(Qt.resolvedUrl("qrc:/qml/ParaSetting_B.qml"))
-                        close()
-                    }
-                }
-            }
-            RowLayout {
-                Layout.row: 1; Layout.column: 0
-                Layout.preferredHeight: 51
-                CheckBox {
-                    id: channel_C_check
-                    checked: false
-                    text: qsTr("C通道")
-                    font.pixelSize: 24
-                    font.bold: true
-
-                    onCheckStateChanged: {
-
-                    }
-                }
-                IconButton {
-                    button_text: qsTr("设置参数")
-                    Layout.preferredWidth: 128; Layout.preferredHeight: 42
-                    button_color: "#3B87E4"; text_color: "#FFFFFF"
-                    onClicked: {
-                        console.log("设置参数：C通道")
-                        mainStackView.push(Qt.resolvedUrl("qrc:/qml/ParaSetting_C.qml"))
-                        close()
-                    }
-                }
-            }
-            RowLayout{
-                Layout.row: 1; Layout.column: 1
-                Layout.preferredHeight: 51
-                CheckBox {
-                    id: channel_D_check
-                    checked: false
-                    text: qsTr("D通道")
-                    font.pixelSize: 24
-                    font.bold: true
-
-                    onCheckStateChanged: {
-
-                    }
-                }
-                IconButton {
-                    button_text: qsTr("设置参数")
-                    Layout.preferredWidth: 128; Layout.preferredHeight: 42
-                    button_color: "#3B87E4"; text_color: "#FFFFFF"
-                    onClicked: {
-                        console.log("设置参数：D通道")
-                        mainStackView.push(Qt.resolvedUrl("qrc:/qml/ParaSetting_D.qml"))
-                        close()
+                    IconButton {
+                        button_text: qsTr("设置参数")
+                        Layout.preferredWidth: 128
+                        Layout.preferredHeight: 42
+                        button_color: "#3B87E4"
+                        text_color: "#FFFFFF"
+                        onClicked: {
+                            console.log("设置参数：", selectionPopup.channelTitle(index))
+                            mainStackView.push(Qt.resolvedUrl(selectionPopup.channelPage(index)))
+                            close()
+                        }
                     }
                 }
             }
         }
 
-        // 按钮行：居中
         RowLayout {
             Layout.alignment: Qt.AlignHCenter
             Layout.bottomMargin: 40
@@ -146,8 +107,10 @@ Popup {
 
             IconButton {
                 button_text: qsTr("取消")
-                Layout.preferredWidth: 120; Layout.preferredHeight: 42
-                button_color: "#EDEEF0"; text_color: "#333333"
+                Layout.preferredWidth: 120
+                Layout.preferredHeight: 42
+                button_color: "#EDEEF0"
+                text_color: "#333333"
                 onClicked: {
                     console.log("取消开始实验")
                     close()
@@ -156,12 +119,13 @@ Popup {
 
             IconButton {
                 button_text: qsTr("确定")
-                Layout.preferredWidth: 120; Layout.preferredHeight: 42
-                button_color: "#3B87E4"; text_color: "#FFFFFF"
-                enabled: channel_A_check.checked || channel_B_check.checked || channel_C_check.checked || channel_D_check.checked
+                Layout.preferredWidth: 120
+                Layout.preferredHeight: 42
+                button_color: "#3B87E4"
+                text_color: "#FFFFFF"
+                enabled: selectionPopup.hasSelectedChannel()
                 onClicked: {
                     console.log("开始实验")
-
                 }
             }
         }

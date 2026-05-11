@@ -23,6 +23,11 @@ else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lSqlOrmd
 else:unix:LIBS += -L$$PWD/$$DESTDIR/ -lSqlOrm
 
 # RNDIS TCP 通信模块
+include(../../../FileExporter/FileExporter_inc.pri)
+win32:CONFIG(release, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lFileExporter
+else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lFileExporterd
+else:unix:LIBS += -L$$PWD/$$DESTDIR/ -lFileExporter
+
 include(../../../DataTransmit/DataTransmit_inc.pri)
 win32:CONFIG(release, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lDataTransmit
 else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/$$DESTDIR/ -lDataTransmitd

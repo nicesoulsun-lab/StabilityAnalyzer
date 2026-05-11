@@ -12,6 +12,7 @@ Item {
     property int selectedRow: -1
     property var selectedExperiment: ({})
     property var comparedExperiments: []
+    property bool pendingReportExport: false
     readonly property bool isComparePage: recordContentPageUrl === "qrc:/qml/ExperimentComparePage.qml"
 
     function openRecordContentPage(pageUrl) {
@@ -34,6 +35,10 @@ Item {
         }
         if (recordContentLoader.item.hasOwnProperty("experimentDataList")) {
             recordContentLoader.item.experimentDataList = pageRoot.comparedExperiments
+        }
+        if (recordContentLoader.item.hasOwnProperty("autoStartExport")) {
+            recordContentLoader.item.autoStartExport = pageRoot.pendingReportExport
+            pageRoot.pendingReportExport = false
         }
     }
 
@@ -167,7 +172,22 @@ Item {
             info_pop.openDialog(qsTr("请勾选实验记录"))
             return
         }
-        console.log(qsTr("导出实验记录:"), checkedIds)
+        if (checkedIds.length > 1) {
+            console.log(qsTr("导出实验报告只支持单个实验"))
+            info_pop.openDialog(qsTr("当前仅支持导出单个实验报告，请选择一条记录"))
+            return
+        }
+
+        var checkedRow = pageRoot.findSingleCheckedRow()
+        if (checkedRow < 0) {
+            info_pop.openDialog(qsTr("未找到已选择的实验记录"))
+            return
+        }
+
+        pageRoot.selectExperiment(checkedRow)
+        pageRoot.pendingReportExport = true
+        pageRoot.openRecordContentPage("qrc:/qml/ExperimentDetailPage.qml")
+        console.log(qsTr("导出实验报告:"), checkedIds)
     }
 
     function tryDelete() {
@@ -249,6 +269,7 @@ Item {
                     onCheckRequested: pageRoot.openCheckedExperimentDetail()
                     onBackRequested: {
                         pageRoot.comparedExperiments = []
+                        pageRoot.pendingReportExport = false
                         pageRoot.openRecordContentPage("qrc:/qml/component/ExperimentRecordListContent.qml")
                     }
                 }

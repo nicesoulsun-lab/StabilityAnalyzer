@@ -1,6 +1,6 @@
-import QtQuick 2.12
-import QtQuick.Controls 2.12
-import QtQuick.Layouts 1.12
+﻿import QtQuick 2.9
+import QtQuick.Controls 2.2
+import QtQuick.Layouts 1.3
 
 Column {
     id: root
@@ -9,7 +9,7 @@ Column {
     spacing: 0
 
     property var columnWidths: [0.1, 0.3, 0.4, 0.2]
-    property var rowlist: [qsTr("选择"), qsTr("工程名称"), qsTr("实验名称"), qsTr("状态")]
+    property var rowlist: [qsTr("閫夋嫨"), qsTr("宸ョ▼鍚嶇О"), qsTr("瀹為獙鍚嶇О"), qsTr("鐘舵€?)]
 
     property alias listView: list
     property int currentIndex: -1
@@ -22,7 +22,7 @@ Column {
     signal rowDeselected()
     signal checkBoxToggled(int row, bool isChecked, string hiddenId)
 
-    // --- 表头 ---
+    // --- 琛ㄥご ---
     Rectangle {
         id: headerRow
         width: parent.width
@@ -58,7 +58,7 @@ Column {
         }
     }
 
-    // --- 列表区域 ---
+    // --- 鍒楄〃鍖哄煙 ---
     Rectangle {
         id: listview
         width: parent.width
@@ -94,7 +94,7 @@ Column {
 
                 property int delegateIndex: index
 
-                // 调试：打印 model 数据
+                // 璋冭瘯锛氭墦鍗?model 鏁版嵁
                 Component.onCompleted: {
                     console.log("Row", index, "model:", model)
                     console.log("  - checked:", model.checked)
@@ -104,7 +104,7 @@ Column {
                     console.log("  - expId:", model.expId)
                 }
 
-                // --- 第 1 列：复选框 ---
+                // --- 绗?1 鍒楋細澶嶉€夋 ---
                 Rectangle {
                     width: list.width * columnWidths[0]
                     height: parent.height
@@ -119,16 +119,13 @@ Column {
                             id: checkBox
                             anchors.centerIn: parent
 
-                            // 保持原有的逻辑
+                            // 淇濇寔鍘熸湁鐨勯€昏緫
                             checked: model ? model.checked : false
 
-                            // 【修改点】使用 scale 缩小，0.7 表示缩小到 70%
+                            // 銆愪慨鏀圭偣銆戜娇鐢?scale 缂╁皬锛?.7 琛ㄧず缂╁皬鍒?70%
                             scale: 0.7
 
-                            // 注意：缩放后，它占据的布局空间可能还是原来的大小。
-                            // 如果周围有其他元素受布局影响，可能需要调整 anchors 或使用 Item 包裹限制空间。
-                            // 在这里因为你是 anchors.centerIn，所以视觉变小即可。
-
+                            // 娉ㄦ剰锛氱缉鏀惧悗锛屽畠鍗犳嵁鐨勫竷灞€绌洪棿鍙兘杩樻槸鍘熸潵鐨勫ぇ灏忋€?                            // 濡傛灉鍛ㄥ洿鏈夊叾浠栧厓绱犲彈甯冨眬褰卞搷锛屽彲鑳介渶瑕佽皟鏁?anchors 鎴栦娇鐢?Item 鍖呰９闄愬埗绌洪棿銆?                            // 鍦ㄨ繖閲屽洜涓轰綘鏄?anchors.centerIn锛屾墍浠ヨ瑙夊彉灏忓嵆鍙€?
                             onCheckStateChanged: {
                                 if (root.experimentListModel) {
                                     root.experimentListModel.setChecked(delegateRow.delegateIndex, checked);
@@ -140,7 +137,7 @@ Column {
                     }
                 }
 
-                // --- 第 2 列：工程名称 ---
+                // --- 绗?2 鍒楋細宸ョ▼鍚嶇О ---
                 Rectangle {
                     width: list.width * columnWidths[1]
                     height: parent.height
@@ -179,7 +176,7 @@ Column {
                     }
                 }
 
-                // --- 第 3 列：实验名称 ---
+                // --- 绗?3 鍒楋細瀹為獙鍚嶇О ---
                 Rectangle {
                     width: list.width * columnWidths[2]
                     height: parent.height
@@ -218,7 +215,7 @@ Column {
                     }
                 }
 
-                // --- 第 4 列：状态 ---
+                // --- 绗?4 鍒楋細鐘舵€?---
                 Rectangle {
                     width: list.width * columnWidths[3]
                     height: parent.height
@@ -233,7 +230,7 @@ Column {
                             if (!model) return "";
                             var s = model.status;
                             console.log("status value:", s, "type:", typeof s);
-                            return s === 1 ? qsTr("已导入") : qsTr("未导入");
+                            return s === 1 ? qsTr("宸插鍏?) : qsTr("鏈鍏?);
                         }
                         font.pointSize: pixel_size
                         color: {
@@ -269,3 +266,4 @@ Column {
         }
     }
 }
+

@@ -6,6 +6,7 @@
 #include "inc/Common/experiment_state_store.h"
 #include "../../../SqlOrm/inc/SqlOrmManager.h"
 #include "../../../TaskScheduler/inc/modbustaskscheduler.h"
+#include "../../../../../CommonData/inc/deviceprofile.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -20,8 +21,12 @@
 #include <algorithm>
 
 namespace {
-constexpr int kChannelCount = 4;
 constexpr qint64 kDrainStopGraceMs = 15000;
+
+int configuredChannelCount()
+{
+    return deviceProfile().channelCount;
+}
 
 /**
  * @brief 由于 addExperiment 当前返回 bool，这里通过“取最大ID”方式获取最新实验ID
@@ -137,7 +142,7 @@ ExperimentCtrl::ExperimentCtrl(QObject *parent)
 {
     qDebug() << "[ExperimentCtrl] initializing...";
 
-    for (int i = 0; i < kChannelCount; ++i) {
+    for (int i = 0; i < configuredChannelCount(); ++i) {
         Channel channel = static_cast<Channel>(i);
 
         m_scanTimers[channel] = new QTimer(this);
@@ -152,12 +157,7 @@ ExperimentCtrl::ExperimentCtrl(QObject *parent)
         m_stateStore->setSlaveId(i, i + 1);
 
         SerialConfig serialCfg;
-        switch (channel) {
-        case ChannelA: serialCfg.portName = "COM1"; break;
-        case ChannelB: serialCfg.portName = "COM2"; break;
-        case ChannelC: serialCfg.portName = "COM3"; break;
-        case ChannelD: serialCfg.portName = "COM4"; break;
-        }
+        serialCfg.portName = QStringLiteral("COM%1").arg(i + 1);
         serialCfg.baudRate = 9600;
         serialCfg.dataBits = 8;
         serialCfg.parity = "NoParity";
@@ -202,7 +202,7 @@ ExperimentCtrl::ExperimentCtrl(QObject *parent)
     connect(m_scheduler, &ModbusTaskScheduler::taskCompleted,
             this, &ExperimentCtrl::onSchedulerTaskCompleted);
 
-    for (int i = 0; i < kChannelCount; ++i) {
+    for (int i = 0; i < configuredChannelCount(); ++i) {
         loadSerialConfig(i);
     }
 
@@ -211,7 +211,7 @@ ExperimentCtrl::ExperimentCtrl(QObject *parent)
     // 2) Linux 下若仍是 Windows 风格串口名（COMx），自动改成 ttyUSB0，避免端口不存在。
     QSet<int> usedSlaveIds;
     bool serialPatched = false;
-    for (int i = 0; i < kChannelCount; ++i) {
+    for (int i = 0; i < configuredChannelCount(); ++i) {
         const Channel ch = static_cast<Channel>(i);
         int sid = m_stateStore->slaveId(i, i + 1);
         if (sid <= 0 || usedSlaveIds.contains(sid)) {
@@ -237,7 +237,7 @@ ExperimentCtrl::ExperimentCtrl(QObject *parent)
 
     // 如果进行了兜底修正，立即持久化，确保后续生成 JSON 与运行配置一致。
     if (serialPatched) {
-        for (int i = 0; i < kChannelCount; ++i) {
+        for (int i = 0; i < configuredChannelCount(); ++i) {
             saveSerialConfig(i);
         }
     }
@@ -261,7 +261,8 @@ ExperimentCtrl::ExperimentCtrl(QObject *parent)
  */
 ExperimentCtrl::~ExperimentCtrl()
 {
-    for (auto channel : {ChannelA, ChannelB, ChannelC, ChannelD}) {
+    for (int i = 0; i < configuredChannelCount(); ++i) {
+        const Channel channel = static_cast<Channel>(i);
         if (m_runningFlags.value(channel, false)) {
             stopExperiment(channel);
         }
@@ -274,7 +275,8 @@ ExperimentCtrl::~ExperimentCtrl()
         }
     }
 
-    for (auto channel : {ChannelA, ChannelB, ChannelC, ChannelD}) {
+    for (int i = 0; i < configuredChannelCount(); ++i) {
+        const Channel channel = static_cast<Channel>(i);
         if (m_statusPollTimers.value(channel)) {
             m_statusPollTimers[channel]->stop();
         }
@@ -339,7 +341,7 @@ void ExperimentCtrl::initializeSchedulerAfterStartup()
 
 void ExperimentCtrl::startDeferredStatusPolling()
 {
-    for (int i = 0; i < kChannelCount; ++i) {
+    for (int i = 0; i < configuredChannelCount(); ++i) {
         const Channel ch = static_cast<Channel>(i);
         if (!m_statusPollTimers.value(ch)) {
             continue;
@@ -752,7 +754,7 @@ void ExperimentCtrl::onSchedulerTaskCompleted(TaskResult res, QVector<quint16> d
 void ExperimentCtrl::onStatusPollTimer()
 {
     // 兼容入口：保留旧接口，内部改为逐通道执行。
-    for (int i = 0; i < kChannelCount; ++i) {
+    for (int i = 0; i < configuredChannelCount(); ++i) {
         pollChannelStatus(i);
     }
 }

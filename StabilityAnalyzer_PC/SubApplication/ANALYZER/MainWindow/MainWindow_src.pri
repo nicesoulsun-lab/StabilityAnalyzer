@@ -11,6 +11,7 @@ HEADERS += \
         $$PWD/inc/Controller/compare_ctrl.h \
         $$PWD/inc/Controller/detail_ctrl.h \
         $$PWD/inc/Controller/experiment_ctrl.h \
+        $$PWD/inc/Controller/report_ctrl.h \
         $$PWD/inc/Controller/realtime_ctrl.h \
         $$PWD/inc/Controller/systemsetting_ctrl.h \
         $$PWD/inc/Controller/user_ctrl.h \
@@ -31,6 +32,7 @@ SOURCES += \
         $$PWD/src/Controller/compare_ctrl.cpp \
         $$PWD/src/Controller/detail_ctrl.cpp \
         $$PWD/src/Controller/experiment_ctrl.cpp \
+        $$PWD/src/Controller/report_ctrl.cpp \
         $$PWD/src/Controller/realtime_ctrl.cpp \
         $$PWD/src/Controller/systemsetting_ctrl.cpp \
         $$PWD/src/Controller/user_ctrl.cpp \

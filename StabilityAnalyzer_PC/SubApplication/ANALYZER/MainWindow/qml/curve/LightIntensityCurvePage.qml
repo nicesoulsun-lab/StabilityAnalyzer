@@ -29,6 +29,7 @@ Rectangle {
                                                 && lightCurves.length > 0
     readonly property var displayedCurves: useDetailCurves ? lightCurves : processedCurves
     readonly property int displayedCurveCount: displayedCurves ? displayedCurves.length : 0
+    readonly property bool reportDataReady: !lightCurvesLoading && displayedCurveCount > 0
     readonly property var availableHeightRange: curveHeightRange(lightCurves)
 
     readonly property real safeHeightLowerBound: {
@@ -321,6 +322,13 @@ Rectangle {
         applyAnalysisSettings(0,
                               detailPage.floorToStep(availableHeightRange.minValue, 1),
                               detailPage.ceilToStep(availableHeightRange.maxValue, 1))
+    }
+
+    function prepareReportMode(dataModeIndex) {
+        currentLightModeIndex = 2
+        currentDataModeIndex = dataModeIndex
+        lastDisplaySignature = ""
+        loadDisplayedCurves()
     }
 
     onDetailPageChanged: {

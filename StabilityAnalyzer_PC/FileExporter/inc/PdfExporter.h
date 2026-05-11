@@ -2,11 +2,6 @@
 #define PDFEXPORTER_H
 
 #include "IExportInterface.h"
-#include <QPrinter>
-#include <QPainter>
-#include <QTextDocument>
-#include <QDomDocument>
-#include <QPdfWriter>
 
 class FILEEXPORTER_EXPORT PdfExporter : public IExportInterface
 {

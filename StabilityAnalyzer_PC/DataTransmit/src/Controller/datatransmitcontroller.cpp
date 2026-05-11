@@ -3,6 +3,7 @@
 #include "Channel/controlchannelclient.h"
 #include "Channel/statuschannelclient.h"
 #include "Channel/streamchannelclient.h"
+#include "../../../CommonData/inc/deviceprofile.h"
 
 #include <QDebug>
 #include <QJsonArray>
@@ -69,7 +70,7 @@ DataTransmitController::DataTransmitController(QObject *parent)
             });
     bindChannels();
 
-    for (int channel = 0; channel < 4; ++channel) {
+    for (int channel = 0; channel < deviceProfile().channelCount; ++channel) {
         QVariantMap initialStatus;
         initialStatus.insert(QStringLiteral("channel"), channel);
         initialStatus.insert(QStringLiteral("running"), false);
@@ -786,7 +787,7 @@ void DataTransmitController::updateExperimentChannels(const QVariantMap &message
 void DataTransmitController::resetExperimentChannels()
 {
     QVariantList defaults;
-    for (int channel = 0; channel < 4; ++channel) {
+    for (int channel = 0; channel < deviceProfile().channelCount; ++channel) {
         QVariantMap initialStatus;
         initialStatus.insert(QStringLiteral("channel"), channel);
         initialStatus.insert(QStringLiteral("running"), false);

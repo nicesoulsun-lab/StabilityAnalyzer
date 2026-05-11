@@ -1,8 +1,8 @@
-import QtQuick 2.12
-import QtQuick.Window 2.12
-import QtQuick.Controls 2.12
-import QtQuick.Layouts 1.12
-import QtQuick.VirtualKeyboard 2.4
+﻿import QtQuick 2.9
+import QtQuick.Window 2.2
+import QtQuick.Controls 2.2
+import QtQuick.Layouts 1.3
+import QtQuick.VirtualKeyboard 2.1
 
 Window {
     id: window
@@ -16,7 +16,7 @@ Window {
         anchors.margins: 10
         spacing: 10
 
-        // 标题栏
+        // 鏍囬鏍?
         RowLayout {
             Layout.fillWidth: true
             
@@ -40,7 +40,7 @@ Window {
             }
         }
 
-        // 状态信息
+        // 鐘舵€佷俊鎭?
         GroupBox {
             title: "System Status"
             Layout.fillWidth: true
@@ -69,7 +69,7 @@ Window {
             }
         }
 
-        // 设备列表
+        // 璁惧鍒楄〃
         GroupBox {
             title: "Device List"
             Layout.fillWidth: true
@@ -126,7 +126,7 @@ Window {
             }
         }
 
-        // 日志输出
+        // 鏃ュ織杈撳嚭
         GroupBox {
             title: "Log Output"
             Layout.fillWidth: true
@@ -145,7 +145,7 @@ Window {
         }
     }
 
-    // 连接任务调度器的信号
+    // 杩炴帴浠诲姟璋冨害鍣ㄧ殑淇″彿
     Connections {
         target: taskScheduler
         
@@ -196,3 +196,4 @@ Window {
         }
     }
 }
+

@@ -1,6 +1,6 @@
-import QtQuick 2.12
-import QtQuick.Controls 2.12
-import QtQuick.Layouts 1.12
+﻿import QtQuick 2.9
+import QtQuick.Controls 2.2
+import QtQuick.Layouts 1.3
 import "component"
 
 Popup {
@@ -58,7 +58,7 @@ Popup {
             Text {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                text: qsTr("新建工程")
+                text: qsTr("鏂板缓宸ョ▼")
                 font.pixelSize: 20
                 color: "black"
                 //font.family: family
@@ -75,7 +75,7 @@ Popup {
                 Text {
                     Layout.preferredWidth: 78
                     Layout.fillHeight: true
-                    text: qsTr("工程名")
+                    text: qsTr("宸ョ▼鍚?)
                     font.pixelSize: 18
                     color: "black"
                     //font.family: family
@@ -102,7 +102,7 @@ Popup {
                 Text {
                     Layout.preferredWidth: 78
                     Layout.fillHeight: true
-                    text: qsTr("工程备注")
+                    text: qsTr("宸ョ▼澶囨敞")
                     font.pixelSize: 18
                     color: "black"
                     //font.family: family
@@ -117,8 +117,8 @@ Popup {
                     Layout.preferredWidth: 351
                     Layout.fillHeight: true
 
-                    multiLine: true       // 开启换行
-                    maxLines: 3           // 最多显示5行，超出后内部滚动
+                    multiLine: true       // 寮€鍚崲琛?
+                    maxLines: 3           // 鏈€澶氭樉绀?琛岋紝瓒呭嚭鍚庡唴閮ㄦ粴鍔?
                     font.pixelSize: 18
                     border_color: "#82C1F2"
                 }
@@ -132,21 +132,21 @@ Popup {
 
 
                 IconButton {
-                    button_text: qsTr("取消")
+                    button_text: qsTr("鍙栨秷")
                     Layout.preferredWidth: 120; Layout.preferredHeight: 42
                     button_color: "#EDEEF0"; text_color: "#333333"
                     onClicked: {
-                        console.log("取消新建工程")
+                        console.log("鍙栨秷鏂板缓宸ョ▼")
                         root.close()
                     }
                 }
 
                 IconButton {
-                    button_text: qsTr("确定")
+                    button_text: qsTr("纭畾")
                     Layout.preferredWidth: 120; Layout.preferredHeight: 42
                     button_color: "#3B87E4"; text_color: "#FFFFFF"
                     onClicked: {
-                        console.log("确定新建工程")
+                        console.log("纭畾鏂板缓宸ョ▼")
                         console.log(project_name.text +" "+ project_note.text)
                         data_ctrl.addProject(project_name.text,project_note.text)
                         close()
@@ -156,3 +156,4 @@ Popup {
         }
     }
 }
+

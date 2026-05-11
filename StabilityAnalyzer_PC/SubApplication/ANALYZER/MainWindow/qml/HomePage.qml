@@ -91,6 +91,12 @@ Item {
         openPage("qrc:/qml/ManualViewerPage.qml", "help")
     }
 
+    function channelTitle(index) {
+        if (experiment_ctrl && experiment_ctrl.channelDisplayName)
+            return experiment_ctrl.channelDisplayName(index)
+        return qsTr("通道") + " " + (index + 1)
+    }
+
     RowLayout {
         anchors.fill: parent
         spacing: 0
@@ -112,52 +118,20 @@ Item {
                 anchors.margins: 12
                 spacing: 6
 
-                ChannelPanel {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 150
-                    property var statusData: homepage.channelStatus(0)
-                    title: qsTr("A通道")
-                    isRunning: !!statusData.running
-                    hasSample: !!statusData.hasSample
-                    isCovered: !!statusData.isCovered
-                    //remainingTimeText: homepage.formatRemainingTime(statusData.remainingSeconds || 0)
-                    onClicked: homepage.openRealtimePage(0)
-                }
+                Repeater {
+                    model: experiment_ctrl ? experiment_ctrl.channelCount : 4
 
-                ChannelPanel {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 150
-                    property var statusData: homepage.channelStatus(1)
-                    title: qsTr("B通道")
-                    isRunning: !!statusData.running
-                    hasSample: !!statusData.hasSample
-                    isCovered: !!statusData.isCovered
-                    //remainingTimeText: homepage.formatRemainingTime(statusData.remainingSeconds || 0)
-                    onClicked: homepage.openRealtimePage(1)
-                }
-
-                ChannelPanel {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 150
-                    property var statusData: homepage.channelStatus(2)
-                    title: qsTr("C通道")
-                    isRunning: !!statusData.running
-                    hasSample: !!statusData.hasSample
-                    isCovered: !!statusData.isCovered
-                    //remainingTimeText: homepage.formatRemainingTime(statusData.remainingSeconds || 0)
-                    onClicked: homepage.openRealtimePage(2)
-                }
-
-                ChannelPanel {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 150
-                    property var statusData: homepage.channelStatus(3)
-                    title: qsTr("D通道")
-                    isRunning: !!statusData.running
-                    hasSample: !!statusData.hasSample
-                    isCovered: !!statusData.isCovered
-                    //remainingTimeText: homepage.formatRemainingTime(statusData.remainingSeconds || 0)
-                    onClicked: homepage.openRealtimePage(3)
+                    delegate: ChannelPanel {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 150
+                        property int channelIndex: index
+                        property var statusData: homepage.channelStatus(channelIndex)
+                        title: homepage.channelTitle(channelIndex)
+                        isRunning: !!statusData.running
+                        hasSample: !!statusData.hasSample
+                        isCovered: !!statusData.isCovered
+                        onClicked: homepage.openRealtimePage(channelIndex)
+                    }
                 }
 
                 Item { Layout.fillHeight: true }

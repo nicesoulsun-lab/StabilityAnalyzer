@@ -1,4 +1,4 @@
-import QtQuick 2.12
+﻿import QtQuick 2.9
 
 
 Text {
@@ -12,3 +12,4 @@ Text {
     horizontalAlignment: Text.AlignHCenter
     verticalAlignment: Text.AlignVCenter
 }
+

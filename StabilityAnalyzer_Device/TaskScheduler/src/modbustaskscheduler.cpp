@@ -8,6 +8,7 @@
 #include <QCoreApplication>
 #include <QEventLoop>
 #include <QTimer>
+#include "../../CommonData/inc/deviceprofile.h"
 /**
  * @brief ModbusTaskScheduler 构造函数
  * @param parent 父对象指针
@@ -105,17 +106,20 @@ bool ModbusTaskScheduler::loadConfigurationFromDirectory(const QString &configDi
     // 获取所有JSON配置文件
     QStringList filters;
     filters << "*.json";
-    QFileInfoList configFiles = configDir.entryInfoList(filters, QDir::Files);
+    QFileInfoList configFiles = configDir.entryInfoList(filters, QDir::Files, QDir::Name);
 
     if (configFiles.isEmpty()) {
         emit errorOccurred("No configuration files found in: " + configDirPath);
         return false;
     }
 
-    qDebug() << "Found" << configFiles.size() << "configuration files in" << configDirPath;
+    const int channelCount = qMin(deviceProfile().channelCount, configFiles.size());
+    qDebug() << "Found" << configFiles.size() << "configuration files in" << configDirPath
+             << ", loading first" << channelCount << "files for model" << deviceProfile().deviceModel;
 
     bool allLoaded = true;
-    for (const QFileInfo &fileInfo : configFiles) {
+    for (int i = 0; i < channelCount; ++i) {
+        const QFileInfo &fileInfo = configFiles.at(i);
         QString filePath = fileInfo.absoluteFilePath();
         qDebug() << "Loading configuration file:" << filePath;
 
