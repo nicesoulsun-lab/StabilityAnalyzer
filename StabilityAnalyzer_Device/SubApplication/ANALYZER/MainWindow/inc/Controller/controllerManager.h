@@ -209,7 +209,7 @@ public:
                                                   });
         });
 
-        for (int channel = 0; channel < 4; ++channel) {
+        for (int channel = 0; channel < m_experimentCtrl->channelCount(); ++channel) {
             m_dataTransmitCtrl->updateExperimentChannelStatus(channel, m_experimentCtrl->getChannelStatus(channel));
         }
     }

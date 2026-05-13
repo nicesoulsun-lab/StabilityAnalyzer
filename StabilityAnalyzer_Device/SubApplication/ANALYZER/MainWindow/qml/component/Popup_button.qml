@@ -1,19 +1,19 @@
-﻿// File: ConfirmCancelButton.qml
-import QtQuick 2.9
-import QtQuick.Controls 2.2
+// File: ConfirmCancelButton.qml
+import QtQuick 2.12
+import QtQuick.Controls 2.12
 
 Button {
     id: root
 
-    property int model: 1 // 1: 鍙栨秷(宸?, 2: 纭(鍙?, 3: 鐗规畩鑹?
+    property int model: 1 // 1: 取消(左), 2: 确认(右), 3: 特殊色
     property real pressedScale: 0.95
     property real scaleFactor: 1.0
 
     width: 95
     height: 38
 
-    // 鎸夐挳鏂囨湰
-    property string btnText: model === 1 ? qsTr("鍙栨秷") : (model === 2 ? qsTr("纭") : qsTr("纭"))
+    // 按钮文本
+    property string btnText: model === 1 ? qsTr("取消") : (model === 2 ? qsTr("确认") : qsTr("确认"))
 
     contentItem: Text {
         text: root.btnText
@@ -39,12 +39,12 @@ Button {
         onCanceled: root.scaleFactor = 1.0
         onClicked: root.clicked()
     }
-    //璁剧疆杈规 1px
+    //设置边框 1px
 
     signal clicked()
 
     scale: mouseArea.pressed ? 0.92 : 1.0
-    transformOrigin: Item.Center // 鍏抽敭锛氫互涓績涓鸿酱缂╂斁
+    transformOrigin: Item.Center // 关键：以中心为轴缩放
 
     Behavior on scale {
         NumberAnimation {
@@ -53,4 +53,3 @@ Button {
         }
     }
 }
-

@@ -380,4 +380,3 @@ Dialog {
     function getCurrentHour() { return new Date().getHours(); }
     function getCurrentMinute() { return new Date().getMinutes(); }
 }
-

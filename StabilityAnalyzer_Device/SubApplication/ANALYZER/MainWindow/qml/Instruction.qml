@@ -1,6 +1,6 @@
-﻿import QtQuick 2.9
-import QtQuick.Layouts 1.3
-import QtQuick.Controls 2.2
+import QtQuick 2.12
+import QtQuick.Layouts 1.12
+import QtQuick.Controls 2.12
 
 
 Item {
@@ -14,7 +14,7 @@ Item {
         anchors.fill: parent
         spacing: 0
 
-        // --- 椤堕儴鏍囬鏍?---
+        // --- 顶部标题栏 ---
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 30
@@ -28,7 +28,7 @@ Item {
 
                 Label {
                     Layout.leftMargin: 50
-                    text: qsTr("鎿嶄綔璇存槑涔?)
+                    text: qsTr("操作说明书")
                     font.pixelSize: 20
                     font.bold: true
                     color: "#005BAC"
@@ -36,7 +36,7 @@ Item {
                 }
             }
 
-            // 搴曢儴钃濈嚎
+            // 底部蓝线
             Rectangle {
                 anchors.bottom: parent.bottom
                 width: parent.width
@@ -45,47 +45,47 @@ Item {
             }
         }
 
-        // --- 鏄剧ず鍖哄煙 ---
+        // --- 显示区域 ---
         Rectangle {
             id: instructions
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: "#333333" // 娣辩伆鑳屾櫙锛岃‖鎵樼櫧鑹叉枃妗?
+            color: "#333333" // 深灰背景，衬托白色文档
             radius: 4
 
             Column {
                 anchors.fill: parent
 
-                // 2. 鏍稿績淇敼鍖哄煙锛氱洿鎺ヤ娇鐢?ListView
+                // 2. 核心修改区域：直接使用 ListView
                 ListView {
                     id: listView
                     width: parent.width
-                    height: parent.height - 40 - 10 // 鍑忓幓 Row 楂樺害鍜?spacing
+                    height: parent.height - 40 - 10 // 减去 Row 高度和 spacing
                     clip: true
 
-                    // 鏁版嵁婧愶細28椤?
+                    // 数据源：28页
                     model: 25
 
-                    // 闂磋窛锛氬搴斿師鍏?Column 鐨?spacing
+                    // 间距：对应原先 Column 的 spacing
                     spacing: 50
 
-                    // 鎬ц兘浼樺寲鍏抽敭灞炴€?
-                    cacheBuffer: 1000       // 棰勫姞杞戒笂涓?1000 鍍忕礌鍖哄煙鐨勫唴瀹癸紝淇濊瘉婊戝姩娴佺晠
+                    // 性能优化关键属性
+                    cacheBuffer: 1000       // 预加载上下 1000 像素区域的内容，保证滑动流畅
                     delegate: Image {
                         width: listView.width
                         height: width * 1.414
                         fillMode: Image.PreserveAspectFit
 
-                        // TODO:鍥剧墖瀹為檯璺緞
+                        // TODO:图片实际路径
                         source: "qrc:/instructions/output_images/page_" + (index + 1) + ".png"
 
-                        // 杩涗竴姝ヨ妭鐪佸唴瀛橈細濡傛灉鍥剧墖澶ぇ锛屽彲浠ラ檺鍒舵簮灏哄
+                        // 进一步节省内存：如果图片太大，可以限制源尺寸
                         sourceSize.width: width
 
                         asynchronous: true
 
                     }
-                    //褰撳畬鎴愬姞杞藉悗榛樿鍦?0 鐨勪綅缃?
+                    //当完成加载后默认在 0 的位置
                     Component.onCompleted: {
                         listView.positionViewAtIndex(0, ListView.Beginning)
                     }
@@ -94,4 +94,3 @@ Item {
         }
     }
 }
-

@@ -1,10 +1,10 @@
-﻿import QtQuick 2.9
+import QtQuick 2.12
 
 Rectangle {
     property alias title: titleLabel.text
     property int blockWidth: 315
     property int blockHeight: 200
-    property alias content: container.children // 鍏佽澶栭儴鎻掑叆鍐呭
+    property alias content: container.children // 允许外部插入内容
 
     width: blockWidth
     height: blockHeight
@@ -22,7 +22,6 @@ Rectangle {
     Item {
         id: container
         anchors.fill: parent
-        // 杩欓噷鐣欑粰澶栭儴鏀惧叿浣撶殑鎸夐挳鎴栨粦鍔ㄦ潯
+        // 这里留给外部放具体的按钮或滑动条
     }
 }
-

@@ -4,6 +4,7 @@
 #include "statuschannelserver.h"
 #include "streamchannelserver.h"
 #include "rndismanager.h"
+#include "../../../CommonData/inc/deviceprofile.h"
 
 #include <QDateTime>
 #include <QJsonArray>
@@ -58,7 +59,8 @@ DataTransmitController::DataTransmitController(QObject *parent)
     connect(m_statusServer, &StatusChannelServer::clientConnectedChanged, this, &DataTransmitController::handleChannelStateChanged);
     connect(m_streamServer, &StreamChannelServer::clientConnectedChanged, this, &DataTransmitController::handleChannelStateChanged);
 
-    for (int channel = 0; channel < 4; ++channel) {
+    const int channelCount = deviceProfile().channelCount;
+    for (int channel = 0; channel < channelCount; ++channel) {
         QVariantMap initialStatus;
         initialStatus.insert(QStringLiteral("channel"), channel);
         initialStatus.insert(QStringLiteral("running"), false);

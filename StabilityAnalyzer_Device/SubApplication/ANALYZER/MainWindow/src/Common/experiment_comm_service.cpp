@@ -14,10 +14,9 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QtMath>
+#include "../../../../../CommonData/inc/deviceprofile.h"
 
 namespace {
-constexpr int kChannelCount = 4;
-
 /**
  * @brief 以低字在前的顺序写入 32 位无符号整型。
  */
@@ -77,11 +76,11 @@ void ExperimentCommService::generateDefaultConfig(const QString& configDirPath,
                                                   const SerialConfigProvider& serialConfigProvider,
                                                   const SlaveIdProvider& slaveIdProvider) const
 {
-    const QString channelNames[] = {"ChannelA", "ChannelB", "ChannelC", "ChannelD"};
-    const QString portNames[] = {"COM1", "COM2", "COM3", "COM4"};
+    const DeviceProfile &profile = deviceProfile();
 
-    for (int i = 0; i < kChannelCount; ++i) {
-        const QString filePath = configDirPath + "/" + channelNames[i] + ".json";
+    for (int i = 0; i < profile.channelCount; ++i) {
+        const QString channelKey = profile.channelKey(i);
+        const QString filePath = configDirPath + "/" + channelKey + ".json";
         if (QFileInfo::exists(filePath)) {
             qDebug() << "[ExperimentCommService][Config] keep existing file, skip overwrite:" << filePath;
             continue;
@@ -90,7 +89,7 @@ void ExperimentCommService::generateDefaultConfig(const QString& configDirPath,
         const SerialConfig cfg = serialConfigProvider ? serialConfigProvider(i) : SerialConfig{};
 
         QJsonObject serialObj;
-        serialObj["portName"] = cfg.portName.isEmpty() ? portNames[i] : cfg.portName;
+        serialObj["portName"] = cfg.portName.isEmpty() ? QString("COM%1").arg(i + 1) : cfg.portName;
         serialObj["baudRate"] = cfg.baudRate;
         serialObj["dataBits"] = cfg.dataBits;
         serialObj["parity"] = cfg.parity;
@@ -141,10 +140,10 @@ void ExperimentCommService::generateDefaultConfig(const QString& configDirPath,
 
         QJsonObject deviceObj;
         deviceObj["slaveId"] = slaveIdProvider ? slaveIdProvider(i) : (i + 1);
-        deviceObj["name"] = channelNames[i];
-        deviceObj["description"] = QString("%1 modbus device").arg(channelNames[i]);
+        deviceObj["name"] = channelKey;
+        deviceObj["description"] = QString("%1 modbus device").arg(channelKey);
         deviceObj["manufacturer"] = "TBD";
-        deviceObj["model"] = "TBD";
+        deviceObj["model"] = profile.deviceModel;
         deviceObj["serialConfig"] = serialObj;
         deviceObj["taskList"] = taskList;
 

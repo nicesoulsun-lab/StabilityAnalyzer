@@ -27,6 +27,7 @@ class ExperimentSessionService;
 class MAINWINDOW_EXPORT ExperimentCtrl : public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(int channelCount READ channelCount CONSTANT)
 
 public:
     /**
@@ -137,6 +138,9 @@ public:
      * @brief 从QSettings加载串口配置
      */
     Q_INVOKABLE void loadSerialConfig(int channel);
+    Q_INVOKABLE int channelCount() const;
+    Q_INVOKABLE QString channelName(int channel) const;
+    Q_INVOKABLE QString channelDisplayName(int channel) const;
 
     // ==================== 首页状态模型接口 ====================
 

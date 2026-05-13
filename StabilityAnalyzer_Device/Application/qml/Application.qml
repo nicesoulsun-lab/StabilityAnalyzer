@@ -11,7 +11,7 @@ ApplicationWindow {
     minimumHeight: 600
     maximumWidth: 1024
     maximumHeight: 600
-    title: "绋冲畾鎬у垎鏋愪华"
+    title: "稳定性分析仪"
     visible: true
 
     property var mainStackView: null
@@ -23,24 +23,24 @@ ApplicationWindow {
         width: parent.width; height: parent.height
         color: "transparent"
 
-        // 宓屽瀛愰」鐩殑鐣岄潰
+        // 嵌套子项目的界面
         Loader {
             id: main_loader
             anchors.fill: parent
             source: "qrc:/qml/MainWindow.qml"
 
-            // 2. 鍏抽敭锛氬湪鍔犺浇瀹屾垚鍚庯紝灏嗗唴閮ㄧ殑瀵硅薄璧嬪€肩粰澶栭儴鍙橀噺
+            // 2. 关键：在加载完成后，将内部的对象赋值给外部变量
             onLoaded: {
-                console.log("瀛愰」鐩晫闈㈠姞杞藉畬鎴?)
+                console.log("子项目界面加载完成")
                 if (item) {
                     mainStackView = item.mainStackView;
-                    console.log("MainStackView 宸茬粦瀹?", mainStackView);
+                    console.log("MainStackView 已绑定:", mainStackView);
                 }
             }
 
             onStatusChanged: {
                 if (status === Loader.Error) {
-                    console.log("鍔犺浇瀛愰」鐩晫闈㈠け璐?", source)
+                    console.log("加载子项目界面失败：", source)
                 }
             }
         }

@@ -1,9 +1,9 @@
-﻿import QtQuick 2.9
+﻿import QtQuick 2.12
 import QtQuick.VirtualKeyboard 2.1
-import QtQuick.Window 2.2
-import QtQuick.Controls 2.2
-import QtQuick.Layouts 1.3
-import QtQuick.Controls.Material 2.2
+import QtQuick.Window 2.12
+import QtQuick.Controls 2.12
+import QtQuick.Layouts 1.12
+import QtQuick.Controls.Material 2.12
 import QtQuick.VirtualKeyboard.Settings 2.1
 
 // 虚拟键盘，满足存在window顶层对象和root根对象
@@ -129,4 +129,3 @@ InputPanel {
         easing.type: Easing.OutQuad // 缓动类型（可选）
     }
 }
-

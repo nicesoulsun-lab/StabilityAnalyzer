@@ -1,7 +1,7 @@
-﻿import QtQuick 2.9
-import QtQuick.Controls 2.2
+import QtQuick 2.12
+import QtQuick.Controls 2.12
 import QtQuick.Shapes 1.12
-import QtQuick.Layouts 1.3
+import QtQuick.Layouts 1.12
 
 import "component"
 
@@ -31,14 +31,14 @@ Item {
     }
 
     function roleTextToIndex(role) {
-        if(role === qsTr("绠＄悊鍛?)) return 1;
-        if(role === qsTr("鎿嶄綔鍛?)) return 0;
+        if(role === qsTr("管理员")) return 1;
+        if(role === qsTr("操作员")) return 0;
         return -1;
     }
 
     function indexToRoleText(index) {
-        if(index === 1) return qsTr("绠＄悊鍛?);
-        if(index === 0) return qsTr("鎿嶄綔鍛?);
+        if(index === 1) return qsTr("管理员");
+        if(index === 0) return qsTr("操作员");
         return "";
     }
 
@@ -78,9 +78,9 @@ Item {
         userRoleComboBox.currentIndex = selectedUserRole
 
         if (!isAdminUser) {
-            msg(qsTr("鎿嶄綔鍛樹笉鍙慨鏀圭敤鎴蜂俊鎭?))
+            msg(qsTr("操作员不可修改用户信息"))
         } else if (!canEditSelected) {
-            msg(qsTr("绠＄悊鍛樹笉鍙互淇敼闄よ嚜宸卞鐨勫叾浠栫鐞嗗憳"))
+            msg(qsTr("管理员不可以修改除自己外的其他管理员"))
         }
     }
 
@@ -112,15 +112,15 @@ Item {
         var password = userPasswordInput.text.trim()
 
         if (username === "") {
-            msg(qsTr("璇疯緭鍏ョ敤鎴峰悕"))
+            msg(qsTr("请输入用户名"))
             return false
         }
         if (username.toLowerCase() === "admin") {
-            msg(qsTr("鐢ㄦ埛鍚嶄笉鑳戒负 admin"))
+            msg(qsTr("用户名不能为 admin"))
             return false
         }
         if (password === "") {
-            msg(qsTr("璇疯緭鍏ュ瘑鐮?))
+            msg(qsTr("请输入密码"))
             return false
         }
         return true
@@ -130,11 +130,11 @@ Item {
         var username = userNameInput.text.trim()
 
         if (username === "") {
-            msg(qsTr("璇疯緭鍏ョ敤鎴峰悕"))
+            msg(qsTr("请输入用户名"))
             return false
         }
         if (username.toLowerCase() === "admin") {
-            msg(qsTr("鐢ㄦ埛鍚嶄笉鑳戒负 admin"))
+            msg(qsTr("用户名不能为 admin"))
             return false
         }
         return true
@@ -142,7 +142,7 @@ Item {
 
     function addUser() {
         if (!canAddUser) {
-            msg(qsTr("鎿嶄綔鍛樹笉鍙柊澧炴垨淇敼鐢ㄦ埛"))
+            msg(qsTr("操作员不可新增或修改用户"))
             return
         }
         if (!checkCreate()) {
@@ -154,20 +154,20 @@ Item {
                               userRoleComboBox.currentIndex)) {
             user_list_model.reloadFromDb()
             resetCreateMode()
-            msg(qsTr("娣诲姞鐢ㄦ埛鎴愬姛"))
+            msg(qsTr("添加用户成功"))
         }
     }
 
     function saveUser() {
         if (!hasSelection) {
-            msg(qsTr("璇峰厛閫変腑鐢ㄦ埛"))
+            msg(qsTr("请先选中用户"))
             return
         }
         if (!canEditSelected) {
             if (!isAdminUser) {
-                msg(qsTr("鎿嶄綔鍛樹笉鍙慨鏀圭敤鎴蜂俊鎭?))
+                msg(qsTr("操作员不可修改用户信息"))
             } else {
-                msg(qsTr("绠＄悊鍛樹笉鍙互淇敼闄よ嚜宸卞鐨勫叾浠栫鐞嗗憳"))
+                msg(qsTr("管理员不可以修改除自己外的其他管理员"))
             }
             return
         }
@@ -181,7 +181,7 @@ Item {
                                  userRoleComboBox.currentIndex)) {
             user_list_model.reloadFromDb()
             resetCreateMode()
-            msg(qsTr("淇敼鐢ㄦ埛鎴愬姛"))
+            msg(qsTr("修改用户成功"))
         }
     }
 
@@ -223,11 +223,11 @@ Item {
                     Layout.preferredWidth: 245
                     validator: RegExpValidator { regExp: /^[a-zA-Z0-9_]{1,16}$/ }
                     input_en: !user_root.formReadOnly
-                    placeholderText: qsTr("璇疯緭鍏ョ敤鎴峰悕")
+                    placeholderText: qsTr("请输入用户名")
                     onTextChanged: {
                         if (userNameInput.text.toLowerCase() === "admin") {
                             userNameInput.text = "";
-                            info_pop.message = qsTr("鐢ㄦ埛鍚嶄笉鑳戒负 admin");
+                            info_pop.message = qsTr("用户名不能为 admin");
                             info_pop.open();
                         }
                     }
@@ -239,7 +239,7 @@ Item {
                     Layout.preferredWidth: 245
                     echoMode: user_root.canViewPassword ? TextInput.Normal : TextInput.Password
                     input_en: !user_root.formReadOnly && user_root.canViewPassword
-                    placeholderText: qsTr(hasSelection ? qsTr("鐣欑┖鍒欎笉淇敼瀵嗙爜") : qsTr("璇疯緭鍏ュ瘑鐮?))
+                    placeholderText: qsTr(hasSelection ? qsTr("留空则不修改密码") : qsTr("请输入密码"))
                 }
 
                 RowLayout{
@@ -250,7 +250,7 @@ Item {
                         Layout.preferredWidth: 55
                         Layout.preferredHeight: 42
                         color: "black"
-                        text: qsTr("绛夌骇:")
+                        text: qsTr("等级:")
                         font.pixelSize: 18
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -262,7 +262,7 @@ Item {
                         Layout.preferredHeight: 42
                         font.pixelSize: 18
                         enabled: !user_root.formReadOnly
-                        model: [qsTr("鎿嶄綔鍛?), qsTr("绠＄悊鍛?)]
+                        model: [qsTr("操作员"), qsTr("管理员")]
                         background: Rectangle {
                             border.color: "#cccccc"
                             radius: 4
@@ -287,19 +287,19 @@ Item {
                             scale: root.scaleFactor
                             Behavior on scale { NumberAnimation { duration: 80; easing.type: Easing.InOutQuad } }
                         }
-                        btnText: qsTr("娣诲姞")
+                        btnText: qsTr("添加")
                         onClicked: {
                             user_root.addUser()
                             return
                             if (userNameInput.text === "" || userPasswordInput.text === "") {
-                                info_pop.message = qsTr("鐢ㄦ埛鍚嶅拰瀵嗙爜涓嶈兘涓虹┖");
+                                info_pop.message = qsTr("用户名和密码不能为空");
                                 info_pop.open();
                                 return;
                             }
 
                             var ok = user_ctrl.addUser(userNameInput.text, userPasswordInput.text, userRoleComboBox.currentIndex)
                             if (ok) {
-                                info_pop.message = qsTr("娣诲姞鐢ㄦ埛鎴愬姛");
+                                info_pop.message = qsTr("添加用户成功");
                                 info_pop.open();
                                 user_list_model.reloadFromDb()
                                 resetInputs();
@@ -319,12 +319,12 @@ Item {
                             scale: root.scaleFactor
                             Behavior on scale { NumberAnimation { duration: 80; easing.type: Easing.InOutQuad } }
                         }
-                        btnText: qsTr("淇敼")
+                        btnText: qsTr("修改")
                         onClicked: {
                             user_root.saveUser()
                             return
                             if (selectedUserId <= 0) {
-                                info_pop.message = qsTr("璇峰厛閫夋嫨瑕佷慨鏀圭殑鐢ㄦ埛");
+                                info_pop.message = qsTr("请先选择要修改的用户");
                                 info_pop.open();
                                 return;
                             }
@@ -334,14 +334,14 @@ Item {
                             var newRole = userRoleComboBox.currentIndex;
 
                             if (newUsername === "") {
-                                info_pop.message = qsTr("鐢ㄦ埛鍚嶄笉鑳戒负绌?);
+                                info_pop.message = qsTr("用户名不能为空");
                                 info_pop.open();
                                 return;
                             }
 
                             var ok = user_ctrl.updateUser(selectedUserId, newUsername, newPassword, newRole);
                             if (ok) {
-                                info_pop.message = qsTr("淇敼鐢ㄦ埛鎴愬姛");
+                                info_pop.message = qsTr("修改用户成功");
                                 info_pop.open();
                                 user_list_model.reloadFromDb()
                                 resetInputs();
@@ -367,4 +367,3 @@ Item {
         }
     }
 }
-

@@ -1,5 +1,6 @@
 {
-    "deviceModel": "four_tower",
-    "channelCount": 4,
-    "channelNames": ["A", "B", "C", "D"]
+    "deviceModel": "single_tower",
+    "channelCount": 1,
+    "configDir": "config/experiment_devices_1t",
+    "channelNames": ["A"]
 }

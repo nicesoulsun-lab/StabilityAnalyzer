@@ -83,11 +83,12 @@ void ExperimentDataService::tryFetchStoredData(int channel,
             return;
         }
 
-        // Lower device reports the readable size in "values/registers".
-        // Two consecutive registers form one transmission/backscatter pair.
-        const int readableWordCount = qBound(0, readableCount, kStorageMaxWordCount);
-        const int readablePairCount = readableWordCount / 2;
-        if (readableWordCount <= 0) {
+        // Lower device reports the readable size in "points/pairs".
+        // Each point consists of two consecutive registers:
+        // transmission + backscatter.
+        const int readablePairCount = qBound(0, readableCount, kStorageMaxPairCount);
+        const int readableWordCount = readablePairCount * 2;
+        if (readablePairCount <= 0) {
             qWarning() << "[ExperimentDataService][Fetch] channel=" << channel
                        << (areaA ? "A" : "B") << "state=readable but readableCount=0";
             return;
@@ -156,7 +157,7 @@ void ExperimentDataService::tryFetchStoredData(int channel,
             const bool ackWritten = sendControlFn(channel, ackCommand, {{"value", kStorageTakenState}});
             qDebug() << "[ExperimentDataService][Fetch] channel=" << channel
                      << (areaA ? "A" : "B")
-                     << "readableCount=" << readableWordCount
+                     << "readableCount=" << readablePairCount
                      << "readablePairCount=" << readablePairCount
                      << "readableWordCount=" << readableWordCount
                      << "done words=" << totalWords
@@ -168,7 +169,7 @@ void ExperimentDataService::tryFetchStoredData(int channel,
             qWarning() << "[ExperimentDataService][Fetch] channel=" << channel
                        << (areaA ? "A" : "B")
                        << "partial fetch, keep READY state"
-                       << "readableCount=" << readableWordCount
+                       << "readableCount=" << readablePairCount
                        << "readablePairCount=" << readablePairCount
                        << "readableWordCount=" << readableWordCount
                        << "done words=" << totalWords

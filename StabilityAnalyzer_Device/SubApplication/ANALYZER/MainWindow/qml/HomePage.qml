@@ -1,6 +1,6 @@
-﻿import QtQuick 2.9
-import QtQuick.Controls 2.2
-import QtQuick.Layouts 1.3
+﻿import QtQuick 2.12
+import QtQuick.Controls 2.12
+import QtQuick.Layouts 1.12
 import "component"
 
 Item {
@@ -10,16 +10,22 @@ Item {
 
     objectName: "HomePage"
 
+    function channelCard(index) {
+        return channelCardRepeater.itemAt(index)
+    }
+
+    function channelTitle(index) {
+        if (experiment_ctrl && experiment_ctrl.channelDisplayName)
+            return experiment_ctrl.channelDisplayName(index)
+        return "Channel " + (index + 1)
+    }
+
     // 将C++侧通道状态映射到首页单卡片UI。
     // channel: 0/1/2/3 对应 A/B/C/D 通道。
     // status: 来自 ExperimentCtrl::channelStatusUpdated 的 QVariantMap。
     function applyChannelStatus(channel, status) {
         // 先定位目标通道卡片。
-        var card = null
-        if (channel === 0) card = channel_A
-        else if (channel === 1) card = channel_B
-        else if (channel === 2) card = channel_C
-        else if (channel === 3) card = channel_D
+        var card = channelCard(channel)
         if (card === null || status === undefined || status === null) return
 
         card.isRunning = Boolean(status.running)
@@ -42,9 +48,10 @@ Item {
         }
     }
 
-    // 页面初始化时主动拉取一次四通道快照，避免等待首个轮询信号。
+    // 页面初始化时主动拉取一次通道快照，避免等待首个轮询信号。
     function refreshAllChannelStatus() {
-        for (var i = 0; i < 4; ++i) {
+        var count = experiment_ctrl ? experiment_ctrl.channelCount : 4
+        for (var i = 0; i < count; ++i) {
             applyChannelStatus(i, experiment_ctrl.getChannelStatus(i))
         }
     }
@@ -65,57 +72,35 @@ Item {
         anchors.fill: parent
         spacing: 34
 
-        GridLayout {
-            rows: 2; columns: 4
-            rowSpacing: 28; columnSpacing: 37
-            Layout.fillWidth: true; Layout.preferredHeight: 330
+        Item {
+            id: channelCardContainer
+            Layout.fillWidth: true
+            Layout.preferredHeight: 330
 
-            HP_comp {
-                id: channel_A
-                Layout.row: 0; Layout.column: 0
-                Layout.columnSpan: 1; Layout.rowSpan: 2
-                Layout.preferredWidth: 212; Layout.fillHeight: true
+            Row {
+                id: channelCardRow
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.left: (experiment_ctrl && experiment_ctrl.channelCount === 1)
+                              ? undefined
+                              : parent.left
+                anchors.horizontalCenter: (experiment_ctrl && experiment_ctrl.channelCount === 1)
+                                          ? parent.horizontalCenter
+                                          : undefined
+                spacing: 37
 
-                title: qsTr("A通道")
-                isRunning: false
-                hasSample: false
-                isCovered: true
-            }
+                Repeater {
+                    id: channelCardRepeater
+                    model: experiment_ctrl ? experiment_ctrl.channelCount : 4
 
-            HP_comp {
-                id: channel_B
-                Layout.row: 0; Layout.column: 1
-                Layout.columnSpan: 1; Layout.rowSpan: 2
-                Layout.preferredWidth: 212; Layout.fillHeight: true
-
-                title: qsTr("B通道")
-                isRunning: false
-                hasSample: false
-                isCovered: true
-            }
-
-            HP_comp {
-                id: channel_C
-                Layout.row: 0; Layout.column: 2
-                Layout.columnSpan: 1; Layout.rowSpan: 2
-                Layout.preferredWidth: 212; Layout.fillHeight: true
-
-                title: qsTr("C通道")
-                isRunning: false
-                hasSample: false
-                isCovered: true
-            }
-
-            HP_comp {
-                id: channel_D
-                Layout.row: 0; Layout.column: 3
-                Layout.columnSpan: 1; Layout.rowSpan: 2
-                Layout.preferredWidth: 212; Layout.fillHeight: true
-
-                title: qsTr("D通道")
-                isRunning: false
-                hasSample: false
-                isCovered: true
+                    delegate: HP_comp {
+                        width: 212
+                        height: channelCardContainer.height
+                        title: homepage.channelTitle(index)
+                        isRunning: false
+                        hasSample: false
+                        isCovered: true
+                    }
+                }
             }
         }
 
@@ -176,4 +161,3 @@ Item {
         }
     }
 }
-

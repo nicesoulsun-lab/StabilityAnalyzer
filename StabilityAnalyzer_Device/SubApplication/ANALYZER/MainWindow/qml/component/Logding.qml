@@ -1,6 +1,6 @@
-﻿import QtQuick 2.9
-import QtQuick.Controls 2.2
-import QtQuick.Layouts 1.3
+import QtQuick 2.12
+import QtQuick.Controls 2.12
+import QtQuick.Layouts 1.12
 
 
 Popup {
@@ -9,9 +9,9 @@ Popup {
     width: 500
     height: 150
     modal: true
-    anchors.centerIn: Overlay.overlay  // 娉ㄦ剰锛氬簲璇ユ槸 Overlay.overlay锛屼笉鏄?OverlayLayout
+    anchors.centerIn: Overlay.overlay  // 注意：应该是 Overlay.overlay，不是 OverlayLayout
     closePolicy: Popup.NoAutoClose
-    property string message: "鎻愮ず淇℃伅"
+    property string message: "提示信息"
     property bool loading: false
 
     property int pixelSize: 16
@@ -44,12 +44,12 @@ Popup {
 
         }
 
-        // 浣跨敤灏佽濂界殑杩涘害鏉?
+        // 使用封装好的进度条
         CustomProgressBar {
             Layout.fillWidth: true
-            Layout.preferredHeight: 30 // 缁欐暣涓涓€鐐归珮搴?
+            Layout.preferredHeight: 30 // 给整个行一点高度
 
-            // 缁戝畾灞炴€?
+            // 绑定属性
             // indeterminate: root.isIndeterminate
             // value: root.progressValue
         }
@@ -68,4 +68,3 @@ Popup {
         root.open();
     }
 }
-

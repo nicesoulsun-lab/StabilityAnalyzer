@@ -262,7 +262,8 @@ class DeviceState(object):
             self._fill_area_pairs(A_BASE, start_pair_index, pair_count)
         else:
             self._fill_area_pairs(B_BASE, start_pair_index, pair_count)
-        self._set_area_readable_count(area_a, pair_count * 2)
+        # Report readable count in points, matching the real lower-device protocol.
+        self._set_area_readable_count(area_a, pair_count)
         self._set_area_state(area_a, READY_STATE)
         self.hr[REG_SCANNED_COUNT] = min(65535, int(self.hr[REG_SCANNED_COUNT]) + pair_count)
         self._update_current_position()

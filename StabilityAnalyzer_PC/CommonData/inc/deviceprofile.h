@@ -12,6 +12,7 @@ struct DeviceProfile
 {
     QString deviceModel = QStringLiteral("four_tower");
     int channelCount = 4;
+    QString configDir = QStringLiteral("config/experiment_devices_4t");
     QStringList channelNames = {QStringLiteral("A"),
                                 QStringLiteral("B"),
                                 QStringLiteral("C"),
@@ -35,6 +36,17 @@ struct DeviceProfile
         const QString name = channelName(index);
         return name.isEmpty() ? QStringLiteral("Unknown")
                               : QStringLiteral("Channel%1").arg(name);
+    }
+
+    QString resolvedConfigDir() const
+    {
+        if (!configDir.trimmed().isEmpty()) {
+            return configDir.trimmed();
+        }
+
+        return channelCount <= 1
+                ? QStringLiteral("config/experiment_devices_1t")
+                : QStringLiteral("config/experiment_devices_4t");
     }
 };
 
@@ -60,6 +72,8 @@ inline DeviceProfile loadDeviceProfile()
     profile.channelCount = object.value(QStringLiteral("channelCount"))
                                    .toInt(profile.channelCount);
     profile.channelCount = qBound(1, profile.channelCount, 4);
+    profile.configDir = object.value(QStringLiteral("configDir"))
+                                .toString(profile.configDir);
 
     const QJsonArray channelNames = object.value(QStringLiteral("channelNames")).toArray();
     if (!channelNames.isEmpty()) {
@@ -77,6 +91,12 @@ inline DeviceProfile loadDeviceProfile()
 
     while (profile.channelNames.size() < profile.channelCount) {
         profile.channelNames.append(QString(QChar('A' + profile.channelNames.size())));
+    }
+
+    if (profile.configDir.trimmed().isEmpty()) {
+        profile.configDir = profile.channelCount <= 1
+                ? QStringLiteral("config/experiment_devices_1t")
+                : QStringLiteral("config/experiment_devices_4t");
     }
 
     return profile;

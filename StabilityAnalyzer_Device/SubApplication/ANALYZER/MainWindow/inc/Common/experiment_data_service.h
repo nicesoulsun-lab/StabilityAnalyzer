@@ -54,6 +54,8 @@ public:
      *
      * 存储区仍按固定 500 个字读取，但只处理 readable count 对应的前 N 个数据。
      */
+    // readableCount is reported in points by the lower device.
+    // One point occupies two registers: transmission + backscatter.
     void tryFetchStoredData(int channel,
                             int experimentId,
                             int storageAReadableCount,

@@ -1,7 +1,7 @@
-﻿import QtQuick 2.9
-import QtQuick.Controls 2.2
-import QtQuick.Controls.impl 2.2
-import QtQuick.Templates 2.2 as T
+﻿import QtQuick 2.12
+import QtQuick.Controls 2.12
+import QtQuick.Controls.impl 2.12
+import QtQuick.Templates 2.12 as T
 
 TextField {
     id: tf
@@ -98,7 +98,7 @@ TextField {
         if (tf.text.length > 0 && tf.contentItem) {
             // 简单的宽度估算行数 (比 paintedHeight 更稳)
             var contentWidth = tf.width - leftPadding - rightPadding;
-            var metricsTemp = Qt.createQmlObject("import QtQuick 2.9; TextMetrics {}", tf);
+            var metricsTemp = Qt.createQmlObject("import QtQuick 2.12; TextMetrics {}", tf);
             metricsTemp.font = tf.font;
             metricsTemp.text = tf.text;
 
@@ -179,4 +179,3 @@ TextField {
         return {"x": positionX, "y": positionY};
     }
 }
-

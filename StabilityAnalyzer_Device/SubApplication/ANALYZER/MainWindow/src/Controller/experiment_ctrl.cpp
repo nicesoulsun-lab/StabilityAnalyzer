@@ -6,7 +6,7 @@
 #include "inc/Common/experiment_state_store.h"
 #include "../../../SqlOrm/inc/SqlOrmManager.h"
 #include "../../../TaskScheduler/inc/modbustaskscheduler.h"
-#include "../../../../../CommonData/inc/deviceprofile.h"
+#include "deviceprofile.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -114,10 +114,12 @@ int resolveScanIntervalSeconds(const ExperimentParams &params, int totalDuration
  */
 QString defaultConfigDirPath()
 {
-    // 统一使用“程序实际运行目录”下的配置目录：
-    // Windows 示例：bin-mingw/config/experiment_devices
-    // Linux 示例：/opt/<app>/config/experiment_devices
-    return QCoreApplication::applicationDirPath() + "/config/experiment_devices";
+    const QString configDir = deviceProfile().resolvedConfigDir();
+    if (QDir::isRelativePath(configDir)) {
+        return QCoreApplication::applicationDirPath() + "/" + configDir;
+    }
+
+    return configDir;
 }
 }
 
@@ -354,6 +356,26 @@ void ExperimentCtrl::startDeferredStatusPolling()
             }
         });
     }
+}
+
+int ExperimentCtrl::channelCount() const
+{
+    return configuredChannelCount();
+}
+
+QString ExperimentCtrl::channelName(int channel) const
+{
+    if (channel < 0 || channel >= configuredChannelCount()) {
+        return QString();
+    }
+
+    return deviceProfile().channelName(channel);
+}
+
+QString ExperimentCtrl::channelDisplayName(int channel) const
+{
+    const QString name = channelName(channel);
+    return name.isEmpty() ? QString() : tr("%1通道").arg(name);
 }
 
 QString ExperimentCtrl::getDeviceId(int channel) const
