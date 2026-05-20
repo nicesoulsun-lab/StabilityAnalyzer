@@ -165,18 +165,16 @@ Item {
                     onClicked: {
                         // 必须先走后端登录，写入当前用户角色和 ID，
                         // 首页和用户管理页的权限判断都依赖这份登录态。
-//                        var userStr = usernameInput.text.trim()
-//                        var passStr = passwordInput.text
-//                        if (userStr === "" || passStr === "") {
-//                            info_pop.openDialog(qsTr("账号和密码不能为空"))
-//                            return
-//                        }
-//                        if (user_ctrl.login(userStr, passStr)) {
-//                            mainStackView.push("qrc:/qml/HomePage.qml")
-//                            passwordInput.text = ""
-//                        }
-
-                        mainStackView.push("qrc:/qml/HomePage.qml")
+                        var userStr = usernameInput.text.trim()
+                        var passStr = passwordInput.text
+                        if (userStr === "" || passStr === "") {
+                            info_pop.openDialog(qsTr("账号和密码不能为空"))
+                            return
+                        }
+                        if (user_ctrl.login(userStr, passStr)) {
+                            passwordInput.text = ""
+                            mainStackView.push("qrc:/qml/HomePage.qml")
+                        }
                     }
                 }
 
