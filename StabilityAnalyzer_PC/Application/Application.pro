@@ -74,7 +74,7 @@ mingw{
     #禁止优化
     QMAKE_CFLAGS_RELEASE -= -O2
     QMAKE_CXXFLAGS_RELEASE -= -O2
-    #release在最后link时默认有"-s”参数，表示"Omit all symbol information from the output file"，因此要去掉该参数
+    #release在最后link时默认有"-s"参数，表示"Omit all symbol information from the output file"，因此要去掉该参数
     QMAKE_LFLAGS_RELEASE += -mthreads
 }
 
@@ -86,6 +86,7 @@ message(the Application $$member(TARGET) tempalte is: $$member(TEMPLATE))
 
 # 版本信息 管理员运行权限
 RC_FILE += App_resource.rc
+CONFIG -= embed_manifest_exe
 
 # Additional import path used to resolve QML modules in Qt Creator's code model
 QML_IMPORT_PATH =

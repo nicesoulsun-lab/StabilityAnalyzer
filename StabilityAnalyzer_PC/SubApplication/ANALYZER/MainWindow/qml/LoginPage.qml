@@ -90,6 +90,10 @@ Item {
                             font.family: "Microsoft YaHei"
                             color: "#333333"
                             clip: true
+                            focus: true
+                            KeyNavigation.tab: passwordInput
+                            Keys.onReturnPressed: loginBtn.clicked()
+                            Keys.onEnterPressed: loginBtn.clicked()
                             property string placeholderText: qsTr("请输入您的账号")
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -127,6 +131,9 @@ Item {
                             font.family: "Microsoft YaHei"
                             color: "#333333"
                             clip: true
+                            KeyNavigation.tab: usernameInput
+                            Keys.onReturnPressed: loginBtn.clicked()
+                            Keys.onEnterPressed: loginBtn.clicked()
                             property string placeholderText: qsTr("请输入您的密码")
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter

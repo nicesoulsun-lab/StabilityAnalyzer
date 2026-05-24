@@ -131,6 +131,10 @@ signals:
     void exportExperimentScanRequested(int experimentId, int scanId, int offset, int limit, const QString &requestId);
     // 导入完成后回写设备端状态，避免同一条记录被重复导入。
     void markExperimentImportedRequested(int experimentId, int status, const QString &requestId);
+    void calibrationUpdateRequested(int channel, int transmissionRef, int backscatterRef, const QString &requestId);
+    // 校准扫描请求信号
+    void calibrationScanRequested(int channel, int scanRangeStart, int scanRangeEnd,
+                                   int scanStep, const QString &requestId);
 
 private slots:
     /* 函数功能：执行启动状态机下一步。 */

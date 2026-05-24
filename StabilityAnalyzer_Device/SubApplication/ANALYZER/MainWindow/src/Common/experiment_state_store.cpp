@@ -285,6 +285,57 @@ bool ExperimentStateStore::updateChannelStatus(int channel, const QVariantMap& p
     return changed;
 }
 
+void ExperimentStateStore::setCalibration(int channel, int transmissionRef, int backscatterRef)
+{
+    if (transmissionRef > 0) {
+        m_transmissionCalibrations[channel] = transmissionRef;
+    }
+    if (backscatterRef > 0) {
+        m_backscatterCalibrations[channel] = backscatterRef;
+    }
+}
+
+int ExperimentStateStore::transmissionCalibration(int channel) const
+{
+    return m_transmissionCalibrations.value(channel, 0);
+}
+
+int ExperimentStateStore::backscatterCalibration(int channel) const
+{
+    return m_backscatterCalibrations.value(channel, 0);
+}
+
+void ExperimentStateStore::saveCalibration(int channel) const
+{
+    ensureExperimentStateIniPathReady();
+    const QString iniPath = experimentStateIniFilePath();
+    QSettings settings(iniPath, QSettings::IniFormat);
+    const QString groupPath = settingsGroupPath("Calibration", channelKey(channel));
+    settings.beginGroup(groupPath);
+    settings.setValue("transmission_reference", m_transmissionCalibrations.value(channel, 0));
+    settings.setValue("backscatter_reference", m_backscatterCalibrations.value(channel, 0));
+    settings.endGroup();
+    settings.sync();
+
+    qDebug() << "[ExperimentStateStore] calibration saved, channel=" << channel
+             << "transRef=" << m_transmissionCalibrations.value(channel, 0)
+             << "backRef=" << m_backscatterCalibrations.value(channel, 0)
+             << "iniPath=" << iniPath
+             << "group=" << groupPath
+             << "status=" << settings.status();
+}
+
+void ExperimentStateStore::loadCalibration(int channel)
+{
+    ensureExperimentStateIniPathReady();
+    QSettings settings(experimentStateIniFilePath(), QSettings::IniFormat);
+    const QString groupPath = settingsGroupPath("Calibration", channelKey(channel));
+    settings.beginGroup(groupPath);
+    m_transmissionCalibrations[channel] = settings.value("transmission_reference", 0).toInt();
+    m_backscatterCalibrations[channel] = settings.value("backscatter_reference", 0).toInt();
+    settings.endGroup();
+}
+
 QVector<QVariantMap>* ExperimentStateStore::memoryCache(int channel)
 {
     return &m_memoryDataCache[channel];

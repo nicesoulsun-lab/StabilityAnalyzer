@@ -33,5 +33,6 @@
         <file>qml/data_page.qml</file>
         <file>qml/component/CustomListView_data.qml</file>
         <file>qml/NewProjectPop.qml</file>
+        <file>qml/RealtimeCurvePage.qml</file>
     </qresource>
 </RCC>

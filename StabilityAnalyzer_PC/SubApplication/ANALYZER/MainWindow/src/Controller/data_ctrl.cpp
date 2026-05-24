@@ -1,4 +1,4 @@
-﻿#include "inc/Controller/data_ctrl.h"
+#include "inc/Controller/data_ctrl.h"
 #include "SqlOrmManager.h"
 #include "../../../SqlOrm/inc/SqlOrmManager.h"
 #include "datatransmitcontroller.h"
@@ -16,8 +16,8 @@
 
 namespace {
 
-constexpr int kImportBatchSize = 256;
-constexpr int kImportScanPageSize = 256;
+constexpr int kImportBatchSize = 2000;
+constexpr int kImportScanPageSize = 2000;
 
 double effectiveScanEndMm(const QVariantMap &experiment)
 {

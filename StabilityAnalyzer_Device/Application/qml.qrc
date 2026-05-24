@@ -10,5 +10,6 @@
         <file alias="LoginPage.qml">../SubApplication/ANALYZER/MainWindow/qml/LoginPage.qml</file>
         <file alias="HomePage.qml">../SubApplication/ANALYZER/MainWindow/qml/HomePage.qml</file>
         <file alias="system_page.qml">../SubApplication/ANALYZER/MainWindow/qml/system_page.qml</file> 
+        <file alias="RealtimeCurvePage.qml">../SubApplication/ANALYZER/MainWindow/qml/RealtimeCurvePage.qml</file>
     </qresource>
 </RCC>

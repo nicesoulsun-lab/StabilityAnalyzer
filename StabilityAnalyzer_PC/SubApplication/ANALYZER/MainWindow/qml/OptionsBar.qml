@@ -1,4 +1,4 @@
-﻿import QtQuick 2.12
+import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Layouts 1.12
 
@@ -12,6 +12,7 @@ Rectangle{
     property bool deviceAvailable: true
     // 由首页接住这个信号，统一决定如何打开仪器检查界面。
     signal instrumentCheckRequested()
+    signal instrumentCalibrationRequested()
     signal importRecordRequested()
     signal newExperimentRequested()
     signal experimentRecordRequested()
@@ -322,7 +323,6 @@ Rectangle{
                             color: maI1.containsMouse ? "#EBF3FF" : "transparent"
                             radius: 4
                             Text { text: qsTr("仪器检查"); font.pixelSize: 14; color: "#333333"; font.family: "Microsoft YaHei"; anchors.verticalCenter: parent.verticalCenter; x: 10 }
-                            // 菜单项本身只负责派发事件，避免直接依赖外部页面或弹窗 id。
                             MouseArea {
                                 id: maI1;
                                 anchors.fill: parent;
@@ -330,6 +330,22 @@ Rectangle{
                                 cursorShape: Qt.PointingHandCursor;
                                 onClicked: {
                                     optionsBar.instrumentCheckRequested();
+                                    closeMenus()
+                                }
+                            }
+                        }
+                        Rectangle {
+                            width: parent.width; height: 36
+                            color: maICal.containsMouse ? "#EBF3FF" : "transparent"
+                            radius: 4
+                            Text { text: qsTr("仪器校准"); font.pixelSize: 14; color: "#333333"; font.family: "Microsoft YaHei"; anchors.verticalCenter: parent.verticalCenter; x: 10 }
+                            MouseArea {
+                                id: maICal;
+                                anchors.fill: parent;
+                                hoverEnabled: true;
+                                cursorShape: Qt.PointingHandCursor;
+                                onClicked: {
+                                    optionsBar.instrumentCalibrationRequested();
                                     closeMenus()
                                 }
                             }

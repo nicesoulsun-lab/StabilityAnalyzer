@@ -1,4 +1,4 @@
-﻿import QtQuick 2.12
+import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Layouts 1.12
 import "component"
@@ -162,6 +162,7 @@ Item {
                                      && data_transmit_ctrl.deviceUiConnectionStateText === "Connected"
                     onImportRecordRequested: importRecordPop.open()
                     onInstrumentCheckRequested: instrumentCheckPop.open()
+                    onInstrumentCalibrationRequested: instrumentCalibrationPop.open()
                     onNewExperimentRequested: newExperimentPop.open()
                     onExperimentRecordRequested: homepage.openContentPage("qrc:/qml/ExperimentRecordPage.qml", "record")
                     onUserManagementRequested: homepage.openContentPage("qrc:/qml/UserManagementPage.qml", "user")
@@ -186,6 +187,10 @@ Item {
 
     InstrumentCheckPop {
         id: instrumentCheckPop
+    }
+
+    InstrumentCalibrationPop {
+        id: instrumentCalibrationPop
     }
 
     ImportRecordPop {

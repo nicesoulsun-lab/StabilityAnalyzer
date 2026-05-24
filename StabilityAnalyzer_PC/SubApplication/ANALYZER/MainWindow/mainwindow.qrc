@@ -45,6 +45,7 @@
         <file>qml/SelectChannelsPop.qml</file>
         <file>qml/CustomPop.qml</file>
         <file>qml/InstrumentCheckPop.qml</file>
+        <file>qml/InstrumentCalibrationPop.qml</file>
         <file>qml/ImportRecordPop.qml</file>
         <file>qml/ImportProgressPop.qml</file>
         <file>qml/NewExperimentPop.qml</file>

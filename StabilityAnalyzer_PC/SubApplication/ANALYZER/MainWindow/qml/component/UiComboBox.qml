@@ -50,7 +50,7 @@ ComboBox {
     popup: Popup {
         width: parent.width
         y: parent.height + 10
-        implicitHeight: Math.min(comboBox.model.length * (comboBox.height) * 1.5, 300) || 0
+        implicitHeight: Math.min((comboBox.model ? comboBox.model.length : 0) * (comboBox.height) * 1.5, 300)
 
         background: Rectangle {
             color: "white"

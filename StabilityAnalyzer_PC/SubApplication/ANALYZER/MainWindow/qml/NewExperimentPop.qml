@@ -1,4 +1,4 @@
-﻿import QtQuick 2.12
+import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Layouts 1.12
 import "component"
@@ -575,6 +575,7 @@ Popup {
                         Layout.preferredHeight: 36
                         font.pixelSize: 16
                         border_color: "#DCE3EC"
+                        input_en: false
                         input_rules: IntValidator { bottom: 0; top: 999999 }
                     }
                 }

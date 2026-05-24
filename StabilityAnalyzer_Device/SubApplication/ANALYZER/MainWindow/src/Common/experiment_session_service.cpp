@@ -101,6 +101,22 @@ int ExperimentSessionService::pendingContextCount(int channel) const
     return m_scanContexts.value(channel).size();
 }
 
+void ExperimentSessionService::setCalibration(int channel, int transmissionRef, int backscatterRef)
+{
+    m_transmissionCalibrations[channel] = transmissionRef;
+    m_backscatterCalibrations[channel] = backscatterRef;
+}
+
+int ExperimentSessionService::transmissionCalibration(int channel) const
+{
+    return m_transmissionCalibrations.value(channel, 0);
+}
+
+int ExperimentSessionService::backscatterCalibration(int channel) const
+{
+    return m_backscatterCalibrations.value(channel, 0);
+}
+
 QVector<QVariantMap> ExperimentSessionService::buildRowsFromStorageData(int channel,
                                                                         const QVector<quint16>& raw,
                                                                         bool areaA)
@@ -173,6 +189,31 @@ QVector<QVariantMap> ExperimentSessionService::buildRowsFromStorageData(int chan
     return dataList;
 }
 
+QVector<QVariantMap> ExperimentSessionService::buildCalibrationRows(
+    int channel, const QVector<quint16>& raw, bool areaA,
+    double scanRangeStartMm, double scanStepUm) const
+{
+    Q_UNUSED(channel)
+    QVector<QVariantMap> dataList;
+    const int pairCount = raw.size() / 2;
+    // A 区起始点索引为 0，B 区起始点索引为 250
+    const int startPointIndex = areaA ? 0 : 250;
+    dataList.reserve(pairCount);
+
+    for (int i = 0; i < pairCount; ++i) {
+        QVariantMap row;
+        // 高度 = 扫描起始位置(um) + 点索引 * 步长(um)，再转为 mm
+        row["height"] = (scanRangeStartMm * 1000.0
+                         + static_cast<double>(startPointIndex + i) * scanStepUm) / 1000.0;
+        // 校准数据不应用校准转换，直接返回原始值
+        row["transmission_intensity"] = static_cast<double>(raw[i * 2]);
+        row["backscatter_intensity"] = static_cast<double>(raw[i * 2 + 1]);
+        dataList.append(row);
+    }
+
+    return dataList;
+}
+
 void ExperimentSessionService::refreshCurrentScanCount(int channel)
 {
     const QVector<ScanCycleContext>& contexts = m_scanContexts.value(channel);
@@ -202,8 +243,24 @@ QVector<QVariantMap> ExperimentSessionService::parseStoragePairs(int channel,
         row["scan_id"] = scanId;
         row["scan_elapsed_ms"] = elapsedSinceExperimentStartMs;
         row["height"] = startHeightUm + (static_cast<double>(pointIndex) * stepUm);
-        row["transmission_intensity"] = raw[(i * 2)] / 10.0;
-        row["backscatter_intensity"] = raw[(i * 2) + 1] / 10.0;
+        const int rawTransmission = raw[(i * 2)];
+        const int rawBackscatter = raw[(i * 2) + 1];
+        const int transRef = m_transmissionCalibrations.value(channel, 0);
+        const int backRef = m_backscatterCalibrations.value(channel, 0);
+
+        if (transRef > 0) {
+            row["transmission_intensity"] = qRound(static_cast<double>(rawTransmission)
+                                            / static_cast<double>(transRef) * 1000.0) / 10.0;
+        } else {
+            row["transmission_intensity"] = static_cast<double>(rawTransmission);
+        }
+
+        if (backRef > 0) {
+            row["backscatter_intensity"] = qRound(static_cast<double>(rawBackscatter)
+                                           / static_cast<double>(backRef) * 1000.0) / 10.0;
+        } else {
+            row["backscatter_intensity"] = static_cast<double>(rawBackscatter);
+        }
         row["channel"] = channel;
         row["point_index"] = pointIndex;
         row["storage_area"] = areaA ? "A" : "B";

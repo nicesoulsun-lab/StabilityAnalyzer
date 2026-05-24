@@ -190,3 +190,121 @@ void ExperimentDataService::tryFetchStoredData(int channel,
  *
  * 该函数当前保留用于后续复用，现阶段主要由会话服务负责高度分配。
  */
+
+/**
+ * @brief 从 A/B 存储区读取校准扫描数据（不入库、不写缓存）。
+ *
+ * 与 tryFetchStoredData 的核心区别：
+ * - 无 experimentId 守卫，校准扫描不需要实验ID；
+ * - 不写内存缓存、不调用 batchSaveExperimentData；
+ * - 通过 CalibrationStreamFn 回调将数据返回给调用方。
+ */
+void ExperimentDataService::tryFetchCalibrationData(int channel,
+                                                     int storageAReadableCount,
+                                                     int storageBReadableCount,
+                                                     int storageAState,
+                                                     int storageBState,
+                                                     const DeviceIdProvider& deviceIdProvider,
+                                                     const BuildRowsFn& buildRowsFn,
+                                                     const SendControlFn& sendControlFn,
+                                                     const CalibrationStreamFn& streamFn) const
+{
+    if (!m_scheduler || !buildRowsFn || !sendControlFn) {
+        return;
+    }
+
+    const QString deviceId = deviceIdProvider ? deviceIdProvider(channel) : QString::number(channel + 1);
+
+    // 校准扫描数据读取：与实验数据读取逻辑相同，但跳过缓存和入库
+    auto fetchArea = [&](bool areaA, int readableCount, int initialState) {
+        if (!isStorageReadable(initialState)) {
+            qDebug() << "[ExperimentDataService][CalibrationFetch] channel=" << channel
+                     << (areaA ? "A" : "B") << "state=" << initialState << "skip(not readable)";
+            return;
+        }
+
+        const int readablePairCount = qBound(0, readableCount, kStorageMaxPairCount);
+        const int readableWordCount = readablePairCount * 2;
+        if (readablePairCount <= 0) {
+            qWarning() << "[ExperimentDataService][CalibrationFetch] channel=" << channel
+                       << (areaA ? "A" : "B") << "state=readable but readableCount=0";
+            return;
+        }
+
+        const QVector<QString> readPlans = areaA
+                ? QVector<QString>{"read_scan_data_a_0", "read_scan_data_a_100", "read_scan_data_a_200",
+                                   "read_scan_data_a_300", "read_scan_data_a_400"}
+                : QVector<QString>{"read_scan_data_b_500", "read_scan_data_b_600", "read_scan_data_b_700",
+                                   "read_scan_data_b_800", "read_scan_data_b_900"};
+        const QString ackCommand = areaA ? "write_storage_a_state" : "write_storage_b_state";
+
+        bool hasReadAnyBatch = false;
+        int totalWords = 0;
+        int totalPairs = 0;
+        int remainingWordCount = readableWordCount;
+
+        for (const QString& taskName : readPlans) {
+            QVector<quint16> raw;
+            m_scheduler->executeUserTask(deviceId, taskName, 1, raw, {}, taskName);
+            qDebug() << "[ExperimentDataService][CalibrationFetch] channel=" << channel
+                     << (areaA ? "A" : "B")
+                     << "task=" << taskName
+                     << "rawSize=" << raw.size();
+            if (raw.isEmpty()) {
+                continue;
+            }
+
+            const int wantedWords = qMax(0, qMin(kStorageChunkRegisterCount, remainingWordCount));
+            const int effectiveWords = qMin(raw.size(), wantedWords);
+            const int alignedWords = effectiveWords - (effectiveWords % 2);
+            const QVector<quint16> sliced = raw.mid(0, alignedWords);
+            remainingWordCount -= effectiveWords;
+            totalWords += sliced.size();
+
+            if (sliced.isEmpty()) {
+                if (wantedWords > 0 && (effectiveWords % 2) != 0) {
+                    qWarning() << "[ExperimentDataService][CalibrationFetch] channel=" << channel
+                               << (areaA ? "A" : "B")
+                               << "odd readable data count ignored last word, task=" << taskName;
+                }
+                continue;
+            }
+
+            hasReadAnyBatch = true;
+            const QVector<QVariantMap> batch = buildRowsFn(channel, sliced, areaA);
+            if (!batch.isEmpty()) {
+                // 校准数据不入库、不写缓存，仅通过回调返回
+                if (streamFn) {
+                    streamFn(channel, batch);
+                }
+                totalPairs += batch.size();
+                qDebug() << "[ExperimentDataService][CalibrationFetch] channel=" << channel
+                         << (areaA ? "A" : "B")
+                         << "batchPairs=" << batch.size();
+            }
+        }
+
+        const bool fullyFetched = (totalWords >= readableWordCount);
+        if (hasReadAnyBatch && fullyFetched) {
+            const bool ackWritten = sendControlFn(channel, ackCommand, {{"value", kStorageTakenState}});
+            qDebug() << "[ExperimentDataService][CalibrationFetch] channel=" << channel
+                     << (areaA ? "A" : "B")
+                     << "readableCount=" << readablePairCount
+                     << "done words=" << totalWords
+                     << "pairs=" << totalPairs
+                     << "ackWritten=" << ackWritten;
+        } else if (hasReadAnyBatch) {
+            qWarning() << "[ExperimentDataService][CalibrationFetch] channel=" << channel
+                       << (areaA ? "A" : "B")
+                       << "partial fetch, keep READY state"
+                       << "done words=" << totalWords
+                       << "pairs=" << totalPairs;
+        } else {
+            qWarning() << "[ExperimentDataService][CalibrationFetch] channel=" << channel
+                       << (areaA ? "A" : "B") << "readable but no data";
+        }
+    };
+
+    fetchArea(true, storageAReadableCount, storageAState);
+    fetchArea(false, storageBReadableCount, storageBState);
+}

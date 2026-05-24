@@ -1,4 +1,4 @@
-﻿import QtQuick 2.12
+import QtQuick 2.12
 import QtQuick.Layouts 1.12
 import QtQuick.Controls 2.12
 
@@ -13,6 +13,8 @@ Item {
     property bool isCovered: true
     property string temperature: "25.0"
     property string remainingHours: "20.0"
+
+    signal clicked()
 
     Rectangle {
         anchors.fill: parent
@@ -125,6 +127,11 @@ Item {
                     Layout.preferredWidth: implicitWidth
                 }
             }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.clicked()
         }
     }
 }

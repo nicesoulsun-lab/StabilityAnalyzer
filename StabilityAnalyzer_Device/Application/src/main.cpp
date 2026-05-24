@@ -6,7 +6,6 @@
 #include <QSharedPointer>
 #include <QTextCodec>
 #include <QThread>
-#include <QTimer>
 #include <QQuickWindow>
 
 #include "logmanager.h"
@@ -15,7 +14,6 @@
 #include "CurveItem.h"
 #include "Controller/controllerManager.h"
 #include "Controller/experiment_ctrl.h"
-#include "datatransmitcontroller.h"
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -71,29 +69,18 @@ int main(int argc, char *argv[])
     LOG_INFO()<<"程序启动主线程"<<QThread::currentThread();
 
     qmlRegisterUncreatableType<ExperimentCtrl>("StabilityAnalyzer", 1, 0, "ExperimentCtrl", "Cannot create ExperimentCtrl in QML");
+    qmlRegisterType<CurveItem>("CustomComponents", 1, 0, "CurveItem");
 
     QQmlApplicationEngine engine;
 
     CtrllerManager *ctrl_manager = new CtrllerManager(&app);
-    DataTransmitController *dataTransmitCtrl = ctrl_manager->getDataTransmitCtrl();
 
-    QObject::connect(dataTransmitCtrl, &DataTransmitController::logMessage,
-                     [&log](const QString &message) {
-        LOG_INFO() << "[DataTransmit]" << message;
-    });
-    QObject::connect(dataTransmitCtrl, &DataTransmitController::lastErrorChanged,
-                     [dataTransmitCtrl]() {
-        const QString errorText = dataTransmitCtrl->lastError();
-        if (!errorText.isEmpty()) {
-            LOG_ERROR() << "[DataTransmit]" << errorText;
-        }
-    });
-
-    engine.rootContext()->setContextProperty("data_transmit_ctrl", dataTransmitCtrl);
+    engine.rootContext()->setContextProperty("data_transmit_ctrl", ctrl_manager->getDataTransmitCtrl());
     engine.rootContext()->setContextProperty("system_ctrl", ctrl_manager->getSystemSettingCtrl());
     engine.rootContext()->setContextProperty("user_ctrl", ctrl_manager->getUserCtrl());
     engine.rootContext()->setContextProperty("data_ctrl", ctrl_manager->getDataCtrl());
     engine.rootContext()->setContextProperty("experiment_ctrl", ctrl_manager->getExperimentCtrl());
+    engine.rootContext()->setContextProperty("realtime_curve_ctrl", ctrl_manager->getRealtimeCurveCtrl());
     engine.rootContext()->setContextProperty("user_list_model", ctrl_manager->getUserListmodel());
     engine.rootContext()->setContextProperty("experiment_list_model", ctrl_manager->getExperimentListmodel());
 
@@ -114,9 +101,6 @@ int main(int argc, char *argv[])
             window->setHeight(600);
         }
     }
-
-    // 在事件循环启动后再拉起通信，避免脚本执行阻塞应用初始化过程。
-    QTimer::singleShot(0, dataTransmitCtrl, SLOT(startConnection()));
 
     return app.exec();
 }

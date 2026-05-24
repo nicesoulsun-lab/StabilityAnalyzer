@@ -450,6 +450,35 @@ void DataTransmitController::handleControlMessage(const QJsonObject &message)
         return;
     }
 
+    if (command == QStringLiteral("set_calibration")) {
+        const int channel = message.value(QStringLiteral("channel")).toInt(-1);
+        const int transmissionRef = message.value(QStringLiteral("transmission_reference")).toInt(0);
+        const int backscatterRef = message.value(QStringLiteral("backscatter_reference")).toInt(0);
+        if (channel < 0 || channel >= 4) {
+            m_controlServer->sendControlMessage(buildCommandResult(command, requestId, false,
+                                                                   QStringLiteral("Invalid channel")));
+            return;
+        }
+        emit calibrationUpdateRequested(channel, transmissionRef, backscatterRef, requestId);
+        return;
+    }
+
+    // 校准扫描命令：触发单次扫描，数据通过 Stream 通道异步推送
+    if (command == QStringLiteral("start_calibration_scan")) {
+        const int channel = message.value(QStringLiteral("channel")).toInt(-1);
+        const int scanRangeStart = message.value(QStringLiteral("scan_range_start")).toInt(0);
+        const int scanRangeEnd = message.value(QStringLiteral("scan_range_end")).toInt(0);
+        const int scanStep = message.value(QStringLiteral("scan_step")).toInt(20);
+        if (channel < 0 || channel >= 4) {
+            m_controlServer->sendControlMessage(
+                buildCommandResult(command, requestId, false,
+                                   QStringLiteral("Invalid channel")));
+            return;
+        }
+        emit calibrationScanRequested(channel, scanRangeStart, scanRangeEnd, scanStep, requestId);
+        return;
+    }
+
     QJsonObject response;
     response.insert(QStringLiteral("type"), QStringLiteral("ack"));
     response.insert(QStringLiteral("cmd"), command);

@@ -424,11 +424,10 @@ void ModbusTaskScheduler::executeUserTask(const QString &slaveId, const QString 
             //轮询任务放到了队列里面，每隔一个interval的时间间隔就需要如队列然后等待执行，然后轮询任务的开始和停止由外部调用者控制
             //如果需要停止这个轮询任务，不再往队列放请求了，就在外部调用暂停的方法，如果又要开始执行这个轮询任务了就再调用开始的方法
             if(task->interval()>0){
-                m_taskQueueManager->addPollingTask(deviceId, task);
+                m_taskQueueManager->addPollingTask(getPortNameForDevice(deviceId), deviceId, task);
             }
-            // 添加到高优先级队列（先进先出）
             else{
-                m_taskQueueManager->addHighPriorityTask(deviceId, task);
+                m_taskQueueManager->addHighPriorityTask(getPortNameForDevice(deviceId), deviceId, task);
             }
             //qDebug() << "User task added to queue:" << taskName
             //         << "for device (slaveId):" << slaveId;
@@ -486,7 +485,7 @@ void ModbusTaskScheduler::schedulePollingTask(const QString &slaveId, const QStr
             task->setIsSync(isSync);
             task->setWriteData(writeData);
             // 添加到轮询队列（低优先级队列）
-            m_taskQueueManager->addPollingTask(deviceId, task);
+            m_taskQueueManager->addPollingTask(getPortNameForDevice(deviceId), deviceId, task);
         } else {
             emit errorOccurred("Task not found: " + taskName + " for device (slaveId): " + slaveId);
         }
@@ -634,9 +633,9 @@ void ModbusTaskScheduler::updateConnectionStatistics()
         }
     }
 
-    qDebug() << "[Scheduler][ConnStats] summary total=" << totalCount
-             << "connected=" << connectedCount
-             << "previousConnected=" << m_connectedDevices;
+//    qDebug() << "[Scheduler][ConnStats] summary total=" << totalCount
+//             << "connected=" << connectedCount
+//             << "previousConnected=" << m_connectedDevices;
 
     if (m_totalDevices != totalCount) {
         m_totalDevices = totalCount;

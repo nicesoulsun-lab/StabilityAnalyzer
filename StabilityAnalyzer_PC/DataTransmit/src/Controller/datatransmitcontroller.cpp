@@ -278,6 +278,9 @@ bool DataTransmitController::sendControlCommand(const QString &command, const QV
 
     QVariantMap message = payload;
     message.insert(QStringLiteral("cmd"), command);
+
+    qDebug()<<"DataTransmitController "<<message;
+
     return sendJson(m_controlChannel, message);
 }
 

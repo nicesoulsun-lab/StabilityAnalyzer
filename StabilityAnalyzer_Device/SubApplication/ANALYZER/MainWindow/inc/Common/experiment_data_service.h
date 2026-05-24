@@ -32,6 +32,8 @@ public:
     using SendControlFn = std::function<bool(int, const QString&, const QVariantMap&)>;
     using CurrentScanCountFn = std::function<int(void)>;
     using StreamRowsFn = std::function<void(int, int, const QVector<QVariantMap>&)>;
+    // 校准数据流式回调，不需要 experimentId
+    using CalibrationStreamFn = std::function<void(int, const QVector<QVariantMap>&)>;
 
     /**
      * @brief 构造数据服务。
@@ -68,6 +70,22 @@ public:
                             const SendControlFn& sendControlFn,
                             const CurrentScanCountFn& currentScanCountFn,
                             const StreamRowsFn& streamRowsFn = StreamRowsFn()) const;
+
+    /**
+     * @brief 根据存储区状态尝试读取 A/B 区校准扫描数据（不入库、不写缓存）。
+     *
+     * 与 tryFetchStoredData 的区别：无 experimentId、无内存缓存、无数据库写入，
+     * 仅读取原始数据并通过 CalibrationStreamFn 回调返回。
+     */
+    void tryFetchCalibrationData(int channel,
+                                  int storageAReadableCount,
+                                  int storageBReadableCount,
+                                  int storageAState,
+                                  int storageBState,
+                                  const DeviceIdProvider& deviceIdProvider,
+                                  const BuildRowsFn& buildRowsFn,
+                                  const SendControlFn& sendControlFn,
+                                  const CalibrationStreamFn& streamFn = CalibrationStreamFn()) const;
 
 private:
     SqlOrmManager* m_dbManager;

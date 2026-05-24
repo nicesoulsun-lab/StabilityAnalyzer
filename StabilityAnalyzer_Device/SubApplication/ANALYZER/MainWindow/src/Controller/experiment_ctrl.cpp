@@ -1,4 +1,4 @@
-﻿
+
 #include "inc/Controller/experiment_ctrl.h"
 #include "inc/Common/experiment_comm_service.h"
 #include "inc/Common/experiment_data_service.h"
@@ -206,6 +206,7 @@ ExperimentCtrl::ExperimentCtrl(QObject *parent)
 
     for (int i = 0; i < configuredChannelCount(); ++i) {
         loadSerialConfig(i);
+        m_stateStore->loadCalibration(i);
     }
 
     // 启动时对“历史持久化配置”做一次兜底修正：
@@ -442,6 +443,12 @@ bool ExperimentCtrl::startExperiment(int channel, int creatorId)
         return false;
     }
 
+    // 校准扫描进行中时禁止启动实验
+    if (m_calibrationModes.value(ch, false)) {
+        emit operationFailed(tr("校准扫描进行中，请等待完成"));
+        return false;
+    }
+
     if (!m_stateStore->hasParams(channel)) {
         emit operationFailed(tr("请先设置实验参数"));
         return false;
@@ -516,6 +523,9 @@ bool ExperimentCtrl::startExperiment(int channel, int creatorId)
     ExperimentScanProfile scanProfile = m_sessionService->buildScanProfile(params);
     scanProfile.experimentStartMs = QDateTime::currentMSecsSinceEpoch();
     m_sessionService->setScanProfile(channel, scanProfile);
+    m_sessionService->setCalibration(channel,
+                                     m_stateStore->transmissionCalibration(channel),
+                                     m_stateStore->backscatterCalibration(channel));
     m_startTimes[ch] = scanProfile.experimentStartMs;
     m_runningFlags[ch] = true;
     m_plannedScanCounts[ch] = qMax(1, params.scanCount);
@@ -710,8 +720,100 @@ void ExperimentCtrl::loadSerialConfig(int channel)
 
 QVariantMap ExperimentCtrl::getChannelStatus(int channel) const
 {
-    // 给QML首帧渲染使用：返回当前缓存快照。
     return m_stateStore->channelStatus(channel);
+}
+
+void ExperimentCtrl::updateCalibration(int channel, int transmissionRef, int backscatterRef)
+{
+    m_stateStore->setCalibration(channel, transmissionRef, backscatterRef);
+    m_stateStore->saveCalibration(channel);
+
+    qDebug() << "[ExperimentCtrl] calibration updated, channel=" << channel
+             << "transRef=" << transmissionRef << "backRef=" << backscatterRef;
+}
+
+void ExperimentCtrl::startCalibrationScan(int channel, int scanRangeStart, int scanRangeEnd, int scanStep)
+{
+    const Channel ch = static_cast<Channel>(channel);
+
+    // 参数校验
+    if (channel < 0 || channel >= configuredChannelCount()) {
+        qDebug() << "[ExperimentCtrl][Calibration] invalid channel" << channel;
+        return;
+    }
+    if (m_runningFlags.value(ch, false)) {
+        qDebug() << "[ExperimentCtrl][Calibration] channel=" << channel << "experiment running, reject";
+        return;
+    }
+    if (m_calibrationModes.value(ch, false)) {
+        qDebug() << "[ExperimentCtrl][Calibration] channel=" << channel << "already in calibration mode";
+        return;
+    }
+    if (scanStep <= 0 || scanRangeEnd <= scanRangeStart) {
+        qDebug() << "[ExperimentCtrl][Calibration] invalid scan params";
+        return;
+    }
+    if (!m_schedulerInitialized) {
+        const QString configPath = defaultConfigDirPath();
+        if (!initializeScheduler(configPath)) {
+            qDebug() << "[ExperimentCtrl][Calibration] scheduler not initialized";
+            return;
+        }
+    }
+
+    // 下发扫描参数并触发单次扫描
+    sendControlCommand(channel, "set_scan_range",
+                       {{"start", scanRangeStart}, {"end", scanRangeEnd}});
+    sendControlCommand(channel, "set_step", {{"step", scanStep}});
+    sendControlCommand(channel, "start_scan", {{"value", 1}});
+
+    // 标记校准模式，初始化数据累积
+    m_calibrationModes[ch] = true;
+    m_calibrationRows[ch].clear();
+    m_calibrationScanContexts[ch] = {
+        static_cast<double>(scanRangeStart),
+        static_cast<double>(scanStep)
+    };
+
+    qDebug() << "[ExperimentCtrl][Calibration] started, channel=" << channel
+             << "range=" << scanRangeStart << "~" << scanRangeEnd
+             << "step=" << scanStep;
+}
+
+void ExperimentCtrl::tryFetchCalibrationData(int channel, int storageAReadableCount,
+                                              int storageBReadableCount,
+                                              int storageAState, int storageBState)
+{
+    const Channel ch = static_cast<Channel>(channel);
+    const CalibrationScanContext ctx = m_calibrationScanContexts.value(ch);
+
+    QVector<QVariantMap> batchRows;
+
+    m_dataService->tryFetchCalibrationData(
+        channel,
+        storageAReadableCount, storageBReadableCount,
+        storageAState, storageBState,
+        [this](int targetChannel) { return getDeviceId(targetChannel); },
+        [this, ctx](int targetChannel, const QVector<quint16>& raw, bool areaA) {
+            return m_sessionService->buildCalibrationRows(
+                targetChannel, raw, areaA, ctx.scanRangeStartMm, ctx.scanStepUm);
+        },
+        [this](int targetChannel, const QString& command, const QVariantMap& params) {
+            return sendControlCommand(targetChannel, command, params);
+        },
+        [&batchRows](int targetChannel, const QVector<QVariantMap>& rows) {
+            Q_UNUSED(targetChannel)
+            batchRows += rows;
+        });
+
+    // 累积数据，不立即推送，等扫描完成后统一推送
+    if (!batchRows.isEmpty()) {
+        m_calibrationRows[ch] += batchRows;
+    }
+
+    qDebug() << "[ExperimentCtrl][Calibration] data fetched, channel=" << channel
+             << "batchRows=" << batchRows.size()
+             << "totalRows=" << m_calibrationRows.value(ch).size();
 }
 
 void ExperimentCtrl::onScanTimer(int channel)
@@ -914,16 +1016,46 @@ void ExperimentCtrl::pollChannelStatus(int channel)
         }
     }
 
+    // 校准模式：哪个区可取就取哪个，用数据累积+空闲状态判断扫描完成
+    if (m_calibrationModes.value(ch, false)) {
+        const int storageAReadableCount = status.value("storageAReadableCount", 0).toInt();
+        const int storageBReadableCount = status.value("storageBReadableCount", 0).toInt();
+        const int storageAState = status.value("storageAState", 0).toInt();
+        const int storageBState = status.value("storageBState", 0).toInt();
+        const int totalRows = m_calibrationRows.value(ch).size();
+
+        // 哪个区可取就取哪个，取完回写3
+        if (storageAReadableCount > 0 || storageBReadableCount > 0) {
+            tryFetchCalibrationData(channel, storageAReadableCount, storageBReadableCount,
+                                    storageAState, storageBState);
+        }
+
+        // 扫描完成判断：已累积到数据 + 下位机空闲 + 无更多可取数据
+        const bool hasData = (totalRows > 0);
+        const bool deviceIdle = (runStatus == 0);
+        const bool noMoreData = (storageAReadableCount <= 0 && storageBReadableCount <= 0);
+        if (hasData && deviceIdle && noMoreData) {
+            const QVector<QVariantMap> allRows = m_calibrationRows.value(ch);
+            emit calibrationScanDataReady(channel, allRows);
+            sendControlCommand(channel, "stop_scan", {{"value", 0}});
+            m_calibrationModes[ch] = false;
+            m_calibrationRows.remove(ch);
+
+            qDebug() << "[ExperimentCtrl][Calibration] completed, channel=" << channel
+                     << "rows=" << allRows.size();
+        }
+    }
+
     QVariantMap mergedStatus;
     if (m_stateStore->updateChannelStatus(channel, patch, &mergedStatus)) {
-        qDebug() << "[ExperimentCtrl][UI] channel=" << channel
-                 << "running=" << mergedStatus.value("running").toBool()
-                 << "hasSample=" << mergedStatus.value("hasSample").toBool()
-                 << "isCovered=" << mergedStatus.value("isCovered").toBool()
-                 << "temp=" << mergedStatus.value("currentTemperature").toDouble()
-                 << "remain=" << mergedStatus.value("remainingSeconds").toInt()
-                 << "A=" << mergedStatus.value("storageAState").toInt()
-                 << "B=" << mergedStatus.value("storageBState").toInt();
+//        qDebug() << "[ExperimentCtrl][UI] channel=" << channel
+//                 << "running=" << mergedStatus.value("running").toBool()
+//                 << "hasSample=" << mergedStatus.value("hasSample").toBool()
+//                 << "isCovered=" << mergedStatus.value("isCovered").toBool()
+//                 << "temp=" << mergedStatus.value("currentTemperature").toDouble()
+//                 << "remain=" << mergedStatus.value("remainingSeconds").toInt()
+//                 << "A=" << mergedStatus.value("storageAState").toInt()
+//                 << "B=" << mergedStatus.value("storageBState").toInt();
         emit channelStatusUpdated(channel, mergedStatus);
     }
 }

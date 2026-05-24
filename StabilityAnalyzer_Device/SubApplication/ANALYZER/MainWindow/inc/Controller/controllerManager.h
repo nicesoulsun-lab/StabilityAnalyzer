@@ -3,11 +3,14 @@
 
 #include <QObject>
 #include <QDebug>
+#include <QTimer>
 #include "datatransmitcontroller.h"
 #include "systemsetting_ctrl.h"
 #include "user_ctrl.h"
 #include "data_ctrl.h"
 #include "experiment_ctrl.h"
+#include "led_controller.h"
+#include "realtime_curve_ctrl.h"
 #include "DataModel/user_sql_listmodel.h"
 #include "DataModel/experiment_listmodel.h"
 
@@ -25,9 +28,39 @@ public:
         , m_experimentCtrl(new ExperimentCtrl(this))
         , m_userListmodel(new user_sql_listmodel(this))
         , m_experimentListmodel(new experiment_listmodel(this))
+        , m_ledController(new LedController(this))
+        , m_realtimeCurveCtrl(new RealtimeCurveCtrl(m_experimentCtrl, m_dataCtrl, this))
     {
+        QObject::connect(m_dataTransmitCtrl, &DataTransmitController::logMessage,
+                         this,
+                         [](const QString &message) {
+            if (!message.contains(QStringLiteral("heartbeat"), Qt::CaseInsensitive))
+                qDebug() << "[DataTransmit]" << message;
+        });
+        QObject::connect(m_dataTransmitCtrl, &DataTransmitController::lastErrorChanged,
+                         this,
+                         [this]() {
+            const QString errorText = m_dataTransmitCtrl->lastError();
+            if (!errorText.isEmpty()) {
+                qWarning() << "[DataTransmit]" << errorText;
+            }
+        });
+
         QObject::connect(m_experimentCtrl, &ExperimentCtrl::channelStatusUpdated,
                          m_dataTransmitCtrl, &DataTransmitController::updateExperimentChannelStatus);
+
+        QObject::connect(m_experimentCtrl, &ExperimentCtrl::experimentStarted,
+                         m_ledController, &LedController::onExperimentStarted);
+        QObject::connect(m_experimentCtrl, &ExperimentCtrl::experimentStopped,
+                         m_ledController, &LedController::onExperimentStopped);
+
+        // 轮询状态中的runStatus=3表示错误，传递给LED控制器
+        QObject::connect(m_experimentCtrl, &ExperimentCtrl::channelStatusUpdated,
+                         this,
+                         [this](int channel, const QVariantMap &status) {
+            const bool hasError = status.value(QStringLiteral("runStatus"), 0).toInt() == 3;
+            m_ledController->applyChannelError(channel, hasError);
+        });
 
         QObject::connect(m_experimentCtrl, &ExperimentCtrl::scanDataChunkReady,
                          this,
@@ -209,9 +242,51 @@ public:
                                                   });
         });
 
+        QObject::connect(m_dataTransmitCtrl, &DataTransmitController::calibrationUpdateRequested,
+                         this,
+                         [this](int channel, int transmissionRef, int backscatterRef, const QString &requestId) {
+            m_experimentCtrl->updateCalibration(channel, transmissionRef, backscatterRef);
+            m_dataTransmitCtrl->sendCommandResult(QStringLiteral("set_calibration"),
+                                                   requestId,
+                                                   true,
+                                                   QString("Calibration updated for channel %1").arg(channel),
+                                                   QVariantMap{{QStringLiteral("channel"), channel}});
+        });
+
+        // 校准扫描请求：触发设备端校准扫描并回复 ACK
+        QObject::connect(m_dataTransmitCtrl, &DataTransmitController::calibrationScanRequested,
+                         this,
+                         [this](int channel, int scanRangeStart, int scanRangeEnd,
+                                int scanStep, const QString &requestId) {
+            m_experimentCtrl->startCalibrationScan(channel, scanRangeStart, scanRangeEnd, scanStep);
+            m_dataTransmitCtrl->sendCommandResult(
+                QStringLiteral("start_calibration_scan"), requestId, true,
+                QString("Calibration scan started for channel %1").arg(channel),
+                QVariantMap{{QStringLiteral("channel"), channel}});
+        });
+
+        // 校准扫描数据就绪：通过 Stream 通道推送给 PC
+        QObject::connect(m_experimentCtrl, &ExperimentCtrl::calibrationScanDataReady,
+                         this,
+                         [this](int channel, const QVector<QVariantMap> &rows) {
+            QVariantList rowList;
+            rowList.reserve(rows.size());
+            for (const QVariantMap &row : rows) {
+                rowList.append(row);
+            }
+            m_dataTransmitCtrl->sendStreamMessage(QVariantMap{
+                {QStringLiteral("type"), QStringLiteral("calibration_scan_data")},
+                {QStringLiteral("channel"), channel},
+                {QStringLiteral("row_count"), rowList.size()},
+                {QStringLiteral("rows"), rowList}
+            });
+        });
+
         for (int channel = 0; channel < m_experimentCtrl->channelCount(); ++channel) {
             m_dataTransmitCtrl->updateExperimentChannelStatus(channel, m_experimentCtrl->getChannelStatus(channel));
         }
+
+        QTimer::singleShot(0, m_dataTransmitCtrl, SLOT(startConnection()));
     }
 
     // 获取各个 Controller 实例
@@ -220,6 +295,8 @@ public:
     userCtrl *getUserCtrl() const { return m_userCtrl; }
     dataCtrl *getDataCtrl() const { return m_dataCtrl; }
     ExperimentCtrl *getExperimentCtrl() const { return m_experimentCtrl; }
+    LedController *getLedController() const { return m_ledController; }
+    RealtimeCurveCtrl *getRealtimeCurveCtrl() const { return m_realtimeCurveCtrl; }
 
     user_sql_listmodel *getUserListmodel() const { return m_userListmodel; }
     experiment_listmodel *getExperimentListmodel() const { return m_experimentListmodel; }
@@ -232,6 +309,8 @@ private:
     ExperimentCtrl *m_experimentCtrl = nullptr;
     user_sql_listmodel *m_userListmodel = nullptr;
     experiment_listmodel *m_experimentListmodel = nullptr;
+    LedController *m_ledController = nullptr;
+    RealtimeCurveCtrl *m_realtimeCurveCtrl = nullptr;
 };
 
 #endif // CONTROLLERMANAGER_H

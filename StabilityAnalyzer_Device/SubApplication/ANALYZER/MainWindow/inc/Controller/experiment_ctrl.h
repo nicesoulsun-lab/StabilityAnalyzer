@@ -1,4 +1,4 @@
-﻿#ifndef EXPERIMENT_CTRL_H
+#ifndef EXPERIMENT_CTRL_H
 #define EXPERIMENT_CTRL_H
 
 #include <QObject>
@@ -149,6 +149,15 @@ public:
      */
     Q_INVOKABLE QVariantMap getChannelStatus(int channel) const;
 
+    Q_INVOKABLE void updateCalibration(int channel, int transmissionRef, int backscatterRef);
+
+    /**
+     * @brief 启动校准扫描（独立于实验流程，不入库）
+     *
+     * 流程：下发扫描参数 → 触发单次扫描 → poll 检测数据就绪 → 读取并推送
+     */
+    Q_INVOKABLE void startCalibrationScan(int channel, int scanRangeStart, int scanRangeEnd, int scanStep);
+
 signals:
     // 实验生命周期信号
     void experimentStarted(int channel, int experimentId);
@@ -167,6 +176,11 @@ signals:
      */
     void channelStatusUpdated(int channel, const QVariantMap& status);
     void scanDataChunkReady(int channel, int experimentId, int scanId, bool scanCompleted, const QVariantList& rows);
+
+    /**
+     * @brief 校准扫描数据就绪（由 tryFetchCalibrationData 触发）
+     */
+    void calibrationScanDataReady(int channel, const QVector<QVariantMap>& rows);
 
 private slots:
     // 旧扫描计时器回调（保留兼容）
@@ -215,6 +229,12 @@ private:
                             int storageAState, int storageBState);
 
     /**
+     * @brief 根据存储区状态尝试读取校准扫描数据（不入库）
+     */
+    void tryFetchCalibrationData(int channel, int storageAReadableCount, int storageBReadableCount,
+                                  int storageAState, int storageBState);
+
+    /**
      * @brief 生成默认JSON配置（设备+taskList）
      */
     void generateDefaultConfig(const QString& configDirPath);
@@ -240,6 +260,19 @@ private:
     QMap<Channel, int> m_startedScanCounts;
     QMap<Channel, bool> m_stopAfterDrainFlags;
     QMap<Channel, qint64> m_stopAfterDrainDeadlineMs;
+
+    // 校准扫描状态
+    QMap<Channel, bool> m_calibrationModes;
+    // 校准扫描已收集的数据行（分批累积，扫描完成后统一推送）
+    QMap<Channel, QVector<QVariantMap>> m_calibrationRows;
+    /**
+     * @brief 校准扫描上下文，保存扫描参数供数据读取时使用
+     */
+    struct CalibrationScanContext {
+        double scanRangeStartMm = 0.0;
+        double scanStepUm = 20.0;
+    };
+    QMap<Channel, CalibrationScanContext> m_calibrationScanContexts;
 
     // 调度器初始化状态
     bool m_schedulerInitialized;

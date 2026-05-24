@@ -14,6 +14,8 @@ HEADERS += \
         $$PWD/inc/Controller/systemsetting_ctrl.h \
         $$PWD/inc/Controller/user_ctrl.h \
         $$PWD/inc/Controller/data_ctrl.h \
+        $$PWD/inc/Controller/led_controller.h \
+        $$PWD/inc/Controller/realtime_curve_ctrl.h \
         $$PWD/inc/DataModel/experiment_listmodel.h \
         $$PWD/inc/DataModel/user_sql_listmodel.h \
         $$PWD/inc/mainwindow_global.h \
@@ -31,6 +33,8 @@ SOURCES += \
         $$PWD/src/Controller/systemsetting_ctrl.cpp \
         $$PWD/src/Controller/user_ctrl.cpp \
         $$PWD/src/Controller/data_ctrl.cpp \
+        $$PWD/src/Controller/led_controller.cpp \
+        $$PWD/src/Controller/realtime_curve_ctrl.cpp \
         $$PWD/src/DataModel/experiment_listmodel.cpp \
         $$PWD/src/DataModel/user_sql_listmodel.cpp \
         $$PWD/src/main.cpp \

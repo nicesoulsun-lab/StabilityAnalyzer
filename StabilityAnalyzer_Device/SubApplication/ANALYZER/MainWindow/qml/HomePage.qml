@@ -1,4 +1,4 @@
-﻿import QtQuick 2.12
+import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Layouts 1.12
 import "component"
@@ -99,6 +99,14 @@ Item {
                         isRunning: false
                         hasSample: false
                         isCovered: true
+
+                        onClicked: {
+                            if (experiment_ctrl && experiment_ctrl.isExperimentRunning(index)) {
+                                user_ctrl.logOperation("进入通道" + (index + 1) + "实时曲线页面")
+                                mainStackView.push("qrc:/qml/RealtimeCurvePage.qml",
+                                                   {"channelId": index})
+                            }
+                        }
                     }
                 }
             }

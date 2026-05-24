@@ -5,21 +5,21 @@ import "../component"
 import ".."
 
 
-//涓嶇ǔ瀹氭€ф洸绾?
+//不稳定性曲线
 Rectangle {
     id: instabilityPanel
 
-    // 涓嶇ǔ瀹氭€ч〉鎶婃渶閲嶇殑璁＄畻绉诲洖 C++/鏁版嵁搴撳眰锛?
-    // QML 渚у彧璐熻矗鎸夋ā寮忔噿鍔犺浇缁撴灉鍜岀粍缁囧睍绀恒€?
+    // 不稳定性页把最重的计算移回 C++/数据库层，
+    // QML 侧只负责按模式懒加载结果和组装展示。
     property var detailPage
     readonly property var experimentData: detailPage ? detailPage.experimentData : ({})
     property int currentModeIndex: 0
-    property var modeTitles: [qsTr("\u6574\u4f53"), qsTr("\u5c40\u90e8"), qsTr("\u81ea\u5b9a\u4e49"), qsTr("\u603b\u89c8")]
-    property var overallSeries: createEmptyInstabilitySeries(qsTr("\u6574\u4f53"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
-    property var bottomSeries: createEmptyInstabilitySeries(qsTr("\u5e95\u90e8"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.minHeightValue : 0)
-    property var middleSeries: createEmptyInstabilitySeries(qsTr("\u4e2d\u90e8"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.minHeightValue : 0)
-    property var topSeries: createEmptyInstabilitySeries(qsTr("\u9876\u90e8"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
-    property var customSeries: createEmptyInstabilitySeries(qsTr("\u81ea\u5b9a\u4e49"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
+    property var modeTitles: [qsTr("整体"), qsTr("局部"), qsTr("自定义"), qsTr("总览")]
+    property var overallSeries: createEmptyInstabilitySeries(qsTr("整体"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
+    property var bottomSeries: createEmptyInstabilitySeries(qsTr("底部"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.minHeightValue : 0)
+    property var middleSeries: createEmptyInstabilitySeries(qsTr("中部"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.minHeightValue : 0)
+    property var topSeries: createEmptyInstabilitySeries(qsTr("顶部"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
+    property var customSeries: createEmptyInstabilitySeries(qsTr("自定义"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
     property var radarPolygons: []
     property real radarMaxValue: 1
     property real customLowerBound: 0
@@ -36,7 +36,7 @@ Rectangle {
     color: "#FFFFFF"
 
     function createEmptyInstabilitySeries(title, lowerBound, upperBound) {
-        // 鎵€鏈夋ā寮忓厛浣跨敤鍚屼竴绉嶇┖缁撴瀯锛岄伩鍏嶇晫闈㈠垵娆¤繘鍏ユ椂鍙嶅鍒ょ┖銆?
+        // 所有模式先使用同一种空结构，避免界面初次进入时反复清空。
         return {
             title: title,
             rangeLabel: detailPage ? detailPage.formatNumber(lowerBound, 1) + " - " + detailPage.formatNumber(upperBound, 1) + " mm" : "",
@@ -59,11 +59,11 @@ Rectangle {
         customLoading = false
         overviewRequestId = 0
         customRequestId = 0
-        overallSeries = createEmptyInstabilitySeries(qsTr("\u6574\u4f53"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
-        bottomSeries = createEmptyInstabilitySeries(qsTr("\u5e95\u90e8"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.minHeightValue : 0)
-        middleSeries = createEmptyInstabilitySeries(qsTr("\u4e2d\u90e8"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.minHeightValue : 0)
-        topSeries = createEmptyInstabilitySeries(qsTr("\u9876\u90e8"), detailPage ? detailPage.maxHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
-        customSeries = createEmptyInstabilitySeries(qsTr("\u81ea\u5b9a\u4e49"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
+        overallSeries = createEmptyInstabilitySeries(qsTr("整体"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
+        bottomSeries = createEmptyInstabilitySeries(qsTr("底部"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.minHeightValue : 0)
+        middleSeries = createEmptyInstabilitySeries(qsTr("中部"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.minHeightValue : 0)
+        topSeries = createEmptyInstabilitySeries(qsTr("顶部"), detailPage ? detailPage.maxHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
+        customSeries = createEmptyInstabilitySeries(qsTr("自定义"), detailPage ? detailPage.minHeightValue : 0, detailPage ? detailPage.maxHeightValue : 0)
         radarPolygons = []
         radarMaxValue = 1
     }
@@ -92,10 +92,10 @@ Rectangle {
     }
 
     function applyOverviewPayload(payload) {
-        overallSeries = payload && payload.overallSeries ? payload.overallSeries : createEmptyInstabilitySeries(qsTr("\u6574\u4f53"), detailPage.minHeightValue, detailPage.maxHeightValue)
-        bottomSeries = payload && payload.bottomSeries ? payload.bottomSeries : createEmptyInstabilitySeries(qsTr("\u5e95\u90e8"), detailPage.minHeightValue, detailPage.minHeightValue)
-        middleSeries = payload && payload.middleSeries ? payload.middleSeries : createEmptyInstabilitySeries(qsTr("\u4e2d\u90e8"), detailPage.minHeightValue, detailPage.minHeightValue)
-        topSeries = payload && payload.topSeries ? payload.topSeries : createEmptyInstabilitySeries(qsTr("\u9876\u90e8"), detailPage.maxHeightValue, detailPage.maxHeightValue)
+        overallSeries = payload && payload.overallSeries ? payload.overallSeries : createEmptyInstabilitySeries(qsTr("整体"), detailPage.minHeightValue, detailPage.maxHeightValue)
+        bottomSeries = payload && payload.bottomSeries ? payload.bottomSeries : createEmptyInstabilitySeries(qsTr("底部"), detailPage.minHeightValue, detailPage.minHeightValue)
+        middleSeries = payload && payload.middleSeries ? payload.middleSeries : createEmptyInstabilitySeries(qsTr("中部"), detailPage.minHeightValue, detailPage.minHeightValue)
+        topSeries = payload && payload.topSeries ? payload.topSeries : createEmptyInstabilitySeries(qsTr("顶部"), detailPage.maxHeightValue, detailPage.maxHeightValue)
 
         var radarData = payload && payload.radarData ? payload.radarData : ({})
         radarPolygons = radarData.polygons || []
@@ -115,7 +115,7 @@ Rectangle {
     }
 
     function applyCustomPayload(payload) {
-        customSeries = payload && payload.series ? payload.series : createEmptyInstabilitySeries(qsTr("\u81ea\u5b9a\u4e49"), customLowerBound, customUpperBound)
+        customSeries = payload && payload.series ? payload.series : createEmptyInstabilitySeries(qsTr("自定义"), customLowerBound, customUpperBound)
         customLoading = false
         customLoaded = true
 
@@ -173,7 +173,7 @@ Rectangle {
     }
 
     function loadLocalData() {
-        // 灞€閮ㄦā寮忓浐瀹氭寜搴?涓?椤朵笁娈靛垏鍒嗭紝缁撴灉浼氳鍚庣鎸夊尯闂寸紦瀛樸€?
+        // 局部模式固定按底部/中部/顶部三段切分，结果会被后端按区间缓存。
         if (!detailPage || !experimentData || experimentData.id === undefined || localLoaded)
             return
 
@@ -181,7 +181,7 @@ Rectangle {
             requestOverviewData()
     }
     function loadCustomData() {
-        // 鑷畾涔夋ā寮忓彧鏈夌偣鍑烩€滃簲鐢ㄢ€濆悗鎵嶉噸鏂板彇鏁帮紝閬垮厤杈撳叆妗嗙紪杈戞椂棰戠箒瑙﹀彂璁＄畻銆?
+        // 自定义模式只有点击"应用"后才重新取数，避免输入框编辑时频繁触发计算。
         if (!detailPage || !experimentData || experimentData.id === undefined || !detail_ctrl)
             return
 
@@ -208,8 +208,8 @@ Rectangle {
     }
 
     function buildRadarOverview() {
-        // 闆疯揪鍥剧殑姣忎竴灞傚搴斿悓涓€涓椂闂寸偣鍦ㄥ洓涓尯闂翠笂鐨?Ius 鍊硷紝
-        // 鍥犳杩欓噷鎸夋椂闂寸储寮曟妸鏁翠綋/搴曢儴/涓儴/椤堕儴鎷兼垚涓€缁?polygon銆?
+        // 雷达图的每一层对应同一个时间点在四个区间上的 Ius 值，
+        // 因此这里按时间索引把整体/底部/中部/顶部拼成一组 polygon。
         radarPolygons = []
         radarMaxValue = 1
         return
@@ -220,8 +220,8 @@ Rectangle {
     }
 
     function ensureModeData() {
-        // 棣栨杩涘叆椤甸潰鍙姞杞芥暣浣擄紱
-        // 鍏朵粬妯″紡鍦ㄧ湡姝ｅ垏鎹㈣繃鍘绘椂鍐嶈ˉ鏁版嵁锛岄伩鍏嶈繘椤靛崱椤裤€?
+        // 首次进入页面只加载整体；
+        // 其他模式在真正切换过去时再补数据，避免进页卡顿。
         if (!overallLoaded)
             loadOverallData()
 
@@ -400,7 +400,7 @@ Rectangle {
 
                 Label {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: qsTr("楂樺害涓嬮檺:")
+                    text: qsTr("高度下限:")
                     font.pixelSize: 12
                     font.family: "Microsoft YaHei"
                     color: "#2F3A4A"
@@ -423,7 +423,7 @@ Rectangle {
 
                 Label {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: qsTr("楂樺害涓婇檺:")
+                    text: qsTr("高度上限:")
                     font.pixelSize: 12
                     font.family: "Microsoft YaHei"
                     color: "#2F3A4A"
@@ -456,7 +456,7 @@ Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
                     width: 80
                     height: 28
-                    button_text: qsTr("搴旂敤")
+                    button_text: qsTr("应用")
                     button_color: "#4A89DC"
                     text_color: "#FFFFFF"
                     pixelSize: 12
@@ -489,7 +489,7 @@ Rectangle {
             Text {
                 anchors.centerIn: parent
                 visible: !instabilityPanel.hasVisibleSeries()
-                text: qsTr("\u6570\u636e\u5e93\u4e2d\u6682\u65e0\u8be5\u5b9e\u9a8c\u7684\u4e0d\u7a33\u5b9a\u6027\u66f2\u7ebf\u6570\u636e")
+                text: qsTr("数据库中暂无该实验的不稳定性曲线数据")
                 font.family: "Microsoft YaHei"
                 color: "#7A8CA5"
             }
@@ -537,9 +537,9 @@ Rectangle {
                                 topMargin: 18
                                 yAxisTitleOffset: 64
                                 dataPoints: modelData.points
-                                lineColor: modelData.title === qsTr("搴曢儴") ? "#2F7CF6"
-                                          : modelData.title === qsTr("涓儴") ? "#21A366"
-                                          : modelData.title === qsTr("椤堕儴") ? "#F28C28"
+                                lineColor: modelData.title === qsTr("底部") ? "#2F7CF6"
+                                          : modelData.title === qsTr("中部") ? "#21A366"
+                                          : modelData.title === qsTr("顶部") ? "#F28C28"
                                           : "#2F7CF6"
                                 minXValue: modelData.chartMinX
                                 maxXValue: modelData.chartMaxX
@@ -548,7 +548,7 @@ Rectangle {
                                 xAxisTickValues: modelData.xAxisTickValues
                                 yAxisLabels: modelData.yAxisLabels
                                 yAxisTitle: "Ius"
-                                xAxisTitle: qsTr("鏃堕棿(min)")
+                                xAxisTitle: qsTr("时间(min)")
                                 formatXLabel: function(value) {
                                     return detailPage ? detailPage.formatNumber(value, 1) : Number(value).toFixed(1)
                                 }
@@ -562,12 +562,12 @@ Rectangle {
                     visible: instabilityPanel.currentModeIndex === 3
 
                     InstabilityRadarChart {
-                        // 鎬昏妯″紡浣跨敤闆疯揪鍥惧睍绀哄悓涓€鏃堕棿鐐瑰湪鍥涗釜楂樺害鍖洪棿鐨勬í鍚戝姣斻€?
+                        // 总览模式使用雷达图展示同一时间点在四个高度区间的横向对比。
                         anchors.fill: parent
                         polygons: instabilityPanel.radarPolygons
                         maxValue: instabilityPanel.radarMaxValue
                         tickCount: 6
-                        axisLabels: [qsTr("Ius - 鏁翠綋"), qsTr("Ius - 搴曢儴"), qsTr("Ius - 涓儴"), qsTr("Ius - 椤堕儴")]
+                        axisLabels: [qsTr("Ius - 整体"), qsTr("Ius - 底部"), qsTr("Ius - 中部"), qsTr("Ius - 顶部")]
                     }
                 }
             }
@@ -596,8 +596,8 @@ Rectangle {
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: instabilityPanel.customLoading
-                              ? qsTr("\u6b63\u5728\u52a0\u8f7d\u81ea\u5b9a\u4e49\u4e0d\u7a33\u5b9a\u6027\u6570\u636e")
-                              : qsTr("\u6b63\u5728\u52a0\u8f7d\u4e0d\u7a33\u5b9a\u6027\u66f2\u7ebf")
+                              ? qsTr("正在加载自定义不稳定性数据")
+                              : qsTr("正在加载不稳定性曲线")
                         font.pixelSize: 12
                         font.family: "Microsoft YaHei"
                         color: "#4A5D75"

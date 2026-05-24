@@ -365,10 +365,10 @@ void ModbusWorker::processResponse(const QByteArray& data)
         return;
     }
     
-    qDebug() << "[ModbusWorker][Reply] requestId=" << m_currentRequest->requestId()
-             << "slave=" << m_currentRequest->slaveId()
-             << "function=" << m_currentRequest->functionCode()
-             << "frame=" << data.toHex(' ');
+//    qDebug() << "[ModbusWorker][Reply] requestId=" << m_currentRequest->requestId()
+//             << "slave=" << m_currentRequest->slaveId()
+//             << "function=" << m_currentRequest->functionCode()
+//             << "frame=" << data.toHex(' ');
 
     // 验证CRC
     if (!validateModbusCRC(data)) {
@@ -461,9 +461,9 @@ void ModbusWorker::processResponse(const QByteArray& data)
                 //                modbusValue.isValid = true;
                 result.values.append(value);
             }
-            qDebug() << "[ModbusWorker][ReplyParsed] requestId=" << m_currentRequest->requestId()
-                     << "registerCount=" << registers.size()
-                     << "values=" << registers;
+//            qDebug() << "[ModbusWorker][ReplyParsed] requestId=" << m_currentRequest->requestId()
+//                     << "registerCount=" << registers.size()
+//                     << "values=" << registers;
         }
         break;
     }
