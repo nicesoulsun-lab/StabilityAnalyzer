@@ -95,7 +95,7 @@ Item {
     // 组件加载完成时，加载保存的参数
     Component.onCompleted: {
         var params = experiment_ctrl.loadParams(channel)
-        console.log("加载通道C参数:", params)
+        console.log(qsTr("加载通道C参数:"), params)
 
         //        if (params.projectId > 0) {
         //            project_combo.currentIndex = params.projectId - 1
@@ -873,33 +873,33 @@ Item {
             pixelSize: 18
 
             onClicked: {
-                console.log("应用通道C参数设置")
+                console.log(qsTr("应用通道C参数设置"))
 
                 // 验证：样品名称必须填写
                 if (project_combo.currentIndex < 0) {
-                    info_pop.openDialog("请选择工程，若暂无工程请先添加工程")
+                    info_pop.openDialog(qsTr("请选择工程，若暂无工程请先添加工程"))
                     return
                 }
                 if (sample_name_edit.text === "") {
-                    info_pop.openDialog("请填写样品名称")
+                    info_pop.openDialog(qsTr("请填写样品名称"))
                     return
                 }
 
                 // 验证：测试者必须填写
                 if (sampler_edit.text === "") {
-                    info_pop.openDialog("请填写测试者")
+                    info_pop.openDialog(qsTr("请填写测试者"))
                     return
                 }
 
                 // 验证：持续时间必须填写
                 if (getDurationSeconds() <= 0) {
-                    info_pop.openDialog("请填写持续时间")
+                    info_pop.openDialog(qsTr("请填写持续时间"))
                     return
                 }
 
                 // 验证：间隔时间必须填写
                 if (getIntervalSeconds() <= 0) {
-                    info_pop.openDialog("请填写间隔时间")
+                    info_pop.openDialog(qsTr("请填写间隔时间"))
                     return
                 }
 
@@ -907,7 +907,7 @@ Item {
                 var rangeStart = region_bottom_combo.currentIndex
                 var rangeEnd = scanRangeTopModel[region_top_combo.currentIndex]
                 if (rangeEnd <= rangeStart) {
-                    info_pop.openDialog("扫描区间上限必须大于下限")
+                    info_pop.openDialog(qsTr("扫描区间上限必须大于下限"))
                     return
                 }
 
@@ -932,7 +932,7 @@ Item {
                     scanStep: scan_step_combo.currentText
                 }
 
-                console.log("保存参数:", params)
+                console.log(qsTr("保存参数:"), params)
                 experiment_ctrl.saveParams(channel, params)
 
                 if(mainStackView.currentItem.objectName === "ParaSetting_C")

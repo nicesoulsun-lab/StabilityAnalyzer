@@ -243,6 +243,7 @@ bool ExperimentCtrl::startExperiment(int channel, int creatorId)
     m_currentScanCounts[ch] = 0;
     m_startTimes[ch] = QDateTime::currentMSecsSinceEpoch();
     m_runningFlags[ch] = true;
+    m_finalizedChannels.remove(channel);
 
     emit experimentStarted(channel, experimentId);
     emit operationInfo(tr("实验开始"));
@@ -268,21 +269,7 @@ bool ExperimentCtrl::stopExperiment(int channel)
         return false;
     }
 
-    if (m_scanTimers.value(ch)) {
-        m_scanTimers[ch]->stop();
-    }
-    if (m_experimentTimers.value(ch)) {
-        m_experimentTimers[ch]->stop();
-    }
-
-    const int experimentId = m_experimentIds.value(ch, 0);
-    m_runningFlags[ch] = false;
-    m_currentScanCounts[ch] = 0;
-    m_startTimes[ch] = 0;
-    m_experimentIds[ch] = 0;
-
-    emit experimentStopped(channel, experimentId);
-    emit operationInfo(tr("实验已停止"));
+    emit operationInfo(tr("正在结束实验"));
     return true;
 }
 
@@ -304,6 +291,10 @@ void ExperimentCtrl::syncExperimentChannelsFromDevice()
         const int cachedExperimentId = m_experimentIds.value(channel, 0);
 
         if (running) {
+            if (m_finalizedChannels.contains(channelIndex)) {
+                qDebug() << "[ExperimentCtrl] sync ignore running=true, already finalized channel=" << channelIndex;
+                continue;
+            }
             m_runningFlags[channel] = true;
             if (reportedExperimentId > 0) {
                 m_experimentIds[channel] = reportedExperimentId;
@@ -346,6 +337,11 @@ QString ExperimentCtrl::channelDisplayName(int channel) const
 
 void ExperimentCtrl::finalizeStoppedChannel(Channel channel, int channelIndex, int experimentId, bool emitSignal)
 {
+    if (m_finalizedChannels.contains(channelIndex)) {
+        qDebug() << "[ExperimentCtrl] finalizeStoppedChannel skip, already finalized channel=" << channelIndex;
+        return;
+    }
+
     if (m_scanTimers.value(channel)) {
         m_scanTimers[channel]->stop();
     }
@@ -353,6 +349,7 @@ void ExperimentCtrl::finalizeStoppedChannel(Channel channel, int channelIndex, i
         m_experimentTimers[channel]->stop();
     }
 
+    m_finalizedChannels.insert(channelIndex);
     m_runningFlags[channel] = false;
     m_currentScanCounts[channel] = 0;
     m_startTimes[channel] = 0;
@@ -364,6 +361,7 @@ void ExperimentCtrl::finalizeStoppedChannel(Channel channel, int channelIndex, i
              << "emitSignal=" << emitSignal;
 
     if (emitSignal) {
+        emit operationInfo(tr("实验已结束，请取出样品"));
         emit experimentStopped(channelIndex, experimentId);
     }
 }

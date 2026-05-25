@@ -1,4 +1,4 @@
-﻿import QtQuick 2.12
+import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtGraphicalEffects 1.12
 import QtQuick.Layouts 1.12
@@ -76,10 +76,10 @@ Popup {
                     Layout.preferredWidth: 120; Layout.preferredHeight: 42
                     button_color: "#EDEEF0"; text_color: "#333333"
                     onClicked: {
-                        if (root.model === 0) console.log("取消升级系统")
+                        if (root.model === 0) console.log(qsTr("取消升级系统"))
                         else if (root.model === 1) return
-                        else if (root.model === 2) console.log("取消删除记录")
-                        else if (root.model === 3) console.log("取消注销登录")
+                        else if (root.model === 2) console.log(qsTr("取消删除记录"))
+                        else if (root.model === 3) console.log(qsTr("取消注销登录"))
                         close()
                     }
                 }
@@ -90,30 +90,30 @@ Popup {
                     button_color: "#3B87E4"; text_color: "#FFFFFF"
                     onClicked: {
                         if (root.model === 0) {
-                            console.log("确认升级系统")
+                            console.log(qsTr("确认升级系统"))
                             system_ctrl.update_system();
                         }
                         else if (root.model === 1) {
 
                         }
                         else if (root.model === 2) {
-                            console.log("确认删除记录")
+                            console.log(qsTr("确认删除记录"))
                             var checkedIds = experiment_list_model.getCheckedExpIds()
-                            console.log("选中的实验ID:", checkedIds)
+                            console.log(qsTr("选中的实验ID:"), checkedIds)
 
                             if (checkedIds.length === 0) {
-                                console.log("没有选中任何实验")
+                                console.log(qsTr("没有选中任何实验"))
                                 return
                             }
 
                             var success = data_ctrl.deleteExperiments(checkedIds)
                             if (success) {
-                                console.log("删除成功，刷新列表")
+                                console.log(qsTr("删除成功，刷新列表"))
                                 experiment_list_model.reloadFromDb()
                             }
                         }
                         else if (root.model === 3) {
-                            console.log("确认注销登录")
+                            console.log(qsTr("确认注销登录"))
                             mainStackView.pop()
                             mainStackView.pop()
                         }

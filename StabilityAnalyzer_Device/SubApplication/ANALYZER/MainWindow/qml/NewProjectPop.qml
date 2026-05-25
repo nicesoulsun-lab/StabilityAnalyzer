@@ -136,7 +136,7 @@ Popup {
                     Layout.preferredWidth: 120; Layout.preferredHeight: 42
                     button_color: "#EDEEF0"; text_color: "#333333"
                     onClicked: {
-                        console.log("取消新建工程")
+                        console.log(qsTr("取消新建工程"))
                         root.close()
                     }
                 }
@@ -146,7 +146,7 @@ Popup {
                     Layout.preferredWidth: 120; Layout.preferredHeight: 42
                     button_color: "#3B87E4"; text_color: "#FFFFFF"
                     onClicked: {
-                        console.log("确定新建工程")
+                        console.log(qsTr("确定新建工程"))
                         console.log(project_name.text +" "+ project_note.text)
                         data_ctrl.addProject(project_name.text,project_note.text)
                         close()

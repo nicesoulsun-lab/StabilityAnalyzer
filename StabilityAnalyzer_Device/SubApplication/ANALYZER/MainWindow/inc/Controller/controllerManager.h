@@ -117,11 +117,11 @@ public:
         QObject::connect(m_dataTransmitCtrl, &DataTransmitController::stopExperimentRequested,
                          this,
                          [this](int channel, const QString &requestId) {
-            const bool stopped = m_experimentCtrl->stopExperiment(channel);
+            const bool accepted = m_experimentCtrl->requestStopExperiment(channel);
             m_dataTransmitCtrl->sendCommandResult(QStringLiteral("stop_experiment"),
                                                  requestId,
-                                                 stopped,
-                                                 stopped ? QStringLiteral("Experiment stopped")
+                                                 accepted,
+                                                 accepted ? QStringLiteral("Stop request accepted")
                                                          : QStringLiteral("Failed to stop experiment"),
                                                  QVariantMap{{QStringLiteral("channel"), channel}});
         });

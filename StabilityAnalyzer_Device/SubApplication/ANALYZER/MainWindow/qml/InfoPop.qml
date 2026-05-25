@@ -10,7 +10,7 @@ Popup {
     anchors.centerIn: Overlay.overlay
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-    property string message: "提示信息"
+    property string message: qsTr("提示信息")
 
     property int pixelSize : 16
     property string text_color : "#000000"

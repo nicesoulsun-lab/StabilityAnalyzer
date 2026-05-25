@@ -610,7 +610,7 @@ Rectangle{
                             color: maL2.containsMouse ? "#EBF3FF" : "transparent"
                             radius: 4
                             Text { text: qsTr("简体中文"); font.pixelSize: 13; color: "#555555"; font.family: "Microsoft YaHei"; anchors.verticalCenter: parent.verticalCenter; x: 24 }
-                            MouseArea { id: maL2; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: { console.log("简体中文"); closeMenus() } }
+                            MouseArea { id: maL2; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: { console.log(qsTr("简体中文")); closeMenus() } }
                         }
                         Rectangle {
                             width: parent.width; height: 36

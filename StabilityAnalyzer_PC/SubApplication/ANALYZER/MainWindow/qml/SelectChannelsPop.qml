@@ -112,7 +112,7 @@ Popup {
                 button_color: "#EDEEF0"
                 text_color: "#333333"
                 onClicked: {
-                    console.log("取消开始实验")
+                    console.log(qsTr("取消开始实验"))
                     close()
                 }
             }
@@ -125,7 +125,7 @@ Popup {
                 text_color: "#FFFFFF"
                 enabled: selectionPopup.hasSelectedChannel()
                 onClicked: {
-                    console.log("开始实验")
+                    console.log(qsTr("开始实验"))
                 }
             }
         }

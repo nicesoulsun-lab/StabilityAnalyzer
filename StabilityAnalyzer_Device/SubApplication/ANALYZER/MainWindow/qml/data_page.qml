@@ -73,7 +73,7 @@ Item {
                 pixelSize: 18
 
                 onClicked: {
-                    console.log("删除选中的实验")
+                    console.log(qsTr("删除选中的实验"))
 
                     var checkedIds = experiment_list_model.getCheckedExpIds()
                     if (checkedIds.length === 0) {

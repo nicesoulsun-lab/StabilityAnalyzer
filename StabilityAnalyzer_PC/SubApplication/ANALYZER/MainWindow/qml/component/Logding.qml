@@ -11,7 +11,7 @@ Popup {
     modal: true
     anchors.centerIn: Overlay.overlay  // 注意：应该是 Overlay.overlay，不是 OverlayLayout
     closePolicy: Popup.NoAutoClose
-    property string message: "提示信息"
+    property string message: qsTr("提示信息")
     property bool loading: false
 
     property int pixelSize: 16

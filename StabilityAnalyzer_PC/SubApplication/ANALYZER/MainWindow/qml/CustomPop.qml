@@ -1,4 +1,4 @@
-﻿import QtQuick 2.12
+import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtGraphicalEffects 1.12
 import QtQuick.Layouts 1.12
@@ -92,14 +92,14 @@ Popup {
                     button_color: "#3B87E4"; text_color: "#FFFFFF"
                     onClicked: {
                         if (root.model === 0) {
-                            console.log("确认升级系统")
+                            console.log(qsTr("确认升级系统"))
                             system_ctrl.update_system();
                         }
                         else if (root.model === 1) {
 
                         }
                         else if (root.model === 2) {
-                            console.log("确认删除记录")
+                            console.log(qsTr("确认删除记录"))
                             var checkedIds = experiment_list_model.getCheckedExpIds()
                             console.log("选中的实验ID:", checkedIds)
 
@@ -123,7 +123,7 @@ Popup {
                         else if (root.model === 4) {
                             console.log("确认彻底删除记录")
                             var checkedRecycleIds = recycle_experiment_list_model.getCheckedExpIds()
-                            console.log("选中的实验ID:", checkedRecycleIds)
+                            console.log(qsTr("选中的实验ID:"), checkedRecycleIds)
 
                             if (checkedRecycleIds.length === 0) {
                                 console.log("没有选中任何实验")

@@ -2,6 +2,7 @@
 #define EXPERIMENT_CTRL_H
 
 #include <QObject>
+#include <QSet>
 #include <QTimer>
 #include <QVariantMap>
 #include <QVector>
@@ -140,6 +141,7 @@ private:
     QMap<Channel, int> m_currentScanCounts;
     QMap<Channel, qint64> m_startTimes;
     QMap<Channel, bool> m_runningFlags;
+    QSet<int> m_finalizedChannels;
     bool m_schedulerInitialized = false;
 
     // 校准参数缓存，避免只校准一种光时覆盖另一种光的已有值

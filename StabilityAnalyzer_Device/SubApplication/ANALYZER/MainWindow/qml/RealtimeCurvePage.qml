@@ -2,6 +2,7 @@ import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Layouts 1.12
 import CustomComponents 1.0
+import "component"
 
 Rectangle {
     id: curvePage
@@ -10,6 +11,9 @@ Rectangle {
     property int channelId: 0
     property int curveModeIndex: 0
     property var modeTitles: [qsTr("散射光"), qsTr("背射光"), qsTr("散射光+背射光")]
+
+    property bool isRunning: experiment_ctrl ? experiment_ctrl.isExperimentRunning(channelId) : false
+    property bool isStopping: false
 
     readonly property bool hasData: realtime_curve_ctrl ? realtime_curve_ctrl.hasData : false
     readonly property var tPoints: realtime_curve_ctrl ? realtime_curve_ctrl.transmissionPoints : []
@@ -67,11 +71,42 @@ Rectangle {
             realtime_curve_ctrl.clearData()
             realtime_curve_ctrl.channel = channelId
         }
+        updateRunningState()
     }
 
     Component.onDestruction: {
         if (realtime_curve_ctrl)
             realtime_curve_ctrl.clearData()
+    }
+
+    function updateRunningState() {
+        if (!experiment_ctrl) return
+        isRunning = experiment_ctrl.isExperimentRunning(channelId)
+        if (!isRunning) {
+            isStopping = false
+        } else {
+            var status = experiment_ctrl.getChannelStatus(channelId)
+            isStopping = status && status.stopping === true
+        }
+    }
+
+    Connections {
+        target: experiment_ctrl
+        ignoreUnknownSignals: true
+        onChannelStatusUpdated: {
+            if (channel !== curvePage.channelId) return
+            isRunning = status && status.running === true
+            isStopping = isRunning && status && status.stopping === true
+        }
+        onExperimentStopRequested: {
+            if (channel !== curvePage.channelId) return
+            isStopping = true
+        }
+        onExperimentStopped: {
+            if (channel !== curvePage.channelId) return
+            isRunning = false
+            isStopping = false
+        }
     }
 
     ColumnLayout {
@@ -118,13 +153,32 @@ Rectangle {
 
             Item { Layout.fillWidth: true }
 
-//            Label {
-//                visible: hasData
-//                text: qsTr("通道") + " " + (channelId + 1)
-//                font.pixelSize: 13
-//                font.family: "Microsoft YaHei"
-//                color: "#4A5D75"
-//            }
+            IconButton {
+                visible: isRunning
+                width: isStopping ? 120 : 90
+                height: 28
+                text: isStopping ? qsTr("正在停止...") : qsTr("结束实验")
+                enabled: !isStopping
+                onClicked: {
+                    if (experiment_ctrl) {
+                        experiment_ctrl.requestStopExperiment(channelId)
+                    }
+                }
+
+                contentItem: Text {
+                    text: parent.text
+                    font.pixelSize: 12
+                    font.family: "Microsoft YaHei"
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    color: isStopping ? "#999999" : "#FFFFFF"
+                }
+
+                background: Rectangle {
+                    color: isStopping ? "#CCCCCC" : "#E74C3C"
+                    radius: 4
+                }
+            }
         }
 
         Rectangle {

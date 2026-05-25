@@ -74,7 +74,7 @@ Item {
     Connections {
         target: time_select_pop
         onTimeSelected: {
-            console.log("选择时间：" + selected_time)
+            console.log(qsTr("选择时间：") + selected_time)
             line_edit.text = selected_time
         }
     }
@@ -116,7 +116,7 @@ Item {
                             Layout.preferredWidth: 105; Layout.preferredHeight: 42
                             button_color: "#3B87E4"; text_color: "#FFFFFF"
                             onClicked: {
-                                console.log("连接WiFi")
+                                console.log(qsTr("连接WiFi"))
                                 if (wifiComboBox.currentText !== "") {
                                     system_ctrl.connectWifi(wifiComboBox.currentText, wifiPasswordInput.text)
                                     login.openDialog(qsTr("正在连接到WiFi网络，请稍候..."));
@@ -128,7 +128,7 @@ Item {
                             Layout.preferredWidth: 105; Layout.preferredHeight: 42
                             button_color: "#EDEEF0"; text_color: "#333333"
                             onClicked: {
-                                console.log("断开WiFi")
+                                console.log(qsTr("断开WiFi"))
                                 system_ctrl.disconnectWifi()
                             }
                         }
@@ -139,7 +139,7 @@ Item {
                         Layout.preferredWidth: 220; Layout.preferredHeight: 35; Layout.alignment: Qt.AlignHCenter
                         button_color: "#EDEEF0"; text_color: "#3B87E4"
                         onClicked: {
-                            console.log("刷新列表")
+                            console.log(qsTr("刷新列表"))
                             system_ctrl.getWifiNameAsync(1)
                         }
                     }
@@ -180,7 +180,7 @@ Item {
                         Layout.preferredWidth: 220; Layout.preferredHeight: 40
                         button_color: "#3B87E4"; text_color: "white"
                         onClicked: {
-                            console.log("设置日期时间："+line_edit.text)
+                            console.log(qsTr("设置日期时间：")+line_edit.text)
                             if(time_select_pop.text === "") return;
                             system_ctrl.updateDateTime(line_edit.text)
                         }
@@ -200,7 +200,7 @@ Item {
                         Layout.preferredWidth: 245; Layout.preferredHeight: 45
                         button_color: "#EDEEF0"; text_color: "#005BAC"
                         onClicked: {
-                            console.log("说明帮助")
+                            console.log(qsTr("说明帮助"))
                             mainStackView.push("qrc:/qml/Instruction.qml")
                         }
                     }
@@ -209,7 +209,7 @@ Item {
                         Layout.preferredWidth: 245; Layout.preferredHeight: 45
                         button_color: "#EDEEF0"; text_color: "#005BAC"
                         onClicked: {
-                            console.log("查看序列号")
+                            console.log(qsTr("查看序列号"))
                             var num = system_ctrl.getSerialNumber();
                             console.log(num)
                             info_pop.openDialog(num)
@@ -220,7 +220,7 @@ Item {
                         Layout.preferredWidth: 245; Layout.preferredHeight: 45
                         button_color: "#EDEEF0"; text_color: "#005BAC"
                         onClicked: {
-                            console.log("注销登录")
+                            console.log(qsTr("注销登录"))
 
                             custom_pop.show(3)
 
@@ -243,12 +243,12 @@ Item {
                 RowLayout {
                     anchors.centerIn: parent; anchors.verticalCenterOffset: 20; spacing: 15
                     IconButton {
-                        button_text: "中文"
+                        button_text: qsTr("中文")
                         Layout.preferredWidth: 120; Layout.preferredHeight: 45
                         button_color:  "#3B87E4"
                         text_color: "#FFFFFF"
                         onClicked: {
-                            console.log("切换语言：中文")
+                            console.log(qsTr("切换语言：中文"))
                             system_ctrl.switchLanguage("zh_CN");
                         }
                     }
@@ -258,7 +258,7 @@ Item {
                         button_color: "#EDEEF0"
                         text_color: "#333333"
                         onClicked: {
-                            console.log("切换语言：英文")
+                            console.log(qsTr("切换语言：英文"))
                             system_ctrl.switchLanguage("en_US");
                         }
                     }
@@ -275,7 +275,7 @@ Item {
                     from: 10; to: 254
                     value: 40
                     onMoved: {
-                        console.log("调节亮度")
+                        console.log(qsTr("调节亮度"))
                         system_ctrl.switchBrightness(value);
                     }
                 }
@@ -291,7 +291,7 @@ Item {
                     width: 160; height: 45
                     button_color: "#EDEEF0"; text_color: "#005BAC"
                     onClicked: {
-                        console.log("点击系统升级")
+                        console.log(qsTr("点击系统升级"))
                         custom_pop.show(0)
                         //system_ctrl.update_system();
                     }

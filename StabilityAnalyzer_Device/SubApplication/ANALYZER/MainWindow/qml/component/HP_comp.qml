@@ -7,7 +7,7 @@ Item {
     width: 212
     height: 330
 
-    property string title: "A通道"
+    property string title: qsTr("A通道")
     property bool isRunning: true
     property bool hasSample: true
     property bool isCovered: true
@@ -20,7 +20,7 @@ Item {
         anchors.fill: parent
         color: "transparent"
 
-        Image {anchors.fill: parent; source: "qrc:/icon/qml/icon/bg_hp_channel.png"}
+        Image { anchors.fill: parent; source: "qrc:/icon/qml/icon/bg_hp_channel.png" }
 
         ColumnLayout {
             anchors.fill: parent
@@ -45,42 +45,93 @@ Item {
                 }
             }
 
-            // 状态行：实验中
+            // 状态行
             ColumnLayout {
-                // 1. 关键：让整个 ColumnLayout 在父容器中水平居中
                 Layout.alignment: Qt.AlignHCenter
-                spacing: 12 // 设置行间距
+                spacing: 12
 
-                // 运行状态图标
-                Image {
-                    source: isRunning ? "qrc:/icon/qml/icon/running.png" : "qrc:/icon/qml/icon/idle.png"
-
-                    // 2. 关键：防止图片被拉伸，保持原始大小以便居中
-                    Layout.preferredWidth: width
-                    Layout.preferredHeight: height
-
+                // 运行状态
+                Row {
                     Layout.alignment: Qt.AlignHCenter
-                    Layout.leftMargin: 6
+                    spacing: 8
+
+                    Rectangle {
+                        width: 16
+                        height: 16
+                        radius: 8
+                        color: root.isRunning ? "#32CD32" : "#8B8C8F"
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Label {
+                        text: root.isRunning ? qsTr("实验中") : qsTr("空闲")
+                        font.pixelSize: 18
+                        font.bold: true
+                        color: root.isRunning ? "#32CD32" : "#8B8C8F"
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
                 }
 
-                // 样品状态图标
-                Image {
-                    source: hasSample ? "qrc:/icon/qml/icon/sample.png" : "qrc:/icon/qml/icon/no_sample.png"
-
-                    Layout.preferredWidth: width
-                    Layout.preferredHeight: height
-
+                // 样品状态
+                Row {
                     Layout.alignment: Qt.AlignHCenter
+                    spacing: 8
+
+                    Rectangle {
+                        width: 16
+                        height: 16
+                        radius: 8
+                        color: "transparent"
+                        border.width: 1
+                        border.color: root.hasSample ? "#2F7DE1" : "#8B8C8F"
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        Label {
+                            anchors.centerIn: parent
+                            text: root.hasSample ? "✓" : "-"
+                            font.pixelSize: 12
+                            color: root.hasSample ? "#2F7DE1" : "#8B8C8F"
+                        }
+                    }
+
+                    Label {
+                        text: root.hasSample ? qsTr("有样品") : qsTr("无样品")
+                        font.pixelSize: 18
+                        font.bold: true
+                        color: root.hasSample ? "#2F7DE1" : "#8B8C8F"
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
                 }
 
-                // 盖子状态图标
-                Image {
-                    source: isCovered ? "qrc:/icon/qml/icon/close.png" : "qrc:/icon/qml/icon/open.png"
-
-                    Layout.preferredWidth: width
-                    Layout.preferredHeight: height
-
+                // 盖子状态
+                Row {
                     Layout.alignment: Qt.AlignHCenter
+                    spacing: 8
+
+                    Rectangle {
+                        width: 16
+                        height: 16
+                        radius: 8
+                        color: "transparent"
+                        border.width: 1
+                        border.color: root.isCovered ? "#2F7DE1" : "#E53935"
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        Label {
+                            anchors.centerIn: parent
+                            text: root.isCovered ? "✓" : "×"
+                            font.pixelSize: 12
+                            color: root.isCovered ? "#2F7DE1" : "#E53935"
+                        }
+                    }
+
+                    Label {
+                        text: root.isCovered ? qsTr("已关盖") : qsTr("未关盖")
+                        font.pixelSize: 18
+                        font.bold: true
+                        color: root.isCovered ? "#2F7DE1" : "#E53935"
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
                 }
             }
 
@@ -103,7 +154,7 @@ Item {
 
                 // 温度
                 Label {
-                    text: "温度：" + root.temperature + " °C"
+                    text: qsTr("温度：") + root.temperature + " °C"
                     font.pixelSize: 20
                     font.bold: true
 
@@ -116,7 +167,7 @@ Item {
 
                 // 剩余时间
                 Label {
-                    text: "剩余：" + root.remainingHours + "  h"
+                    text: qsTr("剩余：") + root.remainingHours + "  h"
                     font.pixelSize: 20
                     font.bold: true
 

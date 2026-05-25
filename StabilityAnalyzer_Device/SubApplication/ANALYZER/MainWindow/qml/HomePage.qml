@@ -102,7 +102,7 @@ Item {
 
                         onClicked: {
                             if (experiment_ctrl && experiment_ctrl.isExperimentRunning(index)) {
-                                user_ctrl.logOperation("进入通道" + (index + 1) + "实时曲线页面")
+                                user_ctrl.logOperation(qsTr("进入通道") + (index + 1) + qsTr("实时曲线页面"))
                                 mainStackView.push("qrc:/qml/RealtimeCurvePage.qml",
                                                    {"channelId": index})
                             }
@@ -122,8 +122,15 @@ Item {
                 btnHeight: 90
                 iconSource: "qrc:/icon/qml/icon/build_project_btn.png"
                 onClicked: {
-                    user_ctrl.logOperation("进入创建工程页面")
+                    user_ctrl.logOperation(qsTr("进入创建工程页面"))
                     new_project_pop.open()
+                }
+
+                Text {
+                    text: qsTr("创建工程")
+                    font.pixelSize: 20
+                    font.bold: true
+                    anchors.centerIn: parent
                 }
             }
 
@@ -132,8 +139,15 @@ Item {
                 btnHeight: 90
                 iconSource: "qrc:/icon/qml/icon/start_test_btn.png"
                 onClicked: {
-                    user_ctrl.logOperation("进入开始实验页面")
+                    user_ctrl.logOperation(qsTr("进入开始实验页面"))
                     select_channel_pop.open()
+                }
+
+                Text {
+                    text: qsTr("开始实验")
+                    font.pixelSize: 20
+                    font.bold: true
+                    anchors.centerIn: parent
                 }
             }
 
@@ -142,8 +156,15 @@ Item {
                 btnHeight: 90
                 iconSource: "qrc:/icon/qml/icon/sys_set_btn.png"
                 onClicked: {
-                    user_ctrl.logOperation("进入系统设置页面")
+                    user_ctrl.logOperation(qsTr("进入系统设置页面"))
                     mainStackView.push("qrc:/qml/system_page.qml")
+                }
+
+                Text {
+                    text: qsTr("系统设置")
+                    font.pixelSize: 20
+                    font.bold: true
+                    anchors.centerIn: parent
                 }
             }
 
@@ -152,8 +173,15 @@ Item {
                 btnHeight: 90
                 iconSource: "qrc:/icon/qml/icon/data_mng.png"
                 onClicked: {
-                    user_ctrl.logOperation("进入数据管理页面")
+                    user_ctrl.logOperation(qsTr("进入数据管理页面"))
                     mainStackView.push(Qt.resolvedUrl("qrc:/qml/data_page.qml"))
+                }
+
+                Text {
+                    text: qsTr("数据管理")
+                    font.pixelSize: 20
+                    font.bold: true
+                    anchors.centerIn: parent
                 }
             }
 
@@ -162,8 +190,15 @@ Item {
                 btnHeight: 90
                 iconSource: "qrc:/icon/qml/icon/usr_mng.png"
                 onClicked: {
-                    user_ctrl.logOperation("进入用户管理页面")
+                    user_ctrl.logOperation(qsTr("进入用户管理页面"))
                     mainStackView.push("qrc:/qml/user_page.qml")
+                }
+
+                Text {
+                    text: qsTr("用户管理")
+                    font.pixelSize: 20
+                    font.bold: true
+                    anchors.centerIn: parent
                 }
             }
         }

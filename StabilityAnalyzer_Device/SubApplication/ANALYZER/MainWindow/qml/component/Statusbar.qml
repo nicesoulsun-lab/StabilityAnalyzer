@@ -37,18 +37,18 @@ Rectangle {
 
     //初始化完成后】
     Component.onCompleted: {
-        console.log("刷新 wifi")
+        console.log(qsTr("刷新 wifi"))
         updateWifiIcon()
     }
 
     // 更新 WiFi 图标显示
     function updateWifiIcon() {
         if (typeof system_ctrl !== "undefined") {
-            console.log("=== WiFi 状态检查 ===")
-            console.log("system_ctrl 存在:", system_ctrl)
-            console.log("wifiConnected 属性:", system_ctrl.wifiConnected)
-            console.log("wifiConnected 类型:", typeof system_ctrl.wifiConnected)
-            console.log("wifiIntensity 属性:", system_ctrl.wifiIntensity)
+            console.log(qsTr("=== WiFi 状态检查 ==="))
+            console.log(qsTr("system_ctrl 存在:"), system_ctrl)
+            console.log(qsTr("wifiConnected 属性:"), system_ctrl.wifiConnected)
+            console.log(qsTr("wifiConnected 类型:"), typeof system_ctrl.wifiConnected)
+            console.log(qsTr("wifiIntensity 属性:"), system_ctrl.wifiIntensity)
             
             // 使用 wifiConnected 判断是否连接（有值表示已连接）
             var isConnected = system_ctrl.wifiConnected && system_ctrl.wifiConnected.toString().length > 0
@@ -58,12 +58,12 @@ Rectangle {
                 // 使用 wifiIntensity 获取信号强度（字符串转整数）
                 var signalStrength = parseInt(system_ctrl.wifiIntensity)
                 wifi.source = get_wifi_png_strength(signalStrength)
-                console.log("WiFi 已连接:", system_ctrl.wifiConnected, "信号强度:", signalStrength, "图标:", wifi.source)
+                console.log(qsTr("WiFi 已连接:"), system_ctrl.wifiConnected, qsTr("信号强度:"), signalStrength, qsTr("图标:"), wifi.source)
             } else {
-                console.log("WiFi 未连接")
+                console.log(qsTr("WiFi 未连接"))
             }
         } else {
-            console.log("system_ctrl 未定义！")
+            console.log(qsTr("system_ctrl 未定义！"))
         }
     }
 

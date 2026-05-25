@@ -8,7 +8,6 @@
         <file>qml/component/LineEdit.qml</file>
         <file>qml/InfoPop.qml</file>
         <file>qml/HomePage.qml</file>
-        <file>qml/component/HP_comp.qml</file>
         <file>qml/system_page.qml</file>
         <file>qml/component/SettingBlock.qml</file>
         <file>qml/component/UiComboBox.qml</file>

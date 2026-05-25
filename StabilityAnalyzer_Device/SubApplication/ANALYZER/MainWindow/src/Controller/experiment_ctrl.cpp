@@ -615,6 +615,8 @@ bool ExperimentCtrl::stopExperiment(int channel)
     m_stateStore->clearMemoryCache(channel);
     m_sessionService->resetScanContexts(channel);
     m_runningFlags[ch] = false;
+    m_experimentIds[ch] = 0;
+    m_startTimes[ch] = 0;
     QVariantMap mergedStatus;
     if (m_stateStore->updateChannelStatus(channel, {
         {"running", false},
@@ -625,13 +627,47 @@ bool ExperimentCtrl::stopExperiment(int channel)
     }
 
     emit experimentStopped(channel, experimentId);
-    emit operationInfo(tr("实验已停止"));
+    emit operationInfo(tr("实验已结束，请取出样品"));
     return true;
 }
 
 bool ExperimentCtrl::isExperimentRunning(int channel) const
 {
     return m_runningFlags.value(static_cast<Channel>(channel), false);
+}
+
+bool ExperimentCtrl::requestStopExperiment(int channel)
+{
+    const Channel ch = static_cast<Channel>(channel);
+
+    if (!m_runningFlags.value(ch, false)) {
+        return false;
+    }
+
+    if (m_stopAfterDrainFlags.value(ch, false)) {
+        emit operationInfo(tr("实验正在停止中，等待当前扫描完成"));
+        return true;
+    }
+
+    const QVariantMap status = m_stateStore->channelStatus(channel);
+    const int runStatus = status.value("runStatus", 0).toInt();
+
+    if (runStatus == 0 || runStatus == 3) {
+        return stopExperiment(channel);
+    }
+
+    m_scanTimers[ch]->stop();
+    m_experimentTimers[ch]->stop();
+    m_stopAfterDrainFlags[ch] = true;
+    m_stopAfterDrainDeadlineMs[ch] = 0;
+
+    emit experimentStopRequested(channel);
+    emit operationInfo(tr("正在结束实验"));
+
+    qDebug() << "[ExperimentCtrl][RequestStop] channel=" << channel
+             << "runStatus=" << runStatus
+             << "waiting for scan to complete";
+    return true;
 }
 
 int ExperimentCtrl::getCurrentScanCount(int channel) const
@@ -963,6 +999,7 @@ void ExperimentCtrl::pollChannelStatus(int channel)
         patch["experiment_id"] = m_experimentIds.value(ch, 0);
         patch["remainingSeconds"] = remaining;
         patch["running"] = true;
+        patch["stopping"] = m_stopAfterDrainFlags.value(ch, false);
 
         // 实验过程中：依据采集/存储状态决定是否读取A/B区数据。
         tryFetchStoredData(channel,

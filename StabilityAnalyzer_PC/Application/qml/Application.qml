@@ -10,7 +10,7 @@ ApplicationWindow {
     height: 768
     minimumWidth: 1280
     minimumHeight: 768
-    title: "稳定性分析仪"
+    title: qsTr("稳定性分析仪")
     visible: true
     flags: Qt.FramelessWindowHint | Qt.Window
 
@@ -63,13 +63,13 @@ ApplicationWindow {
                         console.log("子项目界面加载完成")
                         if (item) {
                             mainStackView = item.mainStackView;
-                            console.log("MainStackView 已绑定:", mainStackView);
+                            console.log(qsTr("MainStackView 已绑定:"), mainStackView);
                         }
                     }
 
                     onStatusChanged: {
                         if (status === Loader.Error) {
-                            console.log("加载子项目界面失败:", source)
+                            console.log(qsTr("加载子项目界面失败:"), source)
                         }
                     }
                 }

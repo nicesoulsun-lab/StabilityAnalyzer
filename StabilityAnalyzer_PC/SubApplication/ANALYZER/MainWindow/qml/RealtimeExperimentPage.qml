@@ -20,6 +20,8 @@ Item {
     property bool lightCurvesLoading: false
     property int maxVisibleCurveCount: 20
     property bool realtimeSessionActive: false
+    property bool isRunning: experiment_ctrl ? experiment_ctrl.isExperimentRunning(channelIndex) : false
+    property bool isStopping: false
 
     signal backRequested()
 
@@ -395,7 +397,16 @@ Item {
         target: experiment_ctrl
         ignoreUnknownSignals: true
         onExperimentStopped: {
+            if (channel === realtimePage.channelIndex) {
+                realtimePage.isRunning = false
+                realtimePage.isStopping = false
+            }
             realtimePage.releaseFinishedExperimentResources(channel, experimentId)
+        }
+        onOperationInfo: {
+            if (message.indexOf(qsTr("正在结束实验")) >= 0) {
+                realtimePage.isStopping = true
+            }
         }
     }
 
@@ -477,6 +488,35 @@ Item {
                         color: "#6E8096"
                         horizontalAlignment: Text.AlignRight
                         verticalAlignment: Text.AlignVCenter
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    IconButton {
+                        visible: isRunning
+                        Layout.preferredWidth: isStopping ? 100 : 80
+                        Layout.preferredHeight: 28
+                        text: isStopping ? qsTr("正在停止...") : qsTr("结束实验")
+                        enabled: !isStopping
+                        onClicked: {
+                            if (experiment_ctrl) {
+                                experiment_ctrl.stopExperiment(channelIndex)
+                            }
+                        }
+
+                        contentItem: Text {
+                            text: parent.text
+                            font.pixelSize: 12
+                            font.family: "Microsoft YaHei"
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            color: isStopping ? "#999999" : "#FFFFFF"
+                        }
+
+                        background: Rectangle {
+                            color: isStopping ? "#CCCCCC" : "#E74C3C"
+                            radius: 4
+                        }
                     }
                 }
             }

@@ -1,4 +1,4 @@
-﻿import QtQuick 2.12
+import QtQuick 2.12
 import QtQuick.Controls 2.12
 import QtQuick.Controls.impl 2.12
 import QtQuick.Templates 2.12 as T
@@ -19,7 +19,7 @@ TextField {
     property bool input_en: true
 
     // 基础样式
-    placeholderText: multiLine ? "请输入备注..." : ""
+    placeholderText: multiLine ? qsTr("请输入备注...") : ""
     color: "#000000"
     font.pixelSize: 18
     selectByMouse: true

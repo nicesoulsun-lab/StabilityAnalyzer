@@ -1,4 +1,4 @@
-﻿import QtQuick 2.9
+import QtQuick 2.9
 import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.3
 
@@ -11,7 +11,7 @@ ApplicationWindow {
     minimumHeight: 600
     maximumWidth: 1024
     maximumHeight: 600
-    title: "稳定性分析仪"
+    title: qsTr("稳定性分析仪")
     visible: true
 
     property var mainStackView: null
@@ -31,16 +31,16 @@ ApplicationWindow {
 
             // 2. 关键：在加载完成后，将内部的对象赋值给外部变量
             onLoaded: {
-                console.log("子项目界面加载完成")
+                console.log(qsTr("子项目界面加载完成"))
                 if (item) {
                     mainStackView = item.mainStackView;
-                    console.log("MainStackView 已绑定:", mainStackView);
+                    console.log(qsTr("MainStackView 已绑定:"), mainStackView);
                 }
             }
 
             onStatusChanged: {
                 if (status === Loader.Error) {
-                    console.log("加载子项目界面失败：", source)
+                    console.log(qsTr("加载子项目界面失败："), source)
                 }
             }
         }

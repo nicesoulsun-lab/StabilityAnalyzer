@@ -78,6 +78,15 @@ public:
     Q_INVOKABLE bool stopExperiment(int channel);
 
     /**
+     * @brief 请求停止实验（智能停止）
+     *
+     * 根据当前扫描状态决定行为：
+     * - 空闲(0)或错误(3)：直接停止
+     * - 回零(1)或扫描中(2)：设置排空标志，等扫描完成+数据入库后自动停止
+     */
+    Q_INVOKABLE bool requestStopExperiment(int channel);
+
+    /**
      * @brief 查询通道实验是否运行（主机侧标志）
      */
     Q_INVOKABLE bool isExperimentRunning(int channel) const;
@@ -162,6 +171,7 @@ signals:
     // 实验生命周期信号
     void experimentStarted(int channel, int experimentId);
     void experimentStopped(int channel, int experimentId);
+    void experimentStopRequested(int channel);
 
     // 扫描完成（兼容旧流程）
     void scanCompleted(int channel, int scanCount, const QVariantMap& data);
