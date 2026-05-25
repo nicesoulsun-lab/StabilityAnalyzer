@@ -6,35 +6,44 @@ TaskQueueManager::TaskQueueManager(QObject *parent)
     : QObject(parent)
     , m_isRunning(false)
     , m_isPaused(false)
+    , m_workerBusy(false)
+    , m_executionThread(new QThread(this))
+    , m_executionWorker(nullptr)
     , m_schedulerTimer(new QTimer(this))
 {
     qRegisterMetaType<TaskResult>("TaskResult");
     qRegisterMetaType<QVector<quint16>>("QVector<quint16>");
 
+    m_executionWorker = new TaskExecutionWorker();
+    m_executionWorker->moveToThread(m_executionThread);
+
+    connect(m_executionWorker, &TaskExecutionWorker::taskCompleted,
+            this, &TaskQueueManager::onWorkerTaskCompleted);
+
+    connect(m_executionWorker, &TaskExecutionWorker::taskError,
+            this, [](const QString &error) {
+        qWarning() << "Task execution error:" << error;
+    });
+
+    m_executionThread->start();
+
     m_schedulerTimer->setInterval(100);
     connect(m_schedulerTimer, &QTimer::timeout, this, [this]() {
         QMutexLocker locker(&m_queueMutex);
-        for (auto it = m_portQueues.begin(); it != m_portQueues.end(); ++it)
-            requestDispatch(it.value());
+        processNextTask();
     });
 }
 
 int TaskQueueManager::highPriorityQueueSize() const
 {
     QMutexLocker locker(&m_queueMutex);
-    int total = 0;
-    for (auto it = m_portQueues.constBegin(); it != m_portQueues.constEnd(); ++it)
-        total += it.value()->highPriorityQueue.size();
-    return total;
+    return m_highPriorityQueue.size();
 }
 
 int TaskQueueManager::pollingQueueSize() const
 {
     QMutexLocker locker(&m_queueMutex);
-    int total = 0;
-    for (auto it = m_portQueues.constBegin(); it != m_portQueues.constEnd(); ++it)
-        total += it.value()->pollingQueue.size();
-    return total;
+    return m_pollingQueue.size();
 }
 
 void TaskQueueManager::startScheduler()
@@ -53,8 +62,7 @@ void TaskQueueManager::startScheduler()
     emit runningStatusChanged(true);
 
     QMutexLocker locker(&m_queueMutex);
-    for (auto it = m_portQueues.begin(); it != m_portQueues.end(); ++it)
-        requestDispatch(it.value());
+    processNextTask();
 }
 
 void TaskQueueManager::stopScheduler()
@@ -68,21 +76,16 @@ void TaskQueueManager::stopScheduler()
 
     m_schedulerTimer->stop();
 
-    QMutexLocker locker(&m_queueMutex);
-    for (auto it = m_portQueues.begin(); it != m_portQueues.end(); ++it) {
-        PortQueue *pq = it.value();
-        if (pq->worker) {
-            QMetaObject::invokeMethod(pq->worker, "stop", Qt::QueuedConnection);
-        }
-        if (pq->thread && pq->thread->isRunning()) {
-            locker.unlock();
-            pq->thread->quit();
-            pq->thread->wait(5000);
-            if (pq->thread->isRunning()) {
-                pq->thread->terminate();
-                pq->thread->wait();
-            }
-            locker.relock();
+    if (m_executionWorker) {
+        QMetaObject::invokeMethod(m_executionWorker, "stop", Qt::QueuedConnection);
+    }
+
+    if (m_executionThread->isRunning()) {
+        m_executionThread->quit();
+        m_executionThread->wait(5000);
+        if (m_executionThread->isRunning()) {
+            m_executionThread->terminate();
+            m_executionThread->wait();
         }
     }
 
@@ -112,114 +115,66 @@ void TaskQueueManager::resumeScheduler()
     qDebug() << "恢复任务调度器";
 
     QMutexLocker locker(&m_queueMutex);
-    for (auto it = m_portQueues.begin(); it != m_portQueues.end(); ++it)
-        requestDispatch(it.value());
+    processNextTask();
 }
 
-void TaskQueueManager::registerPort(const QString &portName)
-{
-    QMutexLocker locker(&m_queueMutex);
-    if (m_portQueues.contains(portName)) {
-        return;
-    }
-
-    PortQueue *pq = new PortQueue();
-    pq->portName = portName;
-    setupPortWorker(pq);
-    m_portQueues.insert(portName, pq);
-
-    qDebug() << "[TaskQueueManager] registered port:" << portName;
-}
-
-void TaskQueueManager::unregisterPort(const QString &portName)
-{
-    QMutexLocker locker(&m_queueMutex);
-    if (!m_portQueues.contains(portName)) {
-        return;
-    }
-
-    PortQueue *pq = m_portQueues.value(portName);
-    teardownPortWorker(pq);
-    m_portQueues.remove(portName);
-    delete pq;
-
-    qDebug() << "[TaskQueueManager] unregistered port:" << portName;
-}
-
-void TaskQueueManager::addHighPriorityTask(const QString &portName, const QString &deviceId, Task *task)
+void TaskQueueManager::addHighPriorityTask(const QString &deviceId, Task *task)
 {
     if (!task || !m_isRunning) {
         return;
     }
 
     QMutexLocker locker(&m_queueMutex);
-    PortQueue *pq = m_portQueues.value(portName, nullptr);
-    if (!pq) {
-        qWarning() << "[TaskQueueManager] port not registered:" << portName;
-        return;
-    }
-
     QString taskMapKey = deviceId + "_" + task->taskName();
-    QueuedTask queuedTask(deviceId, portName, task);
-    pq->highPriorityQueue.enqueue(queuedTask);
+    QueuedTask queuedTask(deviceId, task);
+    m_highPriorityQueue.enqueue(queuedTask);
     m_taskMap.insert(taskMapKey, queuedTask);
 
     updateQueueStatus();
-    requestDispatch(pq);
+    processNextTask();
 }
 
-void TaskQueueManager::addPollingTask(const QString &portName, const QString &deviceId, Task *task)
+void TaskQueueManager::addPollingTask(const QString &deviceId, Task *task)
 {
     if (!task || !m_isRunning) {
         return;
     }
 
     QMutexLocker locker(&m_queueMutex);
-    PortQueue *pq = m_portQueues.value(portName, nullptr);
-    if (!pq) {
-        qWarning() << "[TaskQueueManager] port not registered:" << portName;
-        return;
-    }
 
-    for (const QueuedTask &qt : pq->pollingQueue) {
+    for (const QueuedTask &qt : m_pollingQueue) {
         if (qt.deviceId == deviceId && qt.task && qt.task->taskName() == task->taskName()) {
             return;
         }
     }
 
     QString taskMapKey = deviceId + "_" + task->taskName();
-    QueuedTask queuedTask(deviceId, portName, task);
-    pq->pollingQueue.enqueue(queuedTask);
+    QueuedTask queuedTask(deviceId, task);
+    m_pollingQueue.enqueue(queuedTask);
     m_taskMap.insert(taskMapKey, queuedTask);
 
     updateQueueStatus();
-    requestDispatch(pq);
+    processNextTask();
 }
 
-void TaskQueueManager::initializeDeviceTasks(const QString &portName, const QString &deviceId, const QList<Task*> &tasks)
+void TaskQueueManager::initializeDeviceTasks(const QString &deviceId, const QList<Task*> &tasks)
 {
     if (!m_isRunning) {
         return;
     }
 
     QMutexLocker locker(&m_queueMutex);
-    PortQueue *pq = m_portQueues.value(portName, nullptr);
-    if (!pq) {
-        qWarning() << "[TaskQueueManager] port not registered:" << portName;
-        return;
-    }
 
     for (Task *task : tasks) {
         if (task) {
             if (task->taskType() == TaskType::INIT_TASK) {
                 QString taskMapKey = deviceId + "_" + task->taskName();
-                QueuedTask queuedTask(deviceId, portName, task);
-                pq->pollingQueue.enqueue(queuedTask);
+                QueuedTask queuedTask(deviceId, task);
+                m_pollingQueue.enqueue(queuedTask);
                 m_taskMap.insert(taskMapKey, queuedTask);
 
                 qDebug() << "设备初始化任务- Device:" << deviceId
                          << "任务名称:" << task->taskName()
-                         << "Port:" << portName
                          << "轮询间隔:" << task->interval();
             } else {
                 qWarning() << "设备初始化跳过用户任务- Device:" << deviceId
@@ -230,28 +185,24 @@ void TaskQueueManager::initializeDeviceTasks(const QString &portName, const QStr
     }
 
     updateQueueStatus();
-    requestDispatch(pq);
+    processNextTask();
 }
 
 void TaskQueueManager::removeTask(const QString &taskName)
 {
     QMutexLocker locker(&m_queueMutex);
 
-    for (auto it = m_portQueues.begin(); it != m_portQueues.end(); ++it) {
-        PortQueue *pq = it.value();
-
-        for (auto qit = pq->highPriorityQueue.begin(); qit != pq->highPriorityQueue.end(); ++qit) {
-            if (qit->task && qit->task->taskName() == taskName) {
-                pq->highPriorityQueue.erase(qit);
-                break;
-            }
+    for (auto it = m_highPriorityQueue.begin(); it != m_highPriorityQueue.end(); ++it) {
+        if (it->task && it->task->taskName() == taskName) {
+            m_highPriorityQueue.erase(it);
+            break;
         }
+    }
 
-        for (auto qit = pq->pollingQueue.begin(); qit != pq->pollingQueue.end(); ++qit) {
-            if (qit->task && qit->task->taskName() == taskName) {
-                pq->pollingQueue.erase(qit);
-                break;
-            }
+    for (auto it = m_pollingQueue.begin(); it != m_pollingQueue.end(); ++it) {
+        if (it->task && it->task->taskName() == taskName) {
+            m_pollingQueue.erase(it);
+            break;
         }
     }
 
@@ -260,13 +211,9 @@ void TaskQueueManager::removeTask(const QString &taskName)
 
 void TaskQueueManager::clearAllTasks()
 {
-    for (auto it = m_portQueues.begin(); it != m_portQueues.end(); ++it) {
-        PortQueue *pq = it.value();
-        pq->highPriorityQueue.clear();
-        pq->pollingQueue.clear();
-        pq->workerBusy = false;
-        pq->dispatchPending = false;
-    }
+    m_highPriorityQueue.clear();
+    m_pollingQueue.clear();
+    m_workerBusy = false;
     m_taskMap.clear();
 
     updateQueueStatus();
@@ -277,11 +224,9 @@ QList<QString> TaskQueueManager::getHighPriorityTaskList() const
     QMutexLocker locker(&m_queueMutex);
 
     QList<QString> taskList;
-    for (auto it = m_portQueues.constBegin(); it != m_portQueues.constEnd(); ++it) {
-        for (const QueuedTask &task : it.value()->highPriorityQueue) {
-            if (task.task) {
-                taskList.append(task.task->taskName());
-            }
+    for (const QueuedTask &task : m_highPriorityQueue) {
+        if (task.task) {
+            taskList.append(task.task->taskName());
         }
     }
     return taskList;
@@ -292,170 +237,74 @@ QList<QString> TaskQueueManager::getPollingTaskList() const
     QMutexLocker locker(&m_queueMutex);
 
     QList<QString> taskList;
-    for (auto it = m_portQueues.constBegin(); it != m_portQueues.constEnd(); ++it) {
-        for (const QueuedTask &task : it.value()->pollingQueue) {
-            if (task.task) {
-                taskList.append(task.task->taskName());
-            }
+    for (const QueuedTask &task : m_pollingQueue) {
+        if (task.task) {
+            taskList.append(task.task->taskName());
         }
     }
     return taskList;
 }
 
-void TaskQueueManager::setupPortWorker(PortQueue *pq)
+void TaskQueueManager::processNextTask()
 {
-    pq->worker = new TaskExecutionWorker();
-    pq->thread = new QThread(this);
-    pq->worker->moveToThread(pq->thread);
-
-    connect(pq->worker, &TaskExecutionWorker::taskCompleted,
-            this, &TaskQueueManager::onWorkerTaskCompleted, Qt::QueuedConnection);
-
-    connect(pq->worker, &TaskExecutionWorker::taskError,
-            this, [this](const QString &error) {
-        qWarning() << "Task execution error:" << error;
-    }, Qt::QueuedConnection);
-
-    pq->thread->start();
-
-    qDebug() << "[TaskQueueManager] worker thread started for port:" << pq->portName;
-}
-
-void TaskQueueManager::teardownPortWorker(PortQueue *pq)
-{
-    if (pq->worker) {
-        QMetaObject::invokeMethod(pq->worker, "stop", Qt::QueuedConnection);
-    }
-    if (pq->thread && pq->thread->isRunning()) {
-        pq->thread->quit();
-        pq->thread->wait(5000);
-        if (pq->thread->isRunning()) {
-            pq->thread->terminate();
-            pq->thread->wait();
-        }
-    }
-}
-
-void TaskQueueManager::requestDispatch(PortQueue *pq)
-{
-    if (!m_isRunning || m_isPaused || pq->workerBusy || pq->dispatchPending) {
+    if (!m_isRunning || m_isPaused || m_workerBusy) {
         return;
     }
 
-    if (pq->highPriorityQueue.isEmpty() && pq->pollingQueue.isEmpty()) {
+    QueuedTask nextTask("", nullptr);
+
+    if (!m_highPriorityQueue.isEmpty()) {
+        nextTask = m_highPriorityQueue.dequeue();
+    } else if (!m_pollingQueue.isEmpty()) {
+        nextTask = m_pollingQueue.dequeue();
+    } else {
         return;
     }
 
-    pq->dispatchPending = true;
-
-    QMetaObject::invokeMethod(this, [this, pq]() {
-        processNextTask(pq);
-    }, Qt::QueuedConnection);
-}
-
-void TaskQueueManager::processNextTask(PortQueue *pq)
-{
-    QueuedTask nextTask("", nullptr, nullptr);
-
-    {
-        QMutexLocker locker(&m_queueMutex);
-        pq->dispatchPending = false;
-
-        if (!m_isRunning || m_isPaused || pq->workerBusy) {
-            return;
-        }
-
-        if (!pq->highPriorityQueue.isEmpty()) {
-            nextTask = pq->highPriorityQueue.dequeue();
-        } else if (!pq->pollingQueue.isEmpty()) {
-            nextTask = pq->pollingQueue.dequeue();
-        } else {
-            return;
-        }
-
-        pq->workerBusy = true;
+    if (!nextTask.task) {
+        return;
     }
 
-    if (!executeTask(pq, nextTask)) {
-        QMutexLocker locker(&m_queueMutex);
-        pq->workerBusy = false;
-        locker.unlock();
-        updateQueueStatus();
-        requestDispatch(pq);
+    QString deviceId = nextTask.deviceId;
+    QString taskId = nextTask.task->taskName();
+
+    if (!nextTask.task->device()) {
+        qWarning() << "Task has no valid device object - Device:" << deviceId
+                   << "Task:" << taskId;
+        processNextTask();
+        return;
+    }
+
+    m_workerBusy = true;
+
+    emit taskStarted(deviceId, taskId);
+
+    const bool invokeOk = QMetaObject::invokeMethod(m_executionWorker, "executeTask",
+                                                    Qt::QueuedConnection,
+                                                    Q_ARG(Task*, nextTask.task));
+    if (!invokeOk) {
+        qWarning() << "Failed to dispatch task to execution worker - Device:" << deviceId
+                   << "Task:" << taskId;
+        m_workerBusy = false;
+        processNextTask();
         return;
     }
 
     updateQueueStatus();
-}
-
-bool TaskQueueManager::executeTask(PortQueue *pq, const QueuedTask &queuedTask)
-{
-    if (!queuedTask.task) {
-        return false;
-    }
-
-    QString deviceId = queuedTask.deviceId;
-    QString taskId = queuedTask.task->taskName();
-
-    if (!queuedTask.task->device()) {
-        qWarning() << "Task has no valid device object - Device:" << deviceId
-                   << "Task:" << taskId;
-        return false;
-    }
-
-    emit taskStarted(deviceId, taskId);
-
-    const bool invokeOk = QMetaObject::invokeMethod(pq->worker, "executeTask",
-                                                    Qt::QueuedConnection,
-                                                    Q_ARG(Task*, queuedTask.task));
-    if (!invokeOk) {
-        qWarning() << "Failed to dispatch task to execution worker - Device:" << deviceId
-                   << "Task:" << taskId
-                   << "Port:" << pq->portName;
-        return false;
-    }
-
-    return true;
 }
 
 void TaskQueueManager::onWorkerTaskCompleted(TaskResult res, QVector<quint16> data)
 {
-    TaskExecutionWorker *worker = qobject_cast<TaskExecutionWorker*>(sender());
-    if (!worker) {
-        return;
-    }
-
-    PortQueue *completedPq = nullptr;
-    {
-        QMutexLocker locker(&m_queueMutex);
-        for (auto it = m_portQueues.begin(); it != m_portQueues.end(); ++it) {
-            if (it.value()->worker == worker) {
-                completedPq = it.value();
-                completedPq->workerBusy = false;
-                break;
-            }
-        }
-    }
+    QMutexLocker locker(&m_queueMutex);
+    m_workerBusy = false;
 
     emit taskCompleted(res, data);
 
     updateQueueStatus();
-
-    if (completedPq) {
-        QMutexLocker locker(&m_queueMutex);
-        requestDispatch(completedPq);
-    }
+    processNextTask();
 }
 
 void TaskQueueManager::updateQueueStatus()
 {
-    int highPriorityCount = 0;
-    int pollingCount = 0;
-
-    for (auto it = m_portQueues.constBegin(); it != m_portQueues.constEnd(); ++it) {
-        highPriorityCount += it.value()->highPriorityQueue.size();
-        pollingCount += it.value()->pollingQueue.size();
-    }
-
-    emit queueStatusChanged(highPriorityCount, pollingCount);
+    emit queueStatusChanged(m_highPriorityQueue.size(), m_pollingQueue.size());
 }

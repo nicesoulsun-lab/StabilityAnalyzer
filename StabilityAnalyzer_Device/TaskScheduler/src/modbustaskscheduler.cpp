@@ -424,10 +424,11 @@ void ModbusTaskScheduler::executeUserTask(const QString &slaveId, const QString 
             //轮询任务放到了队列里面，每隔一个interval的时间间隔就需要如队列然后等待执行，然后轮询任务的开始和停止由外部调用者控制
             //如果需要停止这个轮询任务，不再往队列放请求了，就在外部调用暂停的方法，如果又要开始执行这个轮询任务了就再调用开始的方法
             if(task->interval()>0){
-                m_taskQueueManager->addPollingTask(getPortNameForDevice(deviceId), deviceId, task);
+                m_taskQueueManager->addPollingTask(deviceId, task);
             }
+            // 添加到高优先级队列（先进先出）
             else{
-                m_taskQueueManager->addHighPriorityTask(getPortNameForDevice(deviceId), deviceId, task);
+                m_taskQueueManager->addHighPriorityTask(deviceId, task);
             }
             //qDebug() << "User task added to queue:" << taskName
             //         << "for device (slaveId):" << slaveId;
@@ -485,7 +486,7 @@ void ModbusTaskScheduler::schedulePollingTask(const QString &slaveId, const QStr
             task->setIsSync(isSync);
             task->setWriteData(writeData);
             // 添加到轮询队列（低优先级队列）
-            m_taskQueueManager->addPollingTask(getPortNameForDevice(deviceId), deviceId, task);
+            m_taskQueueManager->addPollingTask(deviceId, task);
         } else {
             emit errorOccurred("Task not found: " + taskName + " for device (slaveId): " + slaveId);
         }
@@ -597,10 +598,10 @@ void ModbusTaskScheduler::onDeviceTaskCompleted(TaskResult res, QVector<quint16>
 void ModbusTaskScheduler::onPortConnectionChanged(const QString &portName, bool connected)
 {
     qDebug() << "Port" << portName << (connected ? "connected" : "disconnected");
-    
+
     // 更新连接状态
     m_portConnectionStates[portName] = connected;
-    
+
     // 根据连接状态控制任务调度
     if (connected) {
         // 串口连接成功，恢复任务调度
@@ -609,7 +610,7 @@ void ModbusTaskScheduler::onPortConnectionChanged(const QString &portName, bool 
         // 串口断开连接，暂停任务调度
         pauseTaskSchedulingForPort(portName);
     }
-    
+
     updateConnectionStatistics();
 }
 
@@ -749,7 +750,7 @@ void ModbusTaskScheduler::initializePortConnection(const SerialConfig &deviceCon
         qWarning() << "Failed to add port:" << portName << "for device:" << deviceId;
         return;
     }
-    
+
     // 初始化串口连接状态和任务调度状态
     if (!m_portConnectionStates.contains(portName)) {
         m_portConnectionStates[portName] = false; // 初始状态为未连接
@@ -773,7 +774,7 @@ void ModbusTaskScheduler::initializePortConnection(const SerialConfig &deviceCon
     } else {
         qDebug() << "Port already connected, device added successfully - Port:" << portName
                  << "Device:" << deviceId;
-        
+
         // 如果端口已经连接，确保任务调度状态正确
         if (m_portConnectionStates.contains(portName) && !m_portTaskSchedulingStates[portName]) {
             resumeTaskSchedulingForPort(portName);
@@ -793,17 +794,17 @@ bool ModbusTaskScheduler::waitForTaskCompletion(Task* task, QVector<quint16>& re
     if (!task) {
         return false;
     }
-    
+
     QEventLoop eventLoop;
     QTimer timeoutTimer;
     bool completed = false;
     bool success = false;
     QVector<quint16> completedData;
-    
+
     // 设置超时时间
     timeoutTimer.setSingleShot(true);
     timeoutTimer.start(timeoutMs);
-    
+
     // 连接任务完成信号
     QObject::connect(task, &Task::taskCompleted, &eventLoop,
                      [&](const TaskResult &taskRes, const QVector<quint16> &data) {
@@ -817,13 +818,13 @@ bool ModbusTaskScheduler::waitForTaskCompletion(Task* task, QVector<quint16>& re
         //          << "dataSize=" << data.size();
         eventLoop.quit();
     });
-    
+
     // 连接超时信号
     QObject::connect(&timeoutTimer, &QTimer::timeout, &eventLoop, &QEventLoop::quit);
-    
+
     // 阻塞并等待任务完成或超时
     eventLoop.exec();
-    
+
     if (timeoutTimer.isActive()) {
         // 任务正常完成
         timeoutTimer.stop();
@@ -831,14 +832,14 @@ bool ModbusTaskScheduler::waitForTaskCompletion(Task* task, QVector<quint16>& re
         //          << "completed=" << completed
         //          << "success=" << success
         //          << "dataSize=" << completedData.size();
-        
+
         // 获取任务结果
         result = completedData;
         return completed && success;
     } else {
         // 任务超时
         qWarning() << "Sync task timeout:" << task->taskName();
-        
+
         // 取消任务
         task->cancel();
         return false;
@@ -1092,9 +1093,9 @@ bool ModbusTaskScheduler::isPortConfigChanged(const SerialConfig &serialConfig) 
         qDebug()<<"第一次使用这个串口" << portName;
         return true;
     }
-    
+
     SerialConfig cachedConfig = m_portConfigCache.value(portName);
-    
+
     // 比较关键配置参数
     const bool changed =
         cachedConfig.baudRate != serialConfig.baudRate ||
@@ -1119,7 +1120,7 @@ bool ModbusTaskScheduler::isPortConfigChanged(const SerialConfig &serialConfig) 
                  << serialConfig.flowControl;
         return true;
     }
-    
+
     return false;
 }
 
@@ -1132,13 +1133,13 @@ void ModbusTaskScheduler::reconnectPortWithNewConfig(const SerialConfig &serialC
 {
     QString portName = serialConfig.portName;
     qDebug() << "Reconnecting port with new config - Port:" << portName;
-    
+
     // 先断开当前连接
     if (m_portManager->isPortConnected(portName)) {
         m_portManager->disconnectPort(portName);
         qDebug() << "Disconnected port:" << portName;
     }
-    
+
     // 更新串口配置
     if (m_portManager->addPort(serialConfig)) {
         // 重新连接串口
@@ -1164,7 +1165,7 @@ QString ModbusTaskScheduler::getPortNameForDevice(const QString &deviceId) const
     if (m_deviceToPortMap.contains(deviceId)) {
         return m_deviceToPortMap.value(deviceId);
     }
-    
+
     // 从设备配置中查找
     if (m_deviceConfigMap.contains(deviceId)) {
         DeviceConfig *deviceConfig = m_deviceConfigMap.value(deviceId);
@@ -1172,7 +1173,7 @@ QString ModbusTaskScheduler::getPortNameForDevice(const QString &deviceId) const
         QJsonObject serialConfig = deviceConfigObj.value("serialConfig").toObject();
         return serialConfig.value("portName").toString();
     }
-    
+
     return QString();
 }
 
@@ -1187,7 +1188,7 @@ QJsonObject ModbusTaskScheduler::getSerialConfigForDevice(const QString &deviceI
         QJsonObject deviceConfigObj = m_deviceConfigs.value(deviceId);
         return deviceConfigObj.value("serialConfig").toObject();
     }
-    
+
     return QJsonObject();
 }
 
@@ -1199,17 +1200,17 @@ void ModbusTaskScheduler::pauseTaskSchedulingForPort(const QString &portName)
 {
     if (!m_portTaskSchedulingStates.contains(portName) || m_portTaskSchedulingStates[portName]) {
         qDebug() << "Pausing task scheduling for port:" << portName;
-        
+
         // 暂停该串口下所有设备的轮询任务
         QList<Device*> devices = m_portManager->getDevicesOnPort(portName);
         for (Device *device : devices) {
             QString deviceId = device->deviceId();
-            
+
             // 暂停该设备的所有轮询任务
             if (m_deviceConfigMap.contains(deviceId)) {
                 DeviceConfig *deviceConfig = m_deviceConfigMap.value(deviceId);
                 QList<Task*> tasks = deviceConfig->tasks();
-                
+
                 for (Task *task : tasks) {
                     if (task->interval() > 0) { // 轮询任务
                         pausePollingTask(deviceId, task->taskName());
@@ -1218,7 +1219,7 @@ void ModbusTaskScheduler::pauseTaskSchedulingForPort(const QString &portName)
                 }
             }
         }
-        
+
         // 更新任务调度状态
         m_portTaskSchedulingStates[portName] = false;
         qDebug() << "Task scheduling paused for port:" << portName;
@@ -1233,17 +1234,17 @@ void ModbusTaskScheduler::resumeTaskSchedulingForPort(const QString &portName)
 {
     if (!m_portTaskSchedulingStates.contains(portName) || !m_portTaskSchedulingStates[portName]) {
         qDebug() << "Resuming task scheduling for port:" << portName;
-        
+
         // 恢复该串口下所有设备的轮询任务
         QList<Device*> devices = m_portManager->getDevicesOnPort(portName);
         for (Device *device : devices) {
             QString deviceId = device->deviceId();
-            
+
             // 恢复该设备的所有轮询任务
             if (m_deviceConfigMap.contains(deviceId)) {
                 DeviceConfig *deviceConfig = m_deviceConfigMap.value(deviceId);
                 QList<Task*> tasks = deviceConfig->tasks();
-                
+
                 for (Task *task : tasks) {
                     if (task->interval() > 0) { // 轮询任务
                         resumePollingTask(deviceId, task->taskName());
@@ -1252,7 +1253,7 @@ void ModbusTaskScheduler::resumeTaskSchedulingForPort(const QString &portName)
                 }
             }
         }
-        
+
         // 更新任务调度状态
         m_portTaskSchedulingStates[portName] = true;
         qDebug() << "Task scheduling resumed for port:" << portName;

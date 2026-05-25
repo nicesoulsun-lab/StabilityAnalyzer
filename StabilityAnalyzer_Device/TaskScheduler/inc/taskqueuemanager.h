@@ -6,7 +6,6 @@
 #include <QStack>
 #include <QTimer>
 #include <QMap>
-#include <QHash>
 #include <QString>
 #include <QMutex>
 #include <QThread>
@@ -34,12 +33,9 @@ public:
     void pauseScheduler();
     void resumeScheduler();
 
-    void registerPort(const QString &portName);
-    void unregisterPort(const QString &portName);
-
-    void addHighPriorityTask(const QString &portName, const QString &deviceId, Task *task);
-    void addPollingTask(const QString &portName, const QString &deviceId, Task *task);
-    void initializeDeviceTasks(const QString &portName, const QString &deviceId, const QList<Task*> &tasks);
+    void addHighPriorityTask(const QString &deviceId, Task *task);
+    void addPollingTask(const QString &deviceId, Task *task);
+    void initializeDeviceTasks(const QString &deviceId, const QList<Task*> &tasks);
     void removeTask(const QString &taskName);
     void clearAllTasks();
 
@@ -59,41 +55,31 @@ private slots:
 private:
     struct QueuedTask {
         QString deviceId;
-        QString portName;
         Task *task;
 
-        QueuedTask() : deviceId(""), portName(""), task(nullptr) {}
-        QueuedTask(const QString &devId, const QString &pName, Task *t)
-            : deviceId(devId), portName(pName), task(t) {}
+        QueuedTask() : deviceId(""), task(nullptr) {}
+        QueuedTask(const QString &devId, Task *t)
+            : deviceId(devId), task(t) {}
     };
-
-    struct PortQueue {
-        QString portName;
-        QThread *thread = nullptr;
-        TaskExecutionWorker *worker = nullptr;
-        QQueue<QueuedTask> highPriorityQueue;
-        QQueue<QueuedTask> pollingQueue;
-        bool workerBusy = false;
-        bool dispatchPending = false;
-    };
-
-    void setupPortWorker(PortQueue *pq);
-    void teardownPortWorker(PortQueue *pq);
-    void requestDispatch(PortQueue *pq);
-    void processNextTask(PortQueue *pq);
-    bool executeTask(PortQueue *pq, const QueuedTask &queuedTask);
-    void updateQueueStatus();
 
     bool m_isRunning;
     bool m_isPaused;
+    bool m_workerBusy;
+
+    QThread *m_executionThread;
+    TaskExecutionWorker *m_executionWorker;
 
     QTimer *m_schedulerTimer;
 
-    QHash<QString, PortQueue*> m_portQueues;
+    QQueue<QueuedTask> m_highPriorityQueue;
+    QQueue<QueuedTask> m_pollingQueue;
 
     mutable QMutex m_queueMutex;
 
     QMap<QString, QueuedTask> m_taskMap;
+
+    void processNextTask();
+    void updateQueueStatus();
 };
 
 #endif // TASKQUEUEMANAGER_H
