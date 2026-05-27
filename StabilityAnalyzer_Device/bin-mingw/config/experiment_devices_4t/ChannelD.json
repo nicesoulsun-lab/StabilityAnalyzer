@@ -1,21 +1,22 @@
-﻿{
+{
     "device":  {
-                   "description":  "ChannelD modbus device",
+                   "description":  "ChannelA modbus device",
                    "manufacturer":  "TBD",
                    "model":  "TBD",
-                   "name":  "ChannelD",
+                   "name":  "ChannelA",
                    "serialConfig":  {
-                                        "baudRate":  9600,
+                                        "baudRate":  115200,
                                         "dataBits":  8,
                                         "flowControl":  "NoFlowControl",
                                         "interFrameDelay":  5,
                                         "maxRetries":  3,
                                         "parity":  "NoParity",
-                                        "portName":  "/tmp/ttySA_D_HOST",
+                                        "portName":  "ttyACM2",
                                         "responseTimeout":  1000,
                                         "stopBits":  1
                                     },
                    "slaveId":  4,
+                   "slaveAddress": 1,
                    "taskList":  [
                                     {
                                         "operate":  1,

@@ -122,6 +122,8 @@ void DeviceConfig::parseGeneralInfo(const QJsonObject &config)
 //        m_deviceId = QString::number(config.value("slaveId").toInt(1));
 //    }
     m_deviceId = QString::number(config.value("slaveId").toInt(1));
+    m_slaveAddress = config.value("slaveAddress").toInt(1);
+    qDebug() << "[DeviceConfig] deviceId=" << m_deviceId << "slaveAddress=" << m_slaveAddress;
     m_deviceName = config.value("name").toString();
     m_description = config.value("description").toString();
     m_manufacturer = config.value("manufacturer").toString();
@@ -188,8 +190,8 @@ void DeviceConfig::parseTaskList(const QJsonArray &tasksArray)
         
         //创建task任务类，使用json文件数据创建，给任务类传递json数据和串口对象
         Task *task = Task::createFromJson(taskConfig, m_portManager);
-        //给任务关联任务id，这个任务id就是读取的配置文件的slaveId
         task->setDeviceId(m_deviceId);
+        task->setSlaveAddress(m_slaveAddress);
 //        qDebug()<< __FUNCTION__ << "task信息：" << task->deviceId()<<m_deviceId;
         if (task) {
             m_tasks.append(task);

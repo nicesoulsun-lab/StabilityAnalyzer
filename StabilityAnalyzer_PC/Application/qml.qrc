@@ -8,7 +8,6 @@
         <file alias="Keyboard.qml">../SubApplication/ANALYZER/MainWindow/qml/Keyboard.qml</file>
         <file alias="InfoPop.qml">../SubApplication/ANALYZER/MainWindow/qml/InfoPop.qml</file>
         <file alias="NewProjectPop.qml">../SubApplication/ANALYZER/MainWindow/qml/NewProjectPop.qml</file>
-        <file alias="SelectChannelsPop.qml">../SubApplication/ANALYZER/MainWindow/qml/SelectChannelsPop.qml</file>
         <file alias="CustomPop.qml">../SubApplication/ANALYZER/MainWindow/qml/CustomPop.qml</file>
         <file alias="InstrumentCheckPop.qml">../SubApplication/ANALYZER/MainWindow/qml/InstrumentCheckPop.qml</file>
         <file alias="NewExperimentPop.qml">../SubApplication/ANALYZER/MainWindow/qml/NewExperimentPop.qml</file>

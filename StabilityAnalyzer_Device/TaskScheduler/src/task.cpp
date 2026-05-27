@@ -116,16 +116,6 @@ QVector<quint16> Task::execute()
     
     //如果这个任务对应的客户端没连接就返回
     const bool clientConnected = client->isConnected();
-    // qDebug() << "[Task][Execute] task=" << m_taskName
-    //          << "device=" << m_deviceId
-    //          << "isSync=" << m_isSync
-    //          << "function=" << static_cast<int>(m_functionCode)
-    //          << "startAddress=" << m_startAddress
-    //          << "quantity=" << m_quantity
-    //          << "client=" << client
-    //          << "clientConnected=" << clientConnected
-    //          << "taskThread=" << QThread::currentThread()
-    //          << "taskObjectThread=" << this->thread();
     if(!clientConnected){
         qWarning() << "ModbusClient object is not connected:" << m_taskName
                    << "device=" << m_deviceId;
@@ -149,37 +139,37 @@ QVector<quint16> Task::execute()
         // 根据功能码执行同步操作
         switch (m_functionCode) {
             case ModbusFunction::READ_COILS:
-                result = client->readCoils(m_deviceId.toInt(), m_startAddress, m_quantity);
+                result = client->readCoils(m_slaveAddress, m_startAddress, m_quantity);
                 success = !result.isEmpty();
                 break;
             case ModbusFunction::READ_DISCRETE_INPUTS:
-                result = client->readDiscreteInputs(m_deviceId.toInt(), m_startAddress, m_quantity);
+                result = client->readDiscreteInputs(m_slaveAddress, m_startAddress, m_quantity);
                 success = !result.isEmpty();
                 break;
             case ModbusFunction::READ_HOLDING_REGISTERS:
-                result = client->readHoldingRegisters(m_deviceId.toInt(), m_startAddress, m_quantity);
+                result = client->readHoldingRegisters(m_slaveAddress, m_startAddress, m_quantity);
                 success = !result.isEmpty();
                 break;
             case ModbusFunction::READ_INPUT_REGISTERS:
-                result = client->readInputRegisters(m_deviceId.toInt(), m_startAddress, m_quantity);
+                result = client->readInputRegisters(m_slaveAddress, m_startAddress, m_quantity);
                 success = !result.isEmpty();
                 break;
             case ModbusFunction::WRITE_SINGLE_COIL:
-                success = client->writeSingleCoil(m_deviceId.toInt(), m_startAddress, QVector<quint16>(m_quantity, 1));
+                success = client->writeSingleCoil(m_slaveAddress, m_startAddress, QVector<quint16>(m_quantity, 1));
                 break;
             case ModbusFunction::WRITE_SINGLE_REGISTER:
-                success = client->writeSingleRegister(m_deviceId.toInt(), m_startAddress, QVector<quint16>(m_quantity, 0));
+                success = client->writeSingleRegister(m_slaveAddress, m_startAddress, QVector<quint16>(m_quantity, 0));
                 break;
             case ModbusFunction::WRITE_MULTIPLE_COILS:
                 {
                     QVector<quint16> coilValues = m_writeData.isEmpty() ? QVector<quint16>(m_quantity, 1) : m_writeData;
-                    success = client->writeMultipleCoils(m_deviceId.toInt(), m_startAddress, coilValues);
+                    success = client->writeMultipleCoils(m_slaveAddress, m_startAddress, coilValues);
                 }
                 break;
             case ModbusFunction::WRITE_MULTIPLE_REGISTERS:
                 {
                     QVector<quint16> registerValues = m_writeData.isEmpty() ? QVector<quint16>(m_quantity, 0) : m_writeData;
-                    success = client->writeMultipleRegisters(m_deviceId.toInt(), m_startAddress, registerValues);
+                    success = client->writeMultipleRegisters(m_slaveAddress, m_startAddress, registerValues);
                 }
                 break;
             default:
@@ -221,40 +211,40 @@ QVector<quint16> Task::execute()
         bool invokeSuccess = false;
         switch (m_functionCode) {
             case ModbusFunction::READ_COILS:
-                client->readCoilsAsync(m_deviceId.toInt(), m_startAddress, m_quantity, tag);
+                client->readCoilsAsync(m_slaveAddress, m_startAddress, m_quantity, tag);
                 invokeSuccess = true;
                 break;
             case ModbusFunction::READ_DISCRETE_INPUTS:
-                client->readDiscreteInputsAsync(m_deviceId.toInt(), m_startAddress, m_quantity, tag);
+                client->readDiscreteInputsAsync(m_slaveAddress, m_startAddress, m_quantity, tag);
                 invokeSuccess = true;
                 break;
             case ModbusFunction::READ_HOLDING_REGISTERS:
-                client->readHoldingRegistersAsync(m_deviceId.toInt(), m_startAddress, m_quantity, tag);
+                client->readHoldingRegistersAsync(m_slaveAddress, m_startAddress, m_quantity, tag);
                 invokeSuccess = true;
                 break;
             case ModbusFunction::READ_INPUT_REGISTERS:
-                client->readInputRegistersAsync(m_deviceId.toInt(), m_startAddress, m_quantity, tag);
+                client->readInputRegistersAsync(m_slaveAddress, m_startAddress, m_quantity, tag);
                 invokeSuccess = true;
                 break;
             case ModbusFunction::WRITE_SINGLE_COIL:
-                client->writeSingleCoilAsync(m_deviceId.toInt(), m_startAddress, QVector<quint16>(m_quantity, 1), tag);
+                client->writeSingleCoilAsync(m_slaveAddress, m_startAddress, QVector<quint16>(m_quantity, 1), tag);
                 invokeSuccess = true;
                 break;
             case ModbusFunction::WRITE_SINGLE_REGISTER:
-                client->writeSingleRegisterAsync(m_deviceId.toInt(), m_startAddress, QVector<quint16>(m_quantity, 0), tag);
+                client->writeSingleRegisterAsync(m_slaveAddress, m_startAddress, QVector<quint16>(m_quantity, 0), tag);
                 invokeSuccess = true;
                 break;
             case ModbusFunction::WRITE_MULTIPLE_COILS:
                 {
                     QVector<quint16> coilValues = m_writeData.isEmpty() ? QVector<quint16>(m_quantity, 1) : m_writeData;
-                    client->writeMultipleCoilsAsync(m_deviceId.toInt(), m_startAddress, coilValues, tag);
+                    client->writeMultipleCoilsAsync(m_slaveAddress, m_startAddress, coilValues, tag);
                     invokeSuccess = true;
                 }
                 break;
             case ModbusFunction::WRITE_MULTIPLE_REGISTERS:
                 {
                     QVector<quint16> registerValues = m_writeData.isEmpty() ? QVector<quint16>(m_quantity, 0) : m_writeData;
-                    client->writeMultipleRegistersAsync(m_deviceId.toInt(), m_startAddress, registerValues, tag);
+                    client->writeMultipleRegistersAsync(m_slaveAddress, m_startAddress, registerValues, tag);
                     invokeSuccess = true;
                 }
                 break;
@@ -425,6 +415,11 @@ void Task::setTaskReamark(const QString &newTaskReamark)
 void Task::setDeviceId(const QString &newDeviceId)
 {
     m_deviceId = newDeviceId;
+}
+
+void Task::setSlaveAddress(int address)
+{
+    m_slaveAddress = address;
 }
 
 void Task::onDisconnected()

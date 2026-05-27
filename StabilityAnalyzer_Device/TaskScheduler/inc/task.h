@@ -130,6 +130,9 @@ public:
 
     void setDeviceId(const QString &newDeviceId);
 
+    int slaveAddress() const { return m_slaveAddress; }
+    void setSlaveAddress(int address);
+
     const QString &taskReamark() const;
     void setTaskReamark(const QString &newTaskReamark);
 
@@ -168,6 +171,7 @@ private:
     
     // Modbus任务参数
     QString m_deviceId;
+    int m_slaveAddress = 1;
     ModbusFunction m_functionCode; //任务类型
     quint16 m_startAddress; //起始地址
     quint16 m_quantity; //读取数量

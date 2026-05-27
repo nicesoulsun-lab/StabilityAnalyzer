@@ -65,6 +65,9 @@ public:
         QObject::connect(m_experimentCtrl, &ExperimentCtrl::scanDataChunkReady,
                          this,
                          [this](int channel, int experimentId, int scanId, bool scanCompleted, const QVariantList &rows) {
+            if (!scanCompleted) {
+                return;
+            }
             QVariantList streamRows;
             streamRows.reserve(rows.size());
             for (const QVariant &rowVariant : rows) {
@@ -268,17 +271,12 @@ public:
         // 校准扫描数据就绪：通过 Stream 通道推送给 PC
         QObject::connect(m_experimentCtrl, &ExperimentCtrl::calibrationScanDataReady,
                          this,
-                         [this](int channel, const QVector<QVariantMap> &rows) {
-            QVariantList rowList;
-            rowList.reserve(rows.size());
-            for (const QVariantMap &row : rows) {
-                rowList.append(row);
-            }
+                         [this](int channel, const QVariantList &rows) {
             m_dataTransmitCtrl->sendStreamMessage(QVariantMap{
                 {QStringLiteral("type"), QStringLiteral("calibration_scan_data")},
                 {QStringLiteral("channel"), channel},
-                {QStringLiteral("row_count"), rowList.size()},
-                {QStringLiteral("rows"), rowList}
+                {QStringLiteral("row_count"), rows.size()},
+                {QStringLiteral("rows"), rows}
             });
         });
 

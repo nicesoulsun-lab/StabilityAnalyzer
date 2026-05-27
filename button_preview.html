@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>按钮美化预览</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .preview-container {
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+            padding: 48px 56px;
+            max-width: 720px;
+            width: 100%;
+        }
+
+        .channel-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 28px;
+            gap: 20px;
+        }
+
+        .channel-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 0 0 100px;
+        }
+
+        .channel-checkbox {
+            width: 18px;
+            height: 18px;
+            border: 2px solid #d0d7de;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .channel-checkbox:hover {
+            border-color: #3b87e4;
+            background: #f0f7ff;
+        }
+
+        .channel-checkbox.checked {
+            background: #3b87e4;
+            border-color: #3b87e4;
+        }
+
+        .channel-checkbox.checked::after {
+            content: '✓';
+            position: absolute;
+            color: white;
+            font-size: 12px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .channel-text {
+            font-size: 15px;
+            color: #333333;
+            font-weight: 400;
+        }
+
+        /* 方案参数按钮 - 渐变蓝色 */
+        .btn-primary {
+            flex: 0 0 140px;
+            height: 44px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #4A9EFF 0%, #2B78E4 100%);
+            color: #ffffff;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 8px rgba(59, 135, 228, 0.25);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(59, 135, 228, 0.35);
+            background: linear-gradient(135deg, #5AABFF 0%, #3B87E4 100%);
+        }
+
+        .btn-primary:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 6px rgba(59, 135, 228, 0.25);
+        }
+
+        /* 设备校准按钮 - 渐变绿色 */
+        .btn-success {
+            width: 100%;
+            height: 52px;
+            border: 2px solid #4EC862;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #E8F9ED 0%, #D4F5E0 100%);
+            color: #2D8A4E;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 8px rgba(78, 200, 98, 0.2);
+            margin-top: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-success::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(78, 200, 98, 0.35);
+            background: linear-gradient(135deg, #F0FBF4 0%, #E0F8E8 100%);
+            border-color: #5DD672;
+        }
+
+        .btn-success:hover::before {
+            left: 100%;
+        }
+
+        .btn-success:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(78, 200, 98, 0.25);
+        }
+
+        /* 底部按钮组 */
+        .action-buttons {
+            display: flex;
+            gap: 24px;
+            justify-content: center;
+            margin-top: 36px;
+        }
+
+        /* 取消按钮 - 幽灵按钮 */
+        .btn-ghost {
+            flex: 0 0 140px;
+            height: 48px;
+            border: 2px solid #E0E6ED;
+            border-radius: 8px;
+            background: #ffffff;
+            color: #5D6775;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-ghost::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #f7f9fb;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .btn-ghost:hover {
+            border-color: #C8D0D9;
+            color: #3D4650;
+            transform: translateY(-1px);
+        }
+
+        .btn-ghost:hover::before {
+            opacity: 1;
+        }
+
+        .btn-ghost:active {
+            transform: translateY(0);
+            background: #f0f2f5;
+        }
+
+        /* 开始按钮 - 主行动按钮 */
+        .btn-action {
+            flex: 0 0 140px;
+            height: 48px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #4A9EFF 0%, #2B78E4 100%);
+            color: #ffffff;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 3px 12px rgba(59, 135, 228, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-action::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .btn-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(59, 135, 228, 0.4);
+            background: linear-gradient(135deg, #5AABFF 0%, #3B87E4 100%);
+        }
+
+        .btn-action:hover::before {
+            left: 100%;
+        }
+
+        .btn-action:active {
+            transform: translateY(0);
+            box-shadow: 0 3px 10px rgba(59, 135, 228, 0.3);
+        }
+
+        .btn-action:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* 标题 */
+        .preview-title {
+            text-align: center;
+            font-size: 14px;
+            color: #8A95A3;
+            margin-bottom: 32px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        /* 交互说明 */
+        .interaction-note {
+            margin-top: 32px;
+            padding: 16px 20px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border-left: 3px solid #3b87e4;
+        }
+
+        .interaction-note h4 {
+            font-size: 13px;
+            color: #5D6775;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .interaction-note ul {
+            font-size: 12px;
+            color: #8A95A3;
+            padding-left: 18px;
+            line-height: 1.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="preview-container">
+        <p class="preview-title">按钮美化方案预览</p>
+
+        <!-- 第一行：A 通道和 B 通道 -->
+        <div class="channel-row">
+            <div class="channel-label">
+                <div class="channel-checkbox"></div>
+                <span class="channel-text">A 通道</span>
+            </div>
+            <button class="btn-primary">设置参数</button>
+            
+            <div class="channel-label">
+                <div class="channel-checkbox"></div>
+                <span class="channel-text">B 通道</span>
+            </div>
+            <button class="btn-primary">设置参数</button>
+        </div>
+
+        <!-- 第二行：C 通道和 D 通道 -->
+        <div class="channel-row">
+            <div class="channel-label">
+                <div class="channel-checkbox"></div>
+                <span class="channel-text">C 通道</span>
+            </div>
+            <button class="btn-primary">设置参数</button>
+            
+            <div class="channel-label">
+                <div class="channel-checkbox"></div>
+                <span class="channel-text">D 通道</span>
+            </div>
+            <button class="btn-primary">设置参数</button>
+        </div>
+
+        <!-- 设备校准按钮 -->
+        <button class="btn-success">设备校准</button>
+
+        <!-- 底部操作按钮 -->
+        <div class="action-buttons">
+            <button class="btn-ghost">取消</button>
+            <button class="btn-action">开始</button>
+        </div>
+
+        <!-- 交互说明 -->
+        <div class="interaction-note">
+            <h4>✨ 美化要点</h4>
+            <ul>
+                <li><strong>渐变色彩：</strong>主按钮采用蓝色渐变，设备校准采用绿色渐变，增强视觉层次</li>
+                <li><strong>阴影效果：</strong>柔和的阴影提升立体感，hover 时阴影加深增强交互反馈</li>
+                <li><strong>光泽动画：</strong>hover 时光泽扫过效果，提升精致感</li>
+                <li><strong>微动效：</strong>hover 时轻微上浮 2px，提供清晰的视觉反馈</li>
+                <li><strong>圆角优化：</strong>统一 8px 圆角，更加现代柔和</li>
+                <li><strong>字体加粗：</strong>关键按钮字体加粗，增强可读性和视觉重量</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // 添加复选框交互
+        document.querySelectorAll('.channel-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('click', function() {
+                this.classList.toggle('checked');
+            });
+        });
+
+        // 添加按钮点击效果
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', function() {
+                console.log('点击了:', this.textContent);
+            });
+        });
+    </script>
+</body>
+</html>

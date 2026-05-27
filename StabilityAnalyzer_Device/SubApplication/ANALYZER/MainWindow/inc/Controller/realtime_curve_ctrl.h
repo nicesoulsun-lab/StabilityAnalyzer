@@ -3,6 +3,8 @@
 
 #include <QObject>
 #include <QVariantList>
+#include <QVector>
+#include <QPointF>
 #include "mainwindow_global.h"
 
 class ExperimentCtrl;
@@ -51,6 +53,8 @@ private slots:
 private:
     void rebuildCurve(const QVariantList &rows);
     void loadLatestScanData();
+    void appendIncrementalData(const QVariantList &rows);
+    void flushIncrementalCurve();
     QVariantList toVariantList(const QVector<QPointF> &points) const;
 
     ExperimentCtrl *m_experimentCtrl;
@@ -67,6 +71,10 @@ private:
     qreal m_minBackscatter;
     qreal m_maxBackscatter;
     bool m_hasData;
+
+    int m_lastScanId;
+    QVector<QPointF> m_accumulatedTransPoints;
+    QVector<QPointF> m_accumulatedBackPoints;
 };
 
 #endif

@@ -5,6 +5,7 @@
 #include <QVariantMap>
 #include <QVector>
 #include <QMap>
+#include <QQueue>
 #include <QTimer>
 #include "Common/experiment_types.h"
 #include "mainwindow_global.h"
@@ -188,9 +189,9 @@ signals:
     void scanDataChunkReady(int channel, int experimentId, int scanId, bool scanCompleted, const QVariantList& rows);
 
     /**
-     * @brief 校准扫描数据就绪（由 tryFetchCalibrationData 触发）
+     * @brief 校准扫描数据就绪（由 poll 完成判断触发）
      */
-    void calibrationScanDataReady(int channel, const QVector<QVariantMap>& rows);
+    void calibrationScanDataReady(int channel, const QVariantList& rows);
 
 private slots:
     // 旧扫描计时器回调（保留兼容）
@@ -229,6 +230,7 @@ private:
      */
     QVariantMap readRealtimeStatus(int channel);
     void pollChannelStatus(int channel);
+    void finishCurrentPoll();
     void initializeSchedulerAfterStartup();
     void startDeferredStatusPolling();
 
@@ -270,6 +272,8 @@ private:
     QMap<Channel, int> m_startedScanCounts;
     QMap<Channel, bool> m_stopAfterDrainFlags;
     QMap<Channel, qint64> m_stopAfterDrainDeadlineMs;
+    bool m_anyPollInProgress = false;
+    QQueue<int> m_pendingPollChannels;
 
     // 校准扫描状态
     QMap<Channel, bool> m_calibrationModes;

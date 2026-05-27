@@ -52,6 +52,7 @@ void LedController::onExperimentStarted(int channel)
 {
     m_runningChannels.insert(channel);
     m_errorChannels.remove(channel);
+    m_errorDebounce.remove(channel);
     updateChannelLeds(channel);
 }
 
@@ -60,16 +61,29 @@ void LedController::onExperimentStopped(int channel)
 {
     m_runningChannels.remove(channel);
     m_errorChannels.remove(channel);
+    m_errorDebounce.remove(channel);
     updateChannelLeds(channel);
 }
 
 // 应用错误状态（由轮询检测到runStatus=3时调用）
+// 非对称消抖：进入错误需连续kErrorEnterThreshold次（容忍MCU瞬态干扰），退出错误即时响应
 void LedController::applyChannelError(int channel, bool hasError)
 {
-    if (hasError)
+    if (m_runningChannels.contains(channel))
+        return;
+
+    int &counter = m_errorDebounce[channel];
+    if (hasError) {
+        counter = qMin(counter + 1, kErrorEnterThreshold);
+        if (counter < kErrorEnterThreshold || m_errorChannels.contains(channel))
+            return;
         m_errorChannels.insert(channel);
-    else
+    } else {
+        counter = 0;
+        if (!m_errorChannels.contains(channel))
+            return;
         m_errorChannels.remove(channel);
+    }
     updateChannelLeds(channel);
 }
 
@@ -81,8 +95,8 @@ void LedController::updateChannelLeds(int channel)
     LedMode mode;
 
     if (m_runningChannels.contains(channel)) {
-        // 实验中：单通道橙色流水，四通道绿色闪烁
-        color = m_isSingleTower ? Color(255, 165, 0) : Color(0, 255, 0);
+        // 实验中：单通道橙色流水，四通道橙色闪烁
+        color = Color(255, 165, 0);
         mode = m_isSingleTower ? Flow : Blink;
     } else if (m_errorChannels.contains(channel)) {
         // 错误：红色闪烁
@@ -142,7 +156,7 @@ void LedController::writeChannel(int ledIndex, const QString &channel, int value
 }
 
 // 定时器回调：驱动闪烁和流水灯效果
-// - 常亮：保持当前颜色
+// - 常亮：已写入正确颜色，不做重复刷新
 // - 闪烁：按相位亮灭切换
 // - 流水：逐帧推进，头灯最亮，拖尾灯渐暗，背景灯灰色
 void LedController::updateBlinkPhase()
@@ -174,10 +188,9 @@ void LedController::updateBlinkPhase()
 
         switch (state.mode) {
         case Steady:
-            setLedColor(led, state.color);
             break;
         case Blink:
-            setLedColor(led, m_blinkPhase ? state.color : Color(0, 0, 0));
+            setLedColor(led, m_blinkPhase ? state.color : Color(kBlinkOffValue, kBlinkOffValue, kBlinkOffValue));
             break;
         case Flow: {
             // 判断当前LED是否在流水亮区（含拖尾）

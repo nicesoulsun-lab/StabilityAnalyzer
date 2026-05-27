@@ -2,6 +2,8 @@ import QtQuick 2.12
 
 Rectangle {
     property alias title: titleLabel.text
+    property alias titleSize: titleLabel.pixelSize
+    property alias titleBold: titleLabel.textBold
     property int blockWidth: 315
     property int blockHeight: 200
     property alias content: container.children // 允许外部插入内容

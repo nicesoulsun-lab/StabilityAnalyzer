@@ -928,12 +928,19 @@ void ExperimentCtrl::pollChannelStatus(int channel)
 {
     const Channel ch = static_cast<Channel>(channel);
 
+    if (m_anyPollInProgress) {
+        if (!m_pendingPollChannels.contains(channel)) {
+            m_pendingPollChannels.enqueue(channel);
+        }
+        return;
+    }
+    m_anyPollInProgress = true;
+
     QVariantMap patch;
     patch["connected"] = isModbusConnected(channel);
     const bool connected = patch["connected"].toBool();
 
     if (!connected) {
-        // 下位机未连接时不做读任务，避免每秒刷屏告警。
         qDebug() << "[ExperimentCtrl][Poll] channel=" << channel
                  << "skip read because connected=false";
         patch["running"] = false;
@@ -950,13 +957,12 @@ void ExperimentCtrl::pollChannelStatus(int channel)
                      << "B=" << mergedStatus.value("storageBState").toInt();
             emit channelStatusUpdated(channel, mergedStatus);
         }
+        finishCurrentPoll();
         return;
     }
 
-    // 通过 JSON 任务名分项读取状态。
     QVariantMap status = readRealtimeStatus(channel);
     if (status.isEmpty()) {
-        // 已连接但读不到数据，才打印告警（用于定位通讯异常）。
         qWarning() << "[ExperimentCtrl][Poll] channel=" << channel
                    << "connected but readRealtimeStatus empty";
         QVariantMap mergedStatus;
@@ -971,6 +977,7 @@ void ExperimentCtrl::pollChannelStatus(int channel)
                      << "B=" << mergedStatus.value("storageBState").toInt();
             emit channelStatusUpdated(channel, mergedStatus);
         }
+        finishCurrentPoll();
         return;
     }
 
@@ -1036,6 +1043,7 @@ void ExperimentCtrl::pollChannelStatus(int channel)
                      << "drainDeadlineReached=" << drainDeadlineReached
                      << "pendingContexts=" << pendingContexts;
             stopExperiment(channel);
+            finishCurrentPoll();
             return;
         }
     } else {
@@ -1073,7 +1081,12 @@ void ExperimentCtrl::pollChannelStatus(int channel)
         const bool noMoreData = (storageAReadableCount <= 0 && storageBReadableCount <= 0);
         if (hasData && deviceIdle && noMoreData) {
             const QVector<QVariantMap> allRows = m_calibrationRows.value(ch);
-            emit calibrationScanDataReady(channel, allRows);
+            QVariantList rowList;
+            rowList.reserve(allRows.size());
+            for (const QVariantMap &row : allRows) {
+                rowList.append(row);
+            }
+            emit calibrationScanDataReady(channel, rowList);
             sendControlCommand(channel, "stop_scan", {{"value", 0}});
             m_calibrationModes[ch] = false;
             m_calibrationRows.remove(ch);
@@ -1094,6 +1107,15 @@ void ExperimentCtrl::pollChannelStatus(int channel)
 //                 << "A=" << mergedStatus.value("storageAState").toInt()
 //                 << "B=" << mergedStatus.value("storageBState").toInt();
         emit channelStatusUpdated(channel, mergedStatus);
+    }
+    finishCurrentPoll();
+}
+void ExperimentCtrl::finishCurrentPoll()
+{
+    m_anyPollInProgress = false;
+    if (!m_pendingPollChannels.isEmpty()) {
+        int nextCh = m_pendingPollChannels.dequeue();
+        pollChannelStatus(nextCh);
     }
 }
 bool ExperimentCtrl::sendControlCommand(int channel, const QString& command, const QVariantMap& params)
@@ -1144,6 +1166,29 @@ void ExperimentCtrl::tryFetchStoredData(int channel, int storageAReadableCount, 
                 const int scanId = row.value(QStringLiteral("scan_id"), -1).toInt();
                 completedByScanId[scanId] = completedByScanId.value(scanId, false)
                         || row.value(QStringLiteral("scan_completed"), false).toBool();
+            }
+
+            for (auto it = completedByScanId.constBegin(); it != completedByScanId.constEnd(); ++it) {
+                if (it.value()) {
+                    continue;
+                }
+
+                QVariantList partialRows;
+                for (const QVariantMap &row : rows) {
+                    if (row.value(QStringLiteral("scan_id"), -1).toInt() == it.key()) {
+                        partialRows.append(row);
+                    }
+                }
+
+                if (partialRows.isEmpty()) {
+                    continue;
+                }
+
+                emit scanDataChunkReady(targetChannel,
+                                        targetExperimentId,
+                                        it.key(),
+                                        false,
+                                        partialRows);
             }
 
             QVector<QVariantMap> *cache = m_stateStore->memoryCache(targetChannel);

@@ -34,5 +34,6 @@
         <file>qml/component/CustomListView_data.qml</file>
         <file>qml/NewProjectPop.qml</file>
         <file>qml/RealtimeCurvePage.qml</file>
+        <file>qml/CalibrationPage.qml</file>
     </qresource>
 </RCC>

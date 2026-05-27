@@ -140,6 +140,7 @@ void ExperimentCommService::generateDefaultConfig(const QString& configDirPath,
 
         QJsonObject deviceObj;
         deviceObj["slaveId"] = slaveIdProvider ? slaveIdProvider(i) : (i + 1);
+        deviceObj["slaveAddress"] = 1;
         deviceObj["name"] = channelKey;
         deviceObj["description"] = QString("%1 modbus device").arg(channelKey);
         deviceObj["manufacturer"] = "TBD";

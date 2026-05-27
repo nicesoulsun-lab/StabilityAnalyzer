@@ -106,10 +106,6 @@ ApplicationWindow {
         id: new_project_pop
     }
 
-    SelectChannelsPop{
-        id:select_channel_pop
-    }
-
     CustomPop{
         id: custom_pop
     }

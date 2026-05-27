@@ -5,17 +5,18 @@
                    "model":  "TBD",
                    "name":  "ChannelA",
                    "serialConfig":  {
-                                        "baudRate":  9600,
+                                        "baudRate":  115200,
                                         "dataBits":  8,
                                         "flowControl":  "NoFlowControl",
                                         "interFrameDelay":  5,
                                         "maxRetries":  3,
                                         "parity":  "NoParity",
-                                        "portName":  "/tmp/ttySA_A_HOST",
+                                        "portName":  "ttyACM4",
                                         "responseTimeout":  1000,
                                         "stopBits":  1
                                     },
                    "slaveId":  1,
+                   "slaveAddress": 1,
                    "taskList":  [
                                     {
                                         "operate":  1,

@@ -21,6 +21,7 @@ RealtimeCurveCtrl::RealtimeCurveCtrl(ExperimentCtrl *experimentCtrl, dataCtrl *d
     , m_minBackscatter(0)
     , m_maxBackscatter(100)
     , m_hasData(false)
+    , m_lastScanId(-1)
 {
     if (m_experimentCtrl) {
         connect(m_experimentCtrl, &ExperimentCtrl::scanDataChunkReady,
@@ -47,6 +48,9 @@ void RealtimeCurveCtrl::setChannel(int ch)
 
     m_channel = ch;
     m_currentExperimentId = 0;
+    m_lastScanId = -1;
+    m_accumulatedTransPoints.clear();
+    m_accumulatedBackPoints.clear();
     clearData();
     emit channelChanged();
 
@@ -115,25 +119,97 @@ void RealtimeCurveCtrl::clearData()
 void RealtimeCurveCtrl::onScanDataChunkReady(int channel, int experimentId, int scanId,
                                               bool scanCompleted, const QVariantList &rows)
 {
-    Q_UNUSED(scanId)
-
-    qDebug() << "[RealtimeCurveCtrl] onScanDataChunkReady"
-             << "channel=" << channel << "m_channel=" << m_channel
-             << "experimentId=" << experimentId
-             << "scanCompleted=" << scanCompleted
-             << "rows=" << rows.size();
-
     if (channel != m_channel)
-        return;
-
-    if (!scanCompleted)
         return;
 
     if (rows.isEmpty())
         return;
 
+    qDebug() << "[RealtimeCurveCtrl] onScanDataChunkReady"
+             << "channel=" << channel << "m_channel=" << m_channel
+             << "experimentId=" << experimentId
+             << "scanId=" << scanId
+             << "scanCompleted=" << scanCompleted
+             << "rows=" << rows.size();
+
     m_currentExperimentId = experimentId;
-    rebuildCurve(rows);
+
+    if (scanId != m_lastScanId && m_lastScanId >= 0) {
+        qDebug() << "[RealtimeCurveCtrl] new scan detected, clearing old data"
+                 << "oldScanId=" << m_lastScanId << "newScanId=" << scanId;
+        m_accumulatedTransPoints.clear();
+        m_accumulatedBackPoints.clear();
+    }
+    m_lastScanId = scanId;
+
+    if (scanCompleted) {
+        m_accumulatedTransPoints.clear();
+        m_accumulatedBackPoints.clear();
+        rebuildCurve(rows);
+    } else {
+        appendIncrementalData(rows);
+    }
+}
+
+void RealtimeCurveCtrl::appendIncrementalData(const QVariantList &rows)
+{
+    for (const QVariant &v : rows) {
+        const QVariantMap row = v.toMap();
+        if (row.isEmpty())
+            continue;
+
+        const double heightMm = row.value(QStringLiteral("height")).toDouble() / 1000.0;
+        const double bs = row.value(QStringLiteral("backscatter_intensity")).toDouble();
+        const double tr = row.value(QStringLiteral("transmission_intensity")).toDouble();
+
+        if (!qIsFinite(heightMm) || !qIsFinite(bs) || !qIsFinite(tr))
+            continue;
+
+        m_accumulatedTransPoints.append(QPointF(heightMm, tr));
+        m_accumulatedBackPoints.append(QPointF(heightMm, bs));
+    }
+
+    flushIncrementalCurve();
+}
+
+void RealtimeCurveCtrl::flushIncrementalCurve()
+{
+    if (m_accumulatedTransPoints.size() < 2)
+        return;
+
+    QVector<QPointF> tSorted = m_accumulatedTransPoints;
+    QVector<QPointF> bSorted = m_accumulatedBackPoints;
+
+    std::sort(tSorted.begin(), tSorted.end(),
+              [](const QPointF &a, const QPointF &b) { return a.x() < b.x(); });
+    std::sort(bSorted.begin(), bSorted.end(),
+              [](const QPointF &a, const QPointF &b) { return a.x() < b.x(); });
+
+    double minH = tSorted.first().x();
+    double maxH = tSorted.last().x();
+
+    m_transmissionPoints = toVariantList(tSorted);
+    m_backscatterPoints = toVariantList(bSorted);
+
+    if (qIsFinite(minH) && qIsFinite(maxH)) {
+        const double hPadding = std::max((maxH - minH) * 0.05, 1.0);
+        m_minHeight = minH - hPadding;
+        m_maxHeight = maxH + hPadding;
+    }
+
+    m_minTransmission = 0;
+    m_maxTransmission = 100;
+    m_minBackscatter = 0;
+    m_maxBackscatter = 100;
+
+    m_hasData = true;
+
+    qDebug() << "[RealtimeCurveCtrl] incremental curve updated"
+             << "channel=" << m_channel
+             << "accumulated=" << m_accumulatedTransPoints.size()
+             << "heightRange=" << m_minHeight << "~" << m_maxHeight;
+
+    emit dataUpdated();
 }
 
 void RealtimeCurveCtrl::loadLatestScanData()
@@ -166,18 +242,20 @@ void RealtimeCurveCtrl::loadLatestScanData()
 
     const int latestScanId = scanIds.last();
 
-    const QVector<QVariantMap> rows = m_dataCtrl->getDataByExperimentAndScan(experimentId, latestScanId);
-    qDebug() << "[RealtimeCurveCtrl] loadLatestScanData rows=" << rows.size()
+    m_lastScanId = latestScanId;
+
+    const QVector<QVariantMap> dbRows = m_dataCtrl->getDataByExperimentAndScan(experimentId, latestScanId);
+    qDebug() << "[RealtimeCurveCtrl] loadLatestScanData dbRows=" << dbRows.size()
              << "scanId=" << latestScanId;
-    if (rows.isEmpty()) {
+    if (dbRows.isEmpty()) {
         qDebug() << "[RealtimeCurveCtrl] no data for scan" << latestScanId
                  << "in experiment" << experimentId;
         return;
     }
 
     QVariantList rowList;
-    rowList.reserve(rows.size());
-    for (const QVariantMap &row : rows) {
+    rowList.reserve(dbRows.size());
+    for (const QVariantMap &row : dbRows) {
         rowList.append(row);
     }
 
@@ -192,82 +270,14 @@ void RealtimeCurveCtrl::loadLatestScanData()
 
 void RealtimeCurveCtrl::rebuildCurve(const QVariantList &rows)
 {
-    QVector<QPointF> tPoints, bPoints;
-    tPoints.reserve(rows.size());
-    bPoints.reserve(rows.size());
+    if (!rows.isEmpty()) {
+        m_accumulatedTransPoints.clear();
+        m_accumulatedBackPoints.clear();
 
-    double minH = std::numeric_limits<double>::max();
-    double maxH = std::numeric_limits<double>::lowest();
-    double minT = std::numeric_limits<double>::max();
-    double maxT = std::numeric_limits<double>::lowest();
-    double minB = std::numeric_limits<double>::max();
-    double maxB = std::numeric_limits<double>::lowest();
-
-    for (const QVariant &v : rows) {
-        const QVariantMap row = v.toMap();
-        if (row.isEmpty())
-            continue;
-
-        const double heightMm = row.value(QStringLiteral("height")).toDouble() / 1000.0;
-        const double bs = row.value(QStringLiteral("backscatter_intensity")).toDouble();
-        const double tr = row.value(QStringLiteral("transmission_intensity")).toDouble();
-
-        if (!qIsFinite(heightMm) || !qIsFinite(bs) || !qIsFinite(tr))
-            continue;
-
-        tPoints.append(QPointF(heightMm, tr));
-        bPoints.append(QPointF(heightMm, bs));
-
-        minH = std::min(minH, heightMm);
-        maxH = std::max(maxH, heightMm);
-        minT = std::min(minT, tr);
-        maxT = std::max(maxT, tr);
-        minB = std::min(minB, bs);
-        maxB = std::max(maxB, bs);
+        appendIncrementalData(rows);
     }
 
-    if (tPoints.size() < 2) {
-        qDebug() << "[RealtimeCurveCtrl] curve data too few, skip"
-                 << "channel=" << m_channel << "points=" << tPoints.size();
-        return;
-    }
-
-    std::sort(tPoints.begin(), tPoints.end(),
-              [](const QPointF &a, const QPointF &b) { return a.x() < b.x(); });
-    std::sort(bPoints.begin(), bPoints.end(),
-              [](const QPointF &a, const QPointF &b) { return a.x() < b.x(); });
-
-    m_transmissionPoints = toVariantList(tPoints);
-    m_backscatterPoints = toVariantList(bPoints);
-
-    if (qIsFinite(minH) && qIsFinite(maxH)) {
-        const double hPadding = std::max((maxH - minH) * 0.05, 1.0);
-        m_minHeight = minH - hPadding;
-        m_maxHeight = maxH + hPadding;
-    }
-
-    if (qIsFinite(minT) && qIsFinite(maxT)) {
-        const double tPadding = std::max((maxT - minT) * 0.08, 1.0);
-        m_minTransmission = std::max(0.0, minT - tPadding);
-        m_maxTransmission = maxT + tPadding;
-    }
-
-    if (qIsFinite(minB) && qIsFinite(maxB)) {
-        const double bPadding = std::max((maxB - minB) * 0.08, 1.0);
-        m_minBackscatter = minB - bPadding;
-        m_maxBackscatter = maxB + bPadding;
-    }
-
-    m_hasData = true;
-
-    qDebug() << "[RealtimeCurveCtrl] curve updated"
-             << "channel=" << m_channel
-             << "points=" << tPoints.size()
-             << "heightRange=" << m_minHeight << "~" << m_maxHeight
-             << "transRange=" << m_minTransmission << "~" << m_maxTransmission
-             << "backRange=" << m_minBackscatter << "~" << m_maxBackscatter;
-
-    emit dataUpdated();
+    flushIncrementalCurve();
 }
 
 QVariantList RealtimeCurveCtrl::toVariantList(const QVector<QPointF> &points) const

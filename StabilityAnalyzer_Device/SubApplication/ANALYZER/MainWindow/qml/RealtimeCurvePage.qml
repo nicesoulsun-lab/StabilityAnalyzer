@@ -68,15 +68,12 @@ Rectangle {
 
     Component.onCompleted: {
         if (realtime_curve_ctrl) {
-            realtime_curve_ctrl.clearData()
             realtime_curve_ctrl.channel = channelId
         }
         updateRunningState()
     }
 
     Component.onDestruction: {
-        if (realtime_curve_ctrl)
-            realtime_curve_ctrl.clearData()
     }
 
     function updateRunningState() {

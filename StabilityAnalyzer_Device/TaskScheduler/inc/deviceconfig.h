@@ -31,6 +31,7 @@ public:
     
     // 属性访问器
     QString deviceId() const { return m_deviceId; }
+    int slaveAddress() const { return m_slaveAddress; }
     QString deviceName() const { return m_deviceName; }
     QString description() const { return m_description; }
     QString manufacturer() const { return m_manufacturer; }
@@ -70,6 +71,7 @@ private:
     
     // 设备通用信息
     QString m_deviceId;
+    int m_slaveAddress = 1;
     QString m_deviceName;
     QString m_description;
     QString m_manufacturer;

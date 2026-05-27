@@ -343,17 +343,10 @@ bool ModbusWorker::sendRequest(QSharedPointer<ModbusRequest> request)
         return false;
     }
     
-    // 添加CRC校验
-    // qDebug() << "[ModbusWorker][Send] requestId=" << request->requestId()
-    //          << "slave=" << request->slaveId()
-    //          << "function=" << request->functionCode()
-    //          << "payloadNoCrc=" << requestData.toHex(' ');
     quint16 crc = calculateCRC(requestData);
     requestData.append(static_cast<char>(crc & 0xFF));
     requestData.append(static_cast<char>((crc >> 8) & 0xFF));
     
-    // qDebug() << "[ModbusWorker][Send] requestId=" << request->requestId()
-    //          << "frame=" << requestData.toHex(' ');
     return m_connectionManager->sendData(requestData);
 }
 
