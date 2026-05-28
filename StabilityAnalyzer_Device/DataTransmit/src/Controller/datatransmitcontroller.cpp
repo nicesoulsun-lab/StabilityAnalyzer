@@ -141,21 +141,6 @@ bool DataTransmitController::isStreamClientConnected() const
     return m_streamServer->isClientConnected();
 }
 
-QString DataTransmitController::scriptPath() const
-{
-    return m_rndisManager->scriptPath();
-}
-
-void DataTransmitController::setScriptPath(const QString &scriptPath)
-{
-    if (m_rndisManager->scriptPath() == scriptPath) {
-        return;
-    }
-
-    m_rndisManager->setScriptPath(scriptPath);
-    emit scriptPathChanged();
-}
-
 QString DataTransmitController::networkInterface() const
 {
     return m_rndisManager->interfaceName();
@@ -385,7 +370,7 @@ void DataTransmitController::handleControlMessage(const QJsonObject &message)
     }
 
     if (command == QStringLiteral("start_experiment")) {
-        const int channel = message.value(QStringLiteral("channel")).toInt(-1);
+        const int channel = message.value(QStringLiteral("channel")).toInt();
         const int creatorId = message.value(QStringLiteral("creator_id")).toInt(0);
         const QVariantMap params = message.value(QStringLiteral("params")).toObject().toVariantMap();
         if (channel < 0 || channel >= 4) {
@@ -398,7 +383,7 @@ void DataTransmitController::handleControlMessage(const QJsonObject &message)
     }
 
     if (command == QStringLiteral("stop_experiment")) {
-        const int channel = message.value(QStringLiteral("channel")).toInt(-1);
+        const int channel = message.value(QStringLiteral("channel")).toInt();
         if (channel < 0 || channel >= 4) {
             m_controlServer->sendControlMessage(buildCommandResult(command, requestId, false,
                                                                    QStringLiteral("Invalid channel")));
@@ -414,7 +399,7 @@ void DataTransmitController::handleControlMessage(const QJsonObject &message)
     }
 
     if (command == QStringLiteral("get_experiment_export")) {
-        const int experimentId = message.value(QStringLiteral("experiment_id")).toInt(-1);
+        const int experimentId = message.value(QStringLiteral("experiment_id")).toInt();
         if (experimentId <= 0) {
             m_controlServer->sendControlMessage(buildCommandResult(command, requestId, false,
                                                                    QStringLiteral("Invalid experiment id")));
@@ -425,8 +410,8 @@ void DataTransmitController::handleControlMessage(const QJsonObject &message)
     }
 
     if (command == QStringLiteral("get_experiment_scan_export")) {
-        const int experimentId = message.value(QStringLiteral("experiment_id")).toInt(-1);
-        const int scanId = message.value(QStringLiteral("scan_id")).toInt(-1);
+        const int experimentId = message.value(QStringLiteral("experiment_id")).toInt();
+        const int scanId = message.value(QStringLiteral("scan_id")).toInt();
         const int offset = qMax(0, message.value(QStringLiteral("offset")).toInt(0));
         const int limit = qMax(0, message.value(QStringLiteral("limit")).toInt(0));
         if (experimentId <= 0 || scanId < 0) {
@@ -439,7 +424,7 @@ void DataTransmitController::handleControlMessage(const QJsonObject &message)
     }
 
     if (command == QStringLiteral("mark_experiment_imported")) {
-        const int experimentId = message.value(QStringLiteral("experiment_id")).toInt(-1);
+        const int experimentId = message.value(QStringLiteral("experiment_id")).toInt();
         const int status = message.value(QStringLiteral("status")).toInt(1);
         if (experimentId <= 0) {
             m_controlServer->sendControlMessage(buildCommandResult(command, requestId, false,
@@ -450,32 +435,16 @@ void DataTransmitController::handleControlMessage(const QJsonObject &message)
         return;
     }
 
-    if (command == QStringLiteral("set_calibration")) {
-        const int channel = message.value(QStringLiteral("channel")).toInt(-1);
-        const int transmissionRef = message.value(QStringLiteral("transmission_reference")).toInt(0);
-        const int backscatterRef = message.value(QStringLiteral("backscatter_reference")).toInt(0);
-        if (channel < 0 || channel >= 4) {
-            m_controlServer->sendControlMessage(buildCommandResult(command, requestId, false,
-                                                                   QStringLiteral("Invalid channel")));
-            return;
-        }
-        emit calibrationUpdateRequested(channel, transmissionRef, backscatterRef, requestId);
-        return;
-    }
-
-    // 校准扫描命令：触发单次扫描，数据通过 Stream 通道异步推送
-    if (command == QStringLiteral("start_calibration_scan")) {
-        const int channel = message.value(QStringLiteral("channel")).toInt(-1);
-        const int scanRangeStart = message.value(QStringLiteral("scan_range_start")).toInt(0);
-        const int scanRangeEnd = message.value(QStringLiteral("scan_range_end")).toInt(0);
-        const int scanStep = message.value(QStringLiteral("scan_step")).toInt(20);
+    if (command == QStringLiteral("start_calibration")) {
+        const int channel = message.value(QStringLiteral("channel")).toInt();
+        const QString calibrationType = message.value(QStringLiteral("calibration_type")).toString();
         if (channel < 0 || channel >= 4) {
             m_controlServer->sendControlMessage(
                 buildCommandResult(command, requestId, false,
                                    QStringLiteral("Invalid channel")));
             return;
         }
-        emit calibrationScanRequested(channel, scanRangeStart, scanRangeEnd, scanStep, requestId);
+        emit calibrationRequested(channel, calibrationType, requestId);
         return;
     }
 
@@ -598,7 +567,6 @@ QJsonObject DataTransmitController::buildDeviceInfo() const
     info.insert(QStringLiteral("type"), QStringLiteral("device_info"));
     info.insert(QStringLiteral("device_ip"), deviceIp());
     info.insert(QStringLiteral("network_interface"), networkInterface());
-    info.insert(QStringLiteral("script_path"), scriptPath());
     info.insert(QStringLiteral("control_port"), 9000);
     info.insert(QStringLiteral("status_port"), 9001);
     info.insert(QStringLiteral("stream_port"), 9002);

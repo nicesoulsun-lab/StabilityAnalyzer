@@ -102,6 +102,13 @@ Rectangle {
 
         onClicked:{
             if(mainStackView.currentItem
+                    && mainStackView.currentItem.isCalibrating === true)
+            {
+                info_pop.openDialog(qsTr("校准进行中，请等待完成后再退出"))
+                return
+            }
+
+            if(mainStackView.currentItem
                     && mainStackView.currentItem.objectName
                     && mainStackView.currentItem.objectName.indexOf("ParaSetting_") === 0)
             {

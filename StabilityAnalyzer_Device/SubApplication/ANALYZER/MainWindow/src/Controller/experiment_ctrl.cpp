@@ -206,7 +206,6 @@ ExperimentCtrl::ExperimentCtrl(QObject *parent)
 
     for (int i = 0; i < configuredChannelCount(); ++i) {
         loadSerialConfig(i);
-        m_stateStore->loadCalibration(i);
     }
 
     // 启动时对“历史持久化配置”做一次兜底修正：
@@ -523,9 +522,7 @@ bool ExperimentCtrl::startExperiment(int channel, int creatorId)
     ExperimentScanProfile scanProfile = m_sessionService->buildScanProfile(params);
     scanProfile.experimentStartMs = QDateTime::currentMSecsSinceEpoch();
     m_sessionService->setScanProfile(channel, scanProfile);
-    m_sessionService->setCalibration(channel,
-                                     m_stateStore->transmissionCalibration(channel),
-                                     m_stateStore->backscatterCalibration(channel));
+    m_sessionService->loadCalibrationAvgTable(channel, m_dbManager);
     m_startTimes[ch] = scanProfile.experimentStartMs;
     m_runningFlags[ch] = true;
     m_plannedScanCounts[ch] = qMax(1, params.scanCount);
@@ -759,61 +756,76 @@ QVariantMap ExperimentCtrl::getChannelStatus(int channel) const
     return m_stateStore->channelStatus(channel);
 }
 
-void ExperimentCtrl::updateCalibration(int channel, int transmissionRef, int backscatterRef)
+void ExperimentCtrl::startCalibration(int channel, const QString& calibrationType)
 {
-    m_stateStore->setCalibration(channel, transmissionRef, backscatterRef);
-    m_stateStore->saveCalibration(channel);
-
-    qDebug() << "[ExperimentCtrl] calibration updated, channel=" << channel
-             << "transRef=" << transmissionRef << "backRef=" << backscatterRef;
-}
-
-void ExperimentCtrl::startCalibrationScan(int channel, int scanRangeStart, int scanRangeEnd, int scanStep)
-{
+    // 背射光和透射光校准扫描范围固定为 0~55mm，步长固定20μm，三次扫描取平均
     const Channel ch = static_cast<Channel>(channel);
 
     // 参数校验
     if (channel < 0 || channel >= configuredChannelCount()) {
-        qDebug() << "[ExperimentCtrl][Calibration] invalid channel" << channel;
+        emit calibrationFailed(channel, tr("无效通道"));
         return;
     }
+    if (calibrationType != QStringLiteral("transmission")
+        && calibrationType != QStringLiteral("backscatter")) {
+        emit calibrationFailed(channel, tr("无效校准类型"));
+        return;
+    }
+    // 实验中通道禁止校准
     if (m_runningFlags.value(ch, false)) {
-        qDebug() << "[ExperimentCtrl][Calibration] channel=" << channel << "experiment running, reject";
+        emit calibrationFailed(channel, tr("该通道正在实验中，无法校准"));
         return;
     }
+    // 防重复校准
     if (m_calibrationModes.value(ch, false)) {
-        qDebug() << "[ExperimentCtrl][Calibration] channel=" << channel << "already in calibration mode";
-        return;
-    }
-    if (scanStep <= 0 || scanRangeEnd <= scanRangeStart) {
-        qDebug() << "[ExperimentCtrl][Calibration] invalid scan params";
+        emit calibrationFailed(channel, tr("该通道已在校准中"));
         return;
     }
     if (!m_schedulerInitialized) {
         const QString configPath = defaultConfigDirPath();
         if (!initializeScheduler(configPath)) {
-            qDebug() << "[ExperimentCtrl][Calibration] scheduler not initialized";
+            emit calibrationFailed(channel, tr("通信模块未初始化"));
             return;
         }
     }
 
-    // 下发扫描参数并触发单次扫描
-    sendControlCommand(channel, "set_scan_range",
-                       {{"start", scanRangeStart}, {"end", scanRangeEnd}});
-    sendControlCommand(channel, "set_step", {{"step", scanStep}});
-    sendControlCommand(channel, "start_scan", {{"value", 1}});
-
-    // 标记校准模式，初始化数据累积
+    // 初始化三次扫描状态，扫描范围固定 0~55mm，步长固定20μm
+    CalibrationScanState state;
+    state.scanRound = 0;
+    state.totalRounds = 3;
+    state.calibrationType = calibrationType;
+    m_calibrationScanStates[ch] = state;
     m_calibrationModes[ch] = true;
-    m_calibrationRows[ch].clear();
-    m_calibrationScanContexts[ch] = {
-        static_cast<double>(scanRangeStart),
-        static_cast<double>(scanStep)
-    };
+
+    // 触发第一轮扫描
+    triggerNextCalibrationScan(channel);
 
     qDebug() << "[ExperimentCtrl][Calibration] started, channel=" << channel
-             << "range=" << scanRangeStart << "~" << scanRangeEnd
-             << "step=" << scanStep;
+             << "type=" << calibrationType
+             << "range=0~55 step=20 fixed, totalRounds=3";
+}
+
+void ExperimentCtrl::triggerNextCalibrationScan(int channel)
+{
+    const Channel ch = static_cast<Channel>(channel);
+    CalibrationScanState& state = m_calibrationScanStates[ch];
+
+    state.scanRound++;
+    if (state.scanRound > state.totalRounds) {
+        return;
+    }
+
+    // 下发扫描参数并启动扫描，步长固定20μm
+    sendControlCommand(channel, "set_scan_range",
+                       {{"start", static_cast<int>(state.scanRangeStartMm)},
+                        {"end", static_cast<int>(state.scanEndMm)}});
+    sendControlCommand(channel, "set_step", {{"step", 20}});
+    sendControlCommand(channel, "start_scan", {{"value", 1}});
+
+    emit calibrationProgress(channel, state.scanRound, state.totalRounds);
+
+    qDebug() << "[ExperimentCtrl][Calibration] round" << state.scanRound << "/" << state.totalRounds
+             << "triggered, channel=" << channel;
 }
 
 void ExperimentCtrl::tryFetchCalibrationData(int channel, int storageAReadableCount,
@@ -821,18 +833,19 @@ void ExperimentCtrl::tryFetchCalibrationData(int channel, int storageAReadableCo
                                               int storageAState, int storageBState)
 {
     const Channel ch = static_cast<Channel>(channel);
-    const CalibrationScanContext ctx = m_calibrationScanContexts.value(ch);
+    const CalibrationScanState& state = m_calibrationScanStates.value(ch);
 
     QVector<QVariantMap> batchRows;
 
+    // 从下位机 A/B 存储区读取校准原始数据
     m_dataService->tryFetchCalibrationData(
         channel,
         storageAReadableCount, storageBReadableCount,
         storageAState, storageBState,
         [this](int targetChannel) { return getDeviceId(targetChannel); },
-        [this, ctx](int targetChannel, const QVector<quint16>& raw, bool areaA) {
+        [this, state](int targetChannel, const QVector<quint16>& raw, bool areaA) {
             return m_sessionService->buildCalibrationRows(
-                targetChannel, raw, areaA, ctx.scanRangeStartMm, ctx.scanStepUm);
+                targetChannel, raw, areaA, state.scanRangeStartMm, state.scanStepUm);
         },
         [this](int targetChannel, const QString& command, const QVariantMap& params) {
             return sendControlCommand(targetChannel, command, params);
@@ -842,14 +855,168 @@ void ExperimentCtrl::tryFetchCalibrationData(int channel, int storageAReadableCo
             batchRows += rows;
         });
 
-    // 累积数据，不立即推送，等扫描完成后统一推送
+    // 按轮次累积数据，用于后续三次取平均
     if (!batchRows.isEmpty()) {
-        m_calibrationRows[ch] += batchRows;
+        CalibrationScanState& mutableState = m_calibrationScanStates[ch];
+        if (mutableState.scanRound > 0 && mutableState.scanRound <= mutableState.totalRounds) {
+            const int roundIndex = mutableState.scanRound - 1;
+            if (roundIndex >= mutableState.scanRoundRows.size()) {
+                mutableState.scanRoundRows.resize(roundIndex + 1);
+            }
+            mutableState.scanRoundRows[roundIndex] += batchRows;
+        }
     }
 
     qDebug() << "[ExperimentCtrl][Calibration] data fetched, channel=" << channel
-             << "batchRows=" << batchRows.size()
-             << "totalRows=" << m_calibrationRows.value(ch).size();
+             << "batchRows=" << batchRows.size();
+}
+
+void ExperimentCtrl::computeCalibrationAverage(int channel)
+{
+    // 三次扫描完成后，按高度对齐求平均值，写入 calibration_avg_data 表
+    const Channel ch = static_cast<Channel>(channel);
+    const CalibrationScanState& state = m_calibrationScanStates.value(ch);
+    const int rounds = state.scanRoundRows.size();
+
+    if (rounds == 0) {
+        emit calibrationFailed(channel, tr("无校准数据"));
+        return;
+    }
+
+    const auto& baseRows = state.scanRoundRows[0];
+    const int pointCount = baseRows.size();
+    const QString calType = state.calibrationType;
+    const bool isTransmission = (calType == QStringLiteral("transmission"));
+
+    // 加载已有校准数据，合并另一类型的已有值
+    // 用微米级整数做 key，避免浮点精度导致匹配失败
+    const QVector<QVariantMap> existingRows = m_dbManager->getCalibrationAvgDataByChannel(channel);
+    QMap<qint64, QVariantMap> existingByHeightUm;
+    for (const QVariantMap& row : existingRows) {
+        const qint64 heightUm = qRound64(row.value("height").toDouble() * 1000.0);
+        existingByHeightUm[heightUm] = row;
+    }
+
+    QVector<QVariantMap> avgEntries;
+    avgEntries.reserve(pointCount + existingRows.size());
+
+    // 记录本次扫描覆盖的高度（微米级），用于后续补齐
+    QSet<qint64> coveredHeightUm;
+    coveredHeightUm.reserve(pointCount);
+
+    double sumAllTrans = 0.0, sumAllBack = 0.0;
+    double maxTrans = -1e9, minTrans = 1e9;
+    double maxBack = -1e9, minBack = 1e9;
+
+    for (int i = 0; i < pointCount; ++i) {
+        const double height = baseRows[i]["height"].toDouble();
+        const qint64 heightUm = qRound64(height * 1000.0);
+        coveredHeightUm.insert(heightUm);
+        double sumTrans = 0.0, sumBack = 0.0;
+        int validCount = 0;
+
+        for (int r = 0; r < rounds; ++r) {
+            if (i < state.scanRoundRows[r].size()) {
+                sumTrans += state.scanRoundRows[r][i]["transmission_intensity"].toDouble();
+                sumBack += state.scanRoundRows[r][i]["backscatter_intensity"].toDouble();
+                validCount++;
+            }
+        }
+
+        if (validCount > 0) {
+            const double avgTrans = sumTrans / validCount;
+            const double avgBack = sumBack / validCount;
+
+            QVariantMap entry;
+            entry["channel"] = channel;
+            entry["height"] = height;
+            entry["scan_count"] = validCount;
+            entry["created_at"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+
+            if (isTransmission) {
+                // 透射光校准：存透射平均值，背射保留已有值
+                entry["avg_transmission_intensity"] = avgTrans;
+                entry["avg_backscatter_intensity"] = existingByHeightUm.value(heightUm).value("avg_backscatter_intensity", 0.0).toDouble();
+                sumAllTrans += avgTrans;
+                if (avgTrans > maxTrans) maxTrans = avgTrans;
+                if (avgTrans < minTrans) minTrans = avgTrans;
+            } else {
+                // 背射光校准：存背射平均值，透射保留已有值
+                entry["avg_backscatter_intensity"] = avgBack;
+                entry["avg_transmission_intensity"] = existingByHeightUm.value(heightUm).value("avg_transmission_intensity", 0.0).toDouble();
+                sumAllBack += avgBack;
+                if (avgBack > maxBack) maxBack = avgBack;
+                if (avgBack < minBack) minBack = avgBack;
+            }
+
+            avgEntries.append(entry);
+        }
+    }
+
+    // 补齐本次扫描高度范围外的已有数据，防止另一类型校准数据丢失
+    for (auto it = existingByHeightUm.constBegin(); it != existingByHeightUm.constEnd(); ++it) {
+        if (!coveredHeightUm.contains(it.key())) {
+            avgEntries.append(it.value());
+        }
+    }
+
+    // 按高度升序排列，保证写入数据库的顺序一致
+    std::sort(avgEntries.begin(), avgEntries.end(), [](const QVariantMap& a, const QVariantMap& b) {
+        return a.value("height").toDouble() < b.value("height").toDouble();
+    });
+
+    m_dbManager->clearCalibrationAvgDataByChannel(channel);
+    m_dbManager->batchAddCalibrationAvgData(avgEntries);
+
+    CalibrationSummary summary;
+    summary.channel = channel;
+    summary.calibrationType = calType;
+    summary.totalPoints = pointCount;
+    summary.scanRounds = rounds;
+    summary.overallAvgTransmission = pointCount > 0 ? sumAllTrans / pointCount : 0.0;
+    summary.overallAvgBackscatter = pointCount > 0 ? sumAllBack / pointCount : 0.0;
+    summary.maxTransmission = maxTrans;
+    summary.minTransmission = minTrans;
+    summary.maxBackscatter = maxBack;
+    summary.minBackscatter = minBack;
+    summary.calibratedAt = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd hh:mm:ss"));
+
+    m_calibrationModes[ch] = false;
+    m_calibrationScanStates.remove(ch);
+
+    emit calibrationCompleted(channel, calibrationSummaryToVariantMap(summary));
+
+    qDebug() << "[ExperimentCtrl][Calibration] completed, channel=" << channel
+             << "type=" << calType
+             << "points=" << pointCount << "rounds=" << rounds
+             << "avgTrans=" << summary.overallAvgTransmission
+             << "avgBack=" << summary.overallAvgBackscatter;
+}
+
+QVariantMap ExperimentCtrl::calibrationSummaryToVariantMap(const CalibrationSummary& summary) const
+{
+    QVariantMap m;
+    m["channel"] = summary.channel;
+    m["calibration_type"] = summary.calibrationType;
+    m["total_points"] = summary.totalPoints;
+    m["scan_rounds"] = summary.scanRounds;
+    m["overall_avg_transmission"] = summary.overallAvgTransmission;
+    m["overall_avg_backscatter"] = summary.overallAvgBackscatter;
+    m["max_transmission"] = summary.maxTransmission;
+    m["min_transmission"] = summary.minTransmission;
+    m["max_backscatter"] = summary.maxBackscatter;
+    m["min_backscatter"] = summary.minBackscatter;
+    m["calibrated_at"] = summary.calibratedAt;
+    return m;
+}
+
+QString ExperimentCtrl::getLastCalibrationTime(int channel) const
+{
+    const QVector<QVariantMap> rows = m_dbManager->getCalibrationAvgDataByChannel(channel);
+    if (rows.isEmpty()) {
+        return QString();
+    }
+    return rows.last().value("created_at").toString();
 }
 
 void ExperimentCtrl::onScanTimer(int channel)
@@ -1061,38 +1228,32 @@ void ExperimentCtrl::pollChannelStatus(int channel)
         }
     }
 
-    // 校准模式：哪个区可取就取哪个，用数据累积+空闲状态判断扫描完成
     if (m_calibrationModes.value(ch, false)) {
         const int storageAReadableCount = status.value("storageAReadableCount", 0).toInt();
         const int storageBReadableCount = status.value("storageBReadableCount", 0).toInt();
         const int storageAState = status.value("storageAState", 0).toInt();
         const int storageBState = status.value("storageBState", 0).toInt();
-        const int totalRows = m_calibrationRows.value(ch).size();
 
-        // 哪个区可取就取哪个，取完回写3
         if (storageAReadableCount > 0 || storageBReadableCount > 0) {
             tryFetchCalibrationData(channel, storageAReadableCount, storageBReadableCount,
                                     storageAState, storageBState);
         }
 
-        // 扫描完成判断：已累积到数据 + 下位机空闲 + 无更多可取数据
-        const bool hasData = (totalRows > 0);
+        const CalibrationScanState& calState = m_calibrationScanStates.value(ch);
+        const bool hasCurrentRoundData = (!calState.scanRoundRows.isEmpty()
+                                          && !calState.scanRoundRows.last().isEmpty());
         const bool deviceIdle = (runStatus == 0);
         const bool noMoreData = (storageAReadableCount <= 0 && storageBReadableCount <= 0);
-        if (hasData && deviceIdle && noMoreData) {
-            const QVector<QVariantMap> allRows = m_calibrationRows.value(ch);
-            QVariantList rowList;
-            rowList.reserve(allRows.size());
-            for (const QVariantMap &row : allRows) {
-                rowList.append(row);
-            }
-            emit calibrationScanDataReady(channel, rowList);
-            sendControlCommand(channel, "stop_scan", {{"value", 0}});
-            m_calibrationModes[ch] = false;
-            m_calibrationRows.remove(ch);
 
-            qDebug() << "[ExperimentCtrl][Calibration] completed, channel=" << channel
-                     << "rows=" << allRows.size();
+        if (hasCurrentRoundData && deviceIdle && noMoreData) {
+            sendControlCommand(channel, "stop_scan", {{"value", 0}});
+
+            // 本轮完成：若未达3次则触发下一轮，否则计算平均值
+            if (calState.scanRound < calState.totalRounds) {
+                triggerNextCalibrationScan(channel);
+            } else {
+                computeCalibrationAverage(channel);
+            }
         }
     }
 

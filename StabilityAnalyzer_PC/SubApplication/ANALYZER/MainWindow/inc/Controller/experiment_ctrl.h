@@ -71,10 +71,7 @@ public:
     Q_INVOKABLE bool stopExperiment(int channel);
     Q_INVOKABLE bool isExperimentRunning(int channel) const;
 
-    // 校准扫描：触发设备端单次校准扫描（不入库），数据通过 Stream 通道异步返回
-    Q_INVOKABLE bool startCalibrationScan(int channel, int scanRangeStart, int scanRangeEnd, int scanStep);
-    // 校准参数下发：将透射/背射参考值发送给设备端
-    Q_INVOKABLE bool sendCalibration(int channel, int transmissionRef, int backscatterRef);
+    Q_INVOKABLE bool startCalibration(int channel, const QString& calibrationType);
 
     Q_INVOKABLE int getCurrentScanCount(int channel) const;
     Q_INVOKABLE int getCurrentExperimentId(int channel) const;
@@ -106,6 +103,10 @@ signals:
     void experimentError(int channel, const QString &error);
     void operationInfo(const QString &message);
     void operationFailed(const QString &message);
+
+    void calibrationProgress(int channel, int currentRound, int totalRounds);
+    void calibrationCompleted(int channel, const QVariantMap &summary);
+    void calibrationFailed(int channel, const QString &reason);
 
 private slots:
     void onScanTimer(int channel);
@@ -143,10 +144,6 @@ private:
     QMap<Channel, bool> m_runningFlags;
     QSet<int> m_finalizedChannels;
     bool m_schedulerInitialized = false;
-
-    // 校准参数缓存，避免只校准一种光时覆盖另一种光的已有值
-    QMap<Channel, int> m_transmissionCalibrations;
-    QMap<Channel, int> m_backscatterCalibrations;
 };
 
 #endif

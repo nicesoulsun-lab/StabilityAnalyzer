@@ -1,5 +1,7 @@
 #include "inc/Common/experiment_session_service.h"
 
+#include "../../../SqlOrm/inc/SqlOrmManager.h"
+
 #include <QDateTime>
 #include <QDebug>
 #include <QtMath>
@@ -101,20 +103,71 @@ int ExperimentSessionService::pendingContextCount(int channel) const
     return m_scanContexts.value(channel).size();
 }
 
-void ExperimentSessionService::setCalibration(int channel, int transmissionRef, int backscatterRef)
+void ExperimentSessionService::loadCalibrationAvgTable(int channel, SqlOrmManager* dbManager)
 {
-    m_transmissionCalibrations[channel] = transmissionRef;
-    m_backscatterCalibrations[channel] = backscatterRef;
+    // 从 calibration_avg_data 表加载该通道的按高度校准平均值
+    m_calibrationAvgTables.remove(channel);
+
+    if (!dbManager) {
+        return;
+    }
+
+    const QVector<QVariantMap> rows = dbManager->getCalibrationAvgDataByChannel(channel);
+    if (rows.isEmpty()) {
+        qDebug() << "[ExperimentSessionService] no calibration avg data for channel=" << channel;
+        return;
+    }
+
+    QVector<CalibrationAvgEntry> table;
+    table.reserve(rows.size());
+    for (const QVariantMap& row : rows) {
+        CalibrationAvgEntry entry;
+        entry.height = row.value("height").toDouble();
+        entry.avgTransmission = row.value("avg_transmission_intensity").toDouble();
+        entry.avgBackscatter = row.value("avg_backscatter_intensity").toDouble();
+        table.append(entry);
+    }
+
+    m_calibrationAvgTables[channel] = table;
+    qDebug() << "[ExperimentSessionService] loaded calibration avg table, channel=" << channel
+             << "entries=" << table.size();
 }
 
-int ExperimentSessionService::transmissionCalibration(int channel) const
+bool ExperimentSessionService::hasCalibrationAvgTable(int channel) const
 {
-    return m_transmissionCalibrations.value(channel, 0);
+    return !m_calibrationAvgTables.value(channel).isEmpty();
 }
 
-int ExperimentSessionService::backscatterCalibration(int channel) const
+double ExperimentSessionService::findCalibrationAvgTransmission(int channel, double heightUm) const
 {
-    return m_backscatterCalibrations.value(channel, 0);
+    const auto& table = m_calibrationAvgTables.value(channel);
+    if (table.isEmpty()) {
+        return 0.0;
+    }
+
+    // 等间距（20μm）直接索引计算
+    const double firstHeightUm = table.first().height * 1000.0;
+    const int idx = qRound((heightUm - firstHeightUm) / 20.0);
+    if (idx >= 0 && idx < table.size()) {
+        return table[idx].avgTransmission;
+    }
+    return 0.0;
+}
+
+double ExperimentSessionService::findCalibrationAvgBackscatter(int channel, double heightUm) const
+{
+    const auto& table = m_calibrationAvgTables.value(channel);
+    if (table.isEmpty()) {
+        return 0.0;
+    }
+
+    // 等间距（20μm）直接索引计算
+    const double firstHeightUm = table.first().height * 1000.0;
+    const int idx = qRound((heightUm - firstHeightUm) / 20.0);
+    if (idx >= 0 && idx < table.size()) {
+        return table[idx].avgBackscatter;
+    }
+    return 0.0;
 }
 
 QVector<QVariantMap> ExperimentSessionService::buildRowsFromStorageData(int channel,
@@ -196,16 +249,13 @@ QVector<QVariantMap> ExperimentSessionService::buildCalibrationRows(
     Q_UNUSED(channel)
     QVector<QVariantMap> dataList;
     const int pairCount = raw.size() / 2;
-    // A 区起始点索引为 0，B 区起始点索引为 250
     const int startPointIndex = areaA ? 0 : 250;
     dataList.reserve(pairCount);
 
     for (int i = 0; i < pairCount; ++i) {
         QVariantMap row;
-        // 高度 = 扫描起始位置(um) + 点索引 * 步长(um)，再转为 mm
         row["height"] = (scanRangeStartMm * 1000.0
                          + static_cast<double>(startPointIndex + i) * scanStepUm) / 1000.0;
-        // 校准数据不应用校准转换，直接返回原始值
         row["transmission_intensity"] = static_cast<double>(raw[i * 2]);
         row["backscatter_intensity"] = static_cast<double>(raw[i * 2 + 1]);
         dataList.append(row);
@@ -237,30 +287,19 @@ QVector<QVariantMap> ExperimentSessionService::parseStoragePairs(int channel,
 
     for (int i = 0; i < pairCount; ++i) {
         const int pointIndex = startPointIndex + i;
+        const double heightUm = startHeightUm + (static_cast<double>(pointIndex) * stepUm);
 
         QVariantMap row;
         row["timestamp"] = baseTs;
         row["scan_id"] = scanId;
         row["scan_elapsed_ms"] = elapsedSinceExperimentStartMs;
-        row["height"] = startHeightUm + (static_cast<double>(pointIndex) * stepUm);
+        row["height"] = heightUm;
         const int rawTransmission = raw[(i * 2)];
         const int rawBackscatter = raw[(i * 2) + 1];
-        const int transRef = m_transmissionCalibrations.value(channel, 0);
-        const int backRef = m_backscatterCalibrations.value(channel, 0);
 
-        if (transRef > 0) {
-            row["transmission_intensity"] = qRound(static_cast<double>(rawTransmission)
-                                            / static_cast<double>(transRef) * 1000.0) / 10.0;
-        } else {
-            row["transmission_intensity"] = static_cast<double>(rawTransmission);
-        }
+        row["transmission_intensity"] = static_cast<double>(rawTransmission);
+        row["backscatter_intensity"] = static_cast<double>(rawBackscatter);
 
-        if (backRef > 0) {
-            row["backscatter_intensity"] = qRound(static_cast<double>(rawBackscatter)
-                                           / static_cast<double>(backRef) * 1000.0) / 10.0;
-        } else {
-            row["backscatter_intensity"] = static_cast<double>(rawBackscatter);
-        }
         row["channel"] = channel;
         row["point_index"] = pointIndex;
         row["storage_area"] = areaA ? "A" : "B";

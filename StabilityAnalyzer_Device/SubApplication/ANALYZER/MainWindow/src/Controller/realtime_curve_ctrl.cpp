@@ -197,10 +197,23 @@ void RealtimeCurveCtrl::flushIncrementalCurve()
         m_maxHeight = maxH + hPadding;
     }
 
-    m_minTransmission = 0;
-    m_maxTransmission = 100;
-    m_minBackscatter = 0;
-    m_maxBackscatter = 100;
+    double minT = std::numeric_limits<double>::max();
+    double maxT = std::numeric_limits<double>::lowest();
+    double minB = std::numeric_limits<double>::max();
+    double maxB = std::numeric_limits<double>::lowest();
+    for (int i = 0; i < tSorted.size(); ++i) {
+        if (tSorted[i].y() < minT) minT = tSorted[i].y();
+        if (tSorted[i].y() > maxT) maxT = tSorted[i].y();
+        if (bSorted[i].y() < minB) minB = bSorted[i].y();
+        if (bSorted[i].y() > maxB) maxB = bSorted[i].y();
+    }
+
+    const double tPadding = std::max((maxT - minT) * 0.08, 1.0);
+    const double bPadding = std::max((maxB - minB) * 0.08, 1.0);
+    m_minTransmission = std::max(0.0, minT - tPadding);
+    m_maxTransmission = maxT + tPadding;
+    m_minBackscatter = std::max(0.0, minB - bPadding);
+    m_maxBackscatter = maxB + bPadding;
 
     m_hasData = true;
 

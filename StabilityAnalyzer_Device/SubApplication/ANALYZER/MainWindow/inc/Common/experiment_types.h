@@ -10,6 +10,8 @@
  */
 
 #include <QString>
+#include <QVariantMap>
+#include <QVector>
 
 /**
  * @brief 单通道实验参数模型。
@@ -77,6 +79,39 @@ struct ExperimentScanProfile
     double stepUm = 20.0;
     qint64 experimentStartMs = 0;
     qint64 idealScanIntervalMs = 0;
+};
+
+struct CalibrationAvgEntry
+{
+    double height = 0.0;
+    double avgTransmission = 0.0;
+    double avgBackscatter = 0.0;
+};
+
+struct CalibrationScanState
+{
+    int scanRound = 0;
+    int totalRounds = 3;
+    double scanRangeStartMm = 0.0;
+    double scanEndMm = 55.0;
+    double scanStepUm = 20.0;
+    QString calibrationType;
+    QVector<QVector<QVariantMap>> scanRoundRows;
+};
+
+struct CalibrationSummary
+{
+    int channel = 0;
+    QString calibrationType;
+    int totalPoints = 0;
+    int scanRounds = 0;
+    double overallAvgTransmission = 0.0;
+    double overallAvgBackscatter = 0.0;
+    double maxTransmission = 0.0;
+    double minTransmission = 0.0;
+    double maxBackscatter = 0.0;
+    double minBackscatter = 0.0;
+    QString calibratedAt;
 };
 
 #endif

@@ -1,13 +1,9 @@
 #include "rndismanager.h"
 
-#include <QCoreApplication>
-#include <QDir>
-#include <QFileInfo>
 #include <QProcess>
 
 RndisManager::RndisManager(QObject *parent)
     : QObject(parent)
-    , m_scriptPath(buildDefaultScriptPath())
     , m_interfaceName(QStringLiteral("usb0"))
     , m_deviceIp(QStringLiteral("192.168.0.2"))
 {
@@ -15,45 +11,7 @@ RndisManager::RndisManager(QObject *parent)
 
 bool RndisManager::initialize()
 {
-    if (m_scriptPath.isEmpty() || !QFileInfo::exists(m_scriptPath)) {
-        setLastError(QStringLiteral("RNDIS script not found: %1").arg(m_scriptPath));
-        setReady(false);
-        return false;
-    }
-
-    emit logMessage(QStringLiteral("Executing RNDIS script: %1").arg(m_scriptPath));
-
-    QProcess process;
-    process.start(QStringLiteral("sh"), QStringList() << m_scriptPath);
-    if (!process.waitForStarted(3000)) {
-        setLastError(QStringLiteral("Failed to start RNDIS script process"));
-        setReady(false);
-        return false;
-    }
-
-    if (!process.waitForFinished(30000)) {
-        process.kill();
-        process.waitForFinished(3000);
-        setLastError(QStringLiteral("RNDIS script execution timed out"));
-        setReady(false);
-        return false;
-    }
-
-    const QString stdOutput = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
-    const QString stdError = QString::fromUtf8(process.readAllStandardError()).trimmed();
-    if (!stdOutput.isEmpty()) {
-        emit logMessage(stdOutput);
-    }
-    if (!stdError.isEmpty()) {
-        emit logMessage(stdError);
-    }
-
-    if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
-        setLastError(QStringLiteral("RNDIS script exited with code %1").arg(process.exitCode()));
-        setReady(false);
-        return false;
-    }
-
+    emit logMessage(QStringLiteral("RNDIS已配置为系统服务，检查网络接口 %1 是否就绪").arg(m_interfaceName));
     return refreshNetworkState();
 }
 
@@ -96,21 +54,6 @@ bool RndisManager::refreshNetworkState()
     return true;
 }
 
-QString RndisManager::scriptPath() const
-{
-    return m_scriptPath;
-}
-
-void RndisManager::setScriptPath(const QString &scriptPath)
-{
-    if (m_scriptPath == scriptPath) {
-        return;
-    }
-
-    m_scriptPath = scriptPath;
-    emit scriptPathChanged();
-}
-
 QString RndisManager::interfaceName() const
 {
     return m_interfaceName;
@@ -149,22 +92,6 @@ bool RndisManager::isReady() const
 QString RndisManager::lastError() const
 {
     return m_lastError;
-}
-
-QString RndisManager::buildDefaultScriptPath() const
-{
-    const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString runtimePath = appDir.filePath(QStringLiteral("sh/rndis_start.sh"));
-    if (QFileInfo::exists(runtimePath)) {
-        return runtimePath;
-    }
-
-    const QString sourceLikePath = appDir.filePath(QStringLiteral("../sh/rndis_start.sh"));
-    if (QFileInfo::exists(sourceLikePath)) {
-        return QDir::cleanPath(sourceLikePath);
-    }
-
-    return runtimePath;
 }
 
 void RndisManager::setLastError(const QString &errorText)

@@ -245,38 +245,45 @@ public:
                                                   });
         });
 
-        QObject::connect(m_dataTransmitCtrl, &DataTransmitController::calibrationUpdateRequested,
+        QObject::connect(m_dataTransmitCtrl, &DataTransmitController::calibrationRequested,
                          this,
-                         [this](int channel, int transmissionRef, int backscatterRef, const QString &requestId) {
-            m_experimentCtrl->updateCalibration(channel, transmissionRef, backscatterRef);
-            m_dataTransmitCtrl->sendCommandResult(QStringLiteral("set_calibration"),
-                                                   requestId,
-                                                   true,
-                                                   QString("Calibration updated for channel %1").arg(channel),
-                                                   QVariantMap{{QStringLiteral("channel"), channel}});
-        });
-
-        // 校准扫描请求：触发设备端校准扫描并回复 ACK
-        QObject::connect(m_dataTransmitCtrl, &DataTransmitController::calibrationScanRequested,
-                         this,
-                         [this](int channel, int scanRangeStart, int scanRangeEnd,
-                                int scanStep, const QString &requestId) {
-            m_experimentCtrl->startCalibrationScan(channel, scanRangeStart, scanRangeEnd, scanStep);
+                         [this](int channel, const QString& calibrationType,
+                                const QString &requestId) {
+            m_experimentCtrl->startCalibration(channel, calibrationType);
             m_dataTransmitCtrl->sendCommandResult(
-                QStringLiteral("start_calibration_scan"), requestId, true,
-                QString("Calibration scan started for channel %1").arg(channel),
+                QStringLiteral("start_calibration"), requestId, true,
+                QString("Calibration started for channel %1").arg(channel),
                 QVariantMap{{QStringLiteral("channel"), channel}});
         });
 
-        // 校准扫描数据就绪：通过 Stream 通道推送给 PC
-        QObject::connect(m_experimentCtrl, &ExperimentCtrl::calibrationScanDataReady,
+        QObject::connect(m_experimentCtrl, &ExperimentCtrl::calibrationProgress,
                          this,
-                         [this](int channel, const QVariantList &rows) {
+                         [this](int channel, int currentRound, int totalRounds) {
             m_dataTransmitCtrl->sendStreamMessage(QVariantMap{
-                {QStringLiteral("type"), QStringLiteral("calibration_scan_data")},
+                {QStringLiteral("type"), QStringLiteral("calibration_progress")},
                 {QStringLiteral("channel"), channel},
-                {QStringLiteral("row_count"), rows.size()},
-                {QStringLiteral("rows"), rows}
+                {QStringLiteral("current_round"), currentRound},
+                {QStringLiteral("total_rounds"), totalRounds}
+            });
+        });
+
+        QObject::connect(m_experimentCtrl, &ExperimentCtrl::calibrationCompleted,
+                         this,
+                         [this](int channel, const QVariantMap &summary) {
+            m_dataTransmitCtrl->sendStreamMessage(QVariantMap{
+                {QStringLiteral("type"), QStringLiteral("calibration_completed")},
+                {QStringLiteral("channel"), channel},
+                {QStringLiteral("summary"), summary}
+            });
+        });
+
+        QObject::connect(m_experimentCtrl, &ExperimentCtrl::calibrationFailed,
+                         this,
+                         [this](int channel, const QString &reason) {
+            m_dataTransmitCtrl->sendStreamMessage(QVariantMap{
+                {QStringLiteral("type"), QStringLiteral("calibration_failed")},
+                {QStringLiteral("channel"), channel},
+                {QStringLiteral("reason"), reason}
             });
         });
 

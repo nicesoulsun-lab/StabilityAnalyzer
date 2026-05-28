@@ -1,11 +1,6 @@
 #ifndef EXPERIMENT_SESSION_SERVICE_H
 #define EXPERIMENT_SESSION_SERVICE_H
 
-/**
- * @file experiment_session_service.h
- * @brief 实验扫描会话与高度分配逻辑。
- */
-
 #include <QMap>
 #include <QVariantMap>
 #include <QVector>
@@ -13,20 +8,11 @@
 #include "experiment_types.h"
 #include "mainwindow_global.h"
 
-// File note:
-// ExperimentSessionService owns scan profiles and pending scan contexts. It
-// converts raw storage pairs into rows with stable height and point indexes.
+class SqlOrmManager;
 
-/**
- * @brief 管理实验运行期间的扫描上下文与高度计算。
- *
- * 该类专注于“本批数据属于哪一轮扫描、该落在哪个高度”，
- * 不直接读写 Modbus，也不直接操作数据库。
- */
 class MAINWINDOW_EXPORT ExperimentSessionService
 {
 public:
-    // Create an empty session manager for all channels.
     ExperimentSessionService();
 
     int calculateTotalSeconds(int days, int hours, int minutes, int seconds) const;
@@ -40,20 +26,13 @@ public:
     int currentScanCount(int channel) const;
     int pendingContextCount(int channel) const;
 
-    void setCalibration(int channel, int transmissionRef, int backscatterRef);
-    int transmissionCalibration(int channel) const;
-    int backscatterCalibration(int channel) const;
+    void loadCalibrationAvgTable(int channel, SqlOrmManager* dbManager);
+    bool hasCalibrationAvgTable(int channel) const;
+    double findCalibrationAvgTransmission(int channel, double heightUm) const;
+    double findCalibrationAvgBackscatter(int channel, double heightUm) const;
 
     QVector<QVariantMap> buildRowsFromStorageData(int channel, const QVector<quint16>& raw, bool areaA);
 
-    /**
-     * @brief 将原始寄存器数据解析为校准行数据（不应用校准转换、不写库）。
-     *
-     * 与 buildRowsFromStorageData 的区别：
-     * - 不需要扫描上下文（无 scan_id、timestamp、scan_completed）；
-     * - 不应用校准转换，直接返回原始光强值；
-     * - 高度从参数直接计算。
-     */
     QVector<QVariantMap> buildCalibrationRows(int channel,
                                                const QVector<quint16>& raw,
                                                bool areaA,
@@ -71,8 +50,7 @@ private:
     QMap<int, ExperimentScanProfile> m_scanProfiles;
     QMap<int, int> m_nextScanSequences;
     QMap<int, int> m_currentScanCounts;
-    QMap<int, int> m_transmissionCalibrations;
-    QMap<int, int> m_backscatterCalibrations;
+    QMap<int, QVector<CalibrationAvgEntry>> m_calibrationAvgTables;
 };
 
 #endif

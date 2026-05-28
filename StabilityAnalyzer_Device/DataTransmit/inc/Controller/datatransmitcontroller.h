@@ -17,7 +17,7 @@ class QJsonObject;
 /*
  * 文件功能：
  * DataTransmitController 是 Device 侧通信模块的统一入口。
- * 它负责执行 RNDIS 启动流程、启动三路 TCP 服务、处理基础握手命令，
+ * 它负责检查 RNDIS 就绪状态（RNDIS 已由系统服务管理）、启动三路 TCP 服务、处理基础握手命令，
  * 并把通信状态统一暴露给 Application / Sub 的控制层。
  */
 class DATATRANSMIT_EXPORT DataTransmitController : public QObject
@@ -32,7 +32,6 @@ class DATATRANSMIT_EXPORT DataTransmitController : public QObject
     Q_PROPERTY(bool controlClientConnected READ isControlClientConnected NOTIFY channelsStateChanged)
     Q_PROPERTY(bool statusClientConnected READ isStatusClientConnected NOTIFY channelsStateChanged)
     Q_PROPERTY(bool streamClientConnected READ isStreamClientConnected NOTIFY channelsStateChanged)
-    Q_PROPERTY(QString scriptPath READ scriptPath WRITE setScriptPath NOTIFY scriptPathChanged)
     Q_PROPERTY(QString networkInterface READ networkInterface WRITE setNetworkInterface NOTIFY networkInterfaceChanged)
     Q_PROPERTY(QString deviceIp READ deviceIp WRITE setDeviceIp NOTIFY deviceIpChanged)
     Q_PROPERTY(QVariantList experimentChannels READ experimentChannels NOTIFY experimentChannelsChanged)
@@ -70,9 +69,6 @@ public:
     bool isControlClientConnected() const;
     bool isStatusClientConnected() const;
     bool isStreamClientConnected() const;
-
-    QString scriptPath() const;
-    void setScriptPath(const QString &scriptPath);
 
     QString networkInterface() const;
     void setNetworkInterface(const QString &interfaceName);
@@ -113,7 +109,6 @@ signals:
     void connectionStateChanged();
     void rndisReadyChanged();
     void channelsStateChanged();
-    void scriptPathChanged();
     void networkInterfaceChanged();
     void deviceIpChanged();
     void experimentChannelsChanged();
@@ -131,10 +126,7 @@ signals:
     void exportExperimentScanRequested(int experimentId, int scanId, int offset, int limit, const QString &requestId);
     // 导入完成后回写设备端状态，避免同一条记录被重复导入。
     void markExperimentImportedRequested(int experimentId, int status, const QString &requestId);
-    void calibrationUpdateRequested(int channel, int transmissionRef, int backscatterRef, const QString &requestId);
-    // 校准扫描请求信号
-    void calibrationScanRequested(int channel, int scanRangeStart, int scanRangeEnd,
-                                   int scanStep, const QString &requestId);
+    void calibrationRequested(int channel, const QString& calibrationType, const QString &requestId);
 
 private slots:
     /* 函数功能：执行启动状态机下一步。 */

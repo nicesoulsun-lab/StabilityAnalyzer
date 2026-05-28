@@ -190,13 +190,23 @@ struct ExperimentData {
  * 映射到数据库的 operation_log 表，记录用户操作行为。
  */
 struct OperationLog {
-    int id;                ///< 主键，自增
-    QString username;      ///< 操作用户名
-    int user_id;           ///< 用户 ID
-    QString operation;     ///< 操作类型（Login/Logout/CreateProject/StartExperiment 等）
-    QString target;        ///< 操作对象（如工程名、实验ID等）
-    QString detail;        ///< 操作详情（可选补充信息）
-    QString created_at;    ///< 操作时间
+    int id;
+    QString username;
+    int user_id;
+    QString operation;
+    QString target;
+    QString detail;
+    QString created_at;
+};
+
+struct CalibrationAvgData {
+    int id;
+    int channel;
+    double height;
+    double avg_transmission_intensity;
+    double avg_backscatter_intensity;
+    int scan_count;
+    QString created_at;
 };
 
 // ============================================================================
@@ -280,6 +290,15 @@ public:
                                        make_column("target", &OperationLog::target),
                                        make_column("detail", &OperationLog::detail),
                                        make_column("created_at", &OperationLog::created_at)
+                                       ),
+                            make_table("calibration_avg_data",
+                                       make_column("id", &CalibrationAvgData::id, primary_key().autoincrement()),
+                                       make_column("channel", &CalibrationAvgData::channel),
+                                       make_column("height", &CalibrationAvgData::height),
+                                       make_column("avg_transmission_intensity", &CalibrationAvgData::avg_transmission_intensity),
+                                       make_column("avg_backscatter_intensity", &CalibrationAvgData::avg_backscatter_intensity),
+                                       make_column("scan_count", &CalibrationAvgData::scan_count),
+                                       make_column("created_at", &CalibrationAvgData::created_at)
                                        )
                             );
     }
@@ -2196,4 +2215,116 @@ void SqlOrmManager::close() {
 bool SqlOrmManager::isValid() const {
     Q_D(const SqlOrmManager);
     return d->initialized && d->storage != nullptr;
+}
+
+bool SqlOrmManager::batchAddCalibrationAvgData(const QVector<QVariantMap>& dataList)
+{
+    // 批量写入校准平均值到 calibration_avg_data 表
+    Q_D(SqlOrmManager);
+    if (!d->initialized) return false;
+
+    const QString connectionName = makeMigrationConnectionName();
+    QSqlDatabase db = openQtDb(d->dbPath, connectionName);
+    if (!db.open()) {
+        qWarning() << "[SqlOrmManager] batchAddCalibrationAvgData open db failed:" << db.lastError().text();
+        closeQtDb(connectionName);
+        return false;
+    }
+
+    db.transaction();
+    QSqlQuery query(db);
+    query.prepare(QStringLiteral(
+        "INSERT INTO calibration_avg_data "
+        "(channel, height, avg_transmission_intensity, avg_backscatter_intensity, scan_count, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)"));
+
+    for (const auto& item : dataList) {
+        query.addBindValue(item.value("channel", 0).toInt());
+        query.addBindValue(item.value("height", 0.0).toDouble());
+        query.addBindValue(item.value("avg_transmission_intensity", 0.0).toDouble());
+        query.addBindValue(item.value("avg_backscatter_intensity", 0.0).toDouble());
+        query.addBindValue(item.value("scan_count", 0).toInt());
+        query.addBindValue(item.value("created_at", QString()).toString());
+        if (!query.exec()) {
+            qWarning() << "[SqlOrmManager] batchAddCalibrationAvgData insert failed:" << query.lastError().text();
+            db.rollback();
+            db.close();
+            closeQtDb(connectionName);
+            return false;
+        }
+    }
+
+    db.commit();
+    db.close();
+    closeQtDb(connectionName);
+    return true;
+}
+
+QVector<QVariantMap> SqlOrmManager::getCalibrationAvgDataByChannel(int channel)
+{
+    // 查询指定通道的校准平均值数据，按高度升序排列
+    Q_D(SqlOrmManager);
+    if (!d->initialized) return {};
+
+    const QString connectionName = makeMigrationConnectionName();
+    QSqlDatabase db = openQtDb(d->dbPath, connectionName);
+    if (!db.open()) {
+        qWarning() << "[SqlOrmManager] getCalibrationAvgDataByChannel open db failed:" << db.lastError().text();
+        closeQtDb(connectionName);
+        return {};
+    }
+
+    QSqlQuery query(db);
+    query.prepare(QStringLiteral(
+        "SELECT id, channel, height, avg_transmission_intensity, avg_backscatter_intensity, scan_count, created_at "
+        "FROM calibration_avg_data WHERE channel = ? ORDER BY height"));
+    query.addBindValue(channel);
+
+    QVector<QVariantMap> result;
+    if (query.exec()) {
+        while (query.next()) {
+            QVariantMap m;
+            m["id"] = query.value(0).toInt();
+            m["channel"] = query.value(1).toInt();
+            m["height"] = query.value(2).toDouble();
+            m["avg_transmission_intensity"] = query.value(3).toDouble();
+            m["avg_backscatter_intensity"] = query.value(4).toDouble();
+            m["scan_count"] = query.value(5).toInt();
+            m["created_at"] = query.value(6).toString();
+            result.append(m);
+        }
+    } else {
+        qWarning() << "[SqlOrmManager] getCalibrationAvgDataByChannel query failed:" << query.lastError().text();
+    }
+
+    db.close();
+    closeQtDb(connectionName);
+    return result;
+}
+
+bool SqlOrmManager::clearCalibrationAvgDataByChannel(int channel)
+{
+    // 清除指定通道的旧校准平均值数据，新校准前调用
+    Q_D(SqlOrmManager);
+    if (!d->initialized) return false;
+
+    const QString connectionName = makeMigrationConnectionName();
+    QSqlDatabase db = openQtDb(d->dbPath, connectionName);
+    if (!db.open()) {
+        qWarning() << "[SqlOrmManager] clearCalibrationAvgDataByChannel open db failed:" << db.lastError().text();
+        closeQtDb(connectionName);
+        return false;
+    }
+
+    QSqlQuery query(db);
+    query.prepare(QStringLiteral("DELETE FROM calibration_avg_data WHERE channel = ?"));
+    query.addBindValue(channel);
+    const bool ok = query.exec();
+    if (!ok) {
+        qWarning() << "[SqlOrmManager] clearCalibrationAvgDataByChannel delete failed:" << query.lastError().text();
+    }
+
+    db.close();
+    closeQtDb(connectionName);
+    return ok;
 }

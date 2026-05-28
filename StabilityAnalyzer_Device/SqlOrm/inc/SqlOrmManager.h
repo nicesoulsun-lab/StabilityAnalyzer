@@ -414,6 +414,14 @@ public:
     int deleteOldOperationLogs(const QString& beforeTime);
 
     // ========================================================================
+    // 校准平均值数据管理
+    // ========================================================================
+
+    bool batchAddCalibrationAvgData(const QVector<QVariantMap>& dataList);
+    QVector<QVariantMap> getCalibrationAvgDataByChannel(int channel);
+    bool clearCalibrationAvgDataByChannel(int channel);
+
+    // ========================================================================
     // 数据库操作
     // ========================================================================
     

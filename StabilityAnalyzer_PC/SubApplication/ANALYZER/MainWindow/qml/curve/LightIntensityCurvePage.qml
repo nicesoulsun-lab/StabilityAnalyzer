@@ -199,7 +199,7 @@ Rectangle {
         : { minValue: -5, maxValue: 5 }
 
         if (currentDataModeIndex === 0)
-            return { minValue: 0, maxValue: paddedRange(Math.max(0, minValue), Math.min(100, maxValue)).maxValue }
+            return { minValue: 0, maxValue: paddedRange(Math.max(0, minValue), maxValue).maxValue }
         return paddedRange(minValue, maxValue)
     }
 

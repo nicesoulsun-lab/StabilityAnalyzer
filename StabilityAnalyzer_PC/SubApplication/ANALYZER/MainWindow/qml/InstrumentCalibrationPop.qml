@@ -16,33 +16,24 @@ Popup {
     dim: true
     focus: true
     anchors.centerIn: Overlay.overlay
-    closePolicy: Popup.CloseOnEscape
+    closePolicy: Popup.NoAutoClose
     padding: 0
 
-    // 通道列表（动态获取）
     property var availableChannelOptions: []
     property var availableChannelIndexes: []
-    // 校准类型选项
-    property var calibrationTypeOptions: [qsTr("透射光校准"), qsTr("背射光校准")]
-    // 扫描区间
-    property var scanRangeStartModel: []
-    property var scanRangeEndModel: []
 
-    // 扫描步长选项（与新建实验一致）
-    property var scanStepModel: ["20", "40", "100", "200"]
-    // 扫描步长（μm）
-    property int scanStepValue: 20
-    // 预期采样点数 = (rangeEnd - rangeStart) * 1000 / scanStep
-    property int expectedPointCount: 0
-
-    // 校准状态
     property bool isCalibrating: false
     property int calibrationChannel: -1
-    property string calibrationType: ""
+    property int calibrationRound: 0
+    property int calibrationTotalRounds: 3
+    property var calibrationTypeOptions: [qsTr("透射光校准"), qsTr("背射光校准")]
 
-    // 校准结果
     property int samplePointCount: 0
-    property double averageIntensity: 0.0
+    property double lightAvg: 0.0
+    property double lightMax: 0.0
+    property double lightMin: 0.0
+    property string calibratedLightType: ""
+    property string lastCalibrationTime: ""
     property string sendStatus: qsTr("未校准")
     property string sendStatusColor: "#999999"
 
@@ -54,8 +45,8 @@ Popup {
         }
     }
 
-    // 刷新可用通道列表，过滤掉正在运行实验的通道
     function refreshChannelOptions() {
+        var prevChannel = currentChannel()
         var nextAvailable = []
         var nextIndexes = []
         var count = experiment_ctrl ? experiment_ctrl.channelCount : 0
@@ -68,8 +59,10 @@ Popup {
         }
         availableChannelOptions = nextAvailable
         availableChannelIndexes = nextIndexes
-        channelCombo.model = availableChannelOptions
-        if (availableChannelIndexes.length > 0) {
+        var newIndex = nextIndexes.indexOf(prevChannel)
+        if (newIndex >= 0) {
+            channelCombo.currentIndex = newIndex
+        } else if (nextIndexes.length > 0) {
             channelCombo.currentIndex = 0
         }
     }
@@ -83,7 +76,6 @@ Popup {
         return !!(info && info.running)
     }
 
-    // 获取当前选中的通道索引
     function currentChannel() {
         if (channelCombo.currentIndex < 0 || channelCombo.currentIndex >= availableChannelIndexes.length) {
             return -1
@@ -91,30 +83,20 @@ Popup {
         return availableChannelIndexes[channelCombo.currentIndex]
     }
 
-    // 根据扫描区间和步长计算预期采样点数
-    function updateExpectedPointCount() {
-        var rangeStart = parseInt(scanRangeStartModel[scanStartCombo.currentIndex])
-        var rangeEnd = parseInt(scanRangeEndModel[scanEndCombo.currentIndex])
-        var step = parseInt(scanStepModel[scanStepCombo.currentIndex]) || 20
-        if (step <= 0) step = 20
-        scanStepValue = step
-        expectedPointCount = (rangeEnd - rangeStart) * 1000 / step
-    }
-
     function resetState() {
         isCalibrating = false
         calibrationChannel = -1
-        calibrationType = ""
+        calibrationRound = 0
         samplePointCount = 0
-        averageIntensity = 0.0
-        expectedPointCount = 0
+        lightAvg = 0.0
+        lightMax = 0.0
+        lightMin = 0.0
         sendStatus = qsTr("未校准")
         sendStatusColor = "#999999"
         startButton.enabled = true
         startButton.button_text = qsTr("开始校准")
-        if (data_transmit_ctrl) {
-            data_transmit_ctrl.streamMessageReceived.disconnect(onStreamData)
-        }
+        root.closePolicy = Popup.NoAutoClose
+        closeButton.enabled = true
     }
 
     function startCalibration() {
@@ -124,41 +106,22 @@ Popup {
             return
         }
 
-        var isTransmission = calibrationTypeCombo.currentIndex === 0
-        var rangeStart = parseInt(scanRangeStartModel[scanStartCombo.currentIndex])
-        var rangeEnd = parseInt(scanRangeEndModel[scanEndCombo.currentIndex])
-        var step = parseInt(scanStepModel[scanStepCombo.currentIndex]) || 20
-
-        if (rangeEnd <= rangeStart) {
-            showMessage(qsTr("扫描区间上限必须大于下限"))
-            return
-        }
-        if (step <= 0) {
-            showMessage(qsTr("扫描步长必须大于0"))
-            return
-        }
-
-        scanStepValue = step
-        updateExpectedPointCount()
-
-        // 保存校准上下文
         calibrationChannel = channel
-        calibrationType = isTransmission ? "transmission" : "backscatter"
+        calibrationRound = 0
         samplePointCount = 0
-        averageIntensity = 0.0
-        sendStatus = qsTr("扫描中...")
+        lightAvg = 0.0
+        lightMax = 0.0
+        lightMin = 0.0
+        sendStatus = qsTr("第 1/3 次扫描...")
         sendStatusColor = "#3B87E4"
         isCalibrating = true
         startButton.enabled = false
         startButton.button_text = qsTr("校准中...")
+        root.closePolicy = Popup.NoAutoClose
+        closeButton.enabled = false
 
-        // 监听 Stream 通道的校准数据
-        if (data_transmit_ctrl) {
-            data_transmit_ctrl.streamMessageReceived.connect(onStreamData)
-        }
-
-        // 发起校准扫描，步长传给设备端
-        var success = experiment_ctrl.startCalibrationScan(channel, rangeStart, rangeEnd, step)
+        var calType = calibrationTypeCombo.currentIndex === 0 ? "transmission" : "backscatter"
+        var success = experiment_ctrl.startCalibration(channel, calType)
         if (!success) {
             resetState()
             sendStatus = qsTr("启动失败")
@@ -166,88 +129,68 @@ Popup {
         }
     }
 
-    // Stream 数据回调：接收校准扫描结果
-    function onStreamData(message) {
-        if (!isCalibrating) return
-        if (message.type !== "calibration_scan_data") return
-        if (message.channel !== calibrationChannel) return
-
-        var rows = message.rows
-        if (!rows || rows.length === 0) {
-            sendStatus = qsTr("无数据")
-            sendStatusColor = "#E05656"
-            finishCalibration()
-            return
-        }
-
-        // 计算目标光强的总和
-        var sum = 0.0
-        var count = rows.length
-        var field = calibrationType === "transmission"
-                    ? "transmission_intensity"
-                    : "backscatter_intensity"
-        for (var i = 0; i < count; i++) {
-            sum += rows[i][field]
-        }
-        samplePointCount = count
-
-        // 用预期点数作除数，避免丢点导致均值偏高
-        averageIntensity = expectedPointCount > 0 ? sum / expectedPointCount : 0
-
-        // 构造校准参数并下发
-        var transRef = calibrationType === "transmission" ? Math.round(averageIntensity) : 0
-        var backRef = calibrationType === "backscatter" ? Math.round(averageIntensity) : 0
-
-        var calSuccess = experiment_ctrl.sendCalibration(calibrationChannel, transRef, backRef)
-
-        if (calSuccess) {
-            sendStatus = qsTr("校准完成")
-            sendStatusColor = "#2FA36B"
-        } else {
-            sendStatus = qsTr("校准失败")
-            sendStatusColor = "#E05656"
-        }
-
-        finishCalibration()
-    }
-
     function finishCalibration() {
         isCalibrating = false
         startButton.enabled = true
         startButton.button_text = qsTr("开始校准")
-        if (data_transmit_ctrl) {
-            data_transmit_ctrl.streamMessageReceived.disconnect(onStreamData)
-        }
+        root.closePolicy = Popup.CloseOnEscape
+        closeButton.enabled = true
     }
 
-    Component.onCompleted: {
-        for (var i = 0; i <= 55; ++i) {
-            scanRangeStartModel.push(i)
-        }
-        for (var j = 55; j >= 0; --j) {
-            scanRangeEndModel.push(j)
-        }
-    }
+    Component.onCompleted: {} // 保留声明，避免重定义冲突
 
     onOpened: {
         resetState()
         refreshChannelOptions()
-        scanStartCombo.model = scanRangeStartModel
-        scanEndCombo.model = scanRangeEndModel
-        scanStartCombo.currentIndex = 0
-        scanEndCombo.currentIndex = 0
-        calibrationTypeCombo.currentIndex = 0
-        scanStepCombo.currentIndex = 0
-        scanStepValue = 20
-        expectedPointCount = 0
     }
 
     onClosed: resetState()
 
-    // 通道状态变化时刷新可用通道列表
     Connections {
         target: data_transmit_ctrl
         onExperimentChannelsChanged: root.refreshChannelOptions()
+    }
+
+    Connections {
+        target: experiment_ctrl
+        onCalibrationProgress: {
+            if (channel !== calibrationChannel) return
+            calibrationRound = currentRound
+            sendStatus = qsTr("第 %1/%2 次扫描...").arg(currentRound).arg(totalRounds)
+        }
+        onCalibrationCompleted: {
+            if (channel !== calibrationChannel) return
+
+            samplePointCount = summary.total_points || 0
+            calibratedLightType = summary.calibration_type || ""
+            lastCalibrationTime = summary.calibrated_at || ""
+            if (calibratedLightType === "transmission") {
+                lightAvg = summary.overall_avg_transmission || 0.0
+                lightMax = summary.max_transmission || 0.0
+                lightMin = summary.min_transmission || 0.0
+            } else {
+                lightAvg = summary.overall_avg_backscatter || 0.0
+                lightMax = summary.max_backscatter || 0.0
+                lightMin = summary.min_backscatter || 0.0
+            }
+
+            sendStatus = qsTr("校准完成")
+            sendStatusColor = "#2FA36B"
+            finishCalibration()
+        }
+        onCalibrationFailed: {
+            if (channel !== calibrationChannel) return
+            sendStatus = qsTr("校准失败: %1").arg(reason)
+            sendStatusColor = "#E05656"
+            finishCalibration()
+        }
+        onOperationFailed: {
+            if (isCalibrating) {
+                sendStatus = qsTr("校准失败")
+                sendStatusColor = "#E05656"
+                finishCalibration()
+            }
+        }
     }
 
     background: Rectangle {
@@ -269,7 +212,6 @@ Popup {
             anchors.margins: 18
             spacing: 18
 
-            // 标题栏
             Item {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 28
@@ -306,7 +248,6 @@ Popup {
                 }
             }
 
-            // 校准参数区
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 182
@@ -341,7 +282,6 @@ Popup {
                         rowSpacing: 18
                         columnSpacing: 60
 
-                        // 第一行：通道选择 + 校准类型
                         RowLayout {
                             spacing: 12
 
@@ -368,6 +308,48 @@ Popup {
                             spacing: 12
 
                             Text {
+                                text: qsTr("扫描区间")
+                                font.pixelSize: 16
+                                color: "#333333"
+                                font.family: "Microsoft YaHei"
+                            }
+
+                            Text {
+                                Layout.preferredWidth: 220
+                                Layout.preferredHeight: 40
+                                text: "0 mm ~ 55 mm"
+                                font.pixelSize: 16
+                                color: "#666666"
+                                font.family: "Microsoft YaHei"
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                        }
+
+                        RowLayout {
+                            spacing: 12
+
+                            Text {
+                                text: qsTr("扫描步长")
+                                font.pixelSize: 16
+                                color: "#333333"
+                                font.family: "Microsoft YaHei"
+                            }
+
+                            Text {
+                                Layout.preferredWidth: 220
+                                Layout.preferredHeight: 40
+                                text: "20 μm"
+                                font.pixelSize: 16
+                                color: "#666666"
+                                font.family: "Microsoft YaHei"
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                        }
+
+                        RowLayout {
+                            spacing: 12
+
+                            Text {
                                 text: qsTr("校准类型")
                                 font.pixelSize: 16
                                 color: "#333333"
@@ -383,91 +365,20 @@ Popup {
                                     border.color: "#82C1F2"
                                     radius: 4
                                 }
-                            }
-                        }
 
-                        // 第二行：扫描区间 + 扫描步长
-                        RowLayout {
-                            spacing: 12
-
-                            Text {
-                                text: qsTr("扫描区间")
-                                font.pixelSize: 16
-                                color: "#333333"
-                                font.family: "Microsoft YaHei"
-                            }
-
-                            UiComboBox {
-                                id: scanStartCombo
-                                Layout.preferredWidth: 92
-                                Layout.preferredHeight: 40
-                                pixelSize: 14
-                                background: Rectangle {
-                                    border.color: "#82C1F2"
-                                    radius: 4
+                                onCurrentIndexChanged: {
+                                    if(currentIndex === 0)
+                                        calibratedLightType = "transmission"
+                                    else{
+                                        calibratedLightType = ""
+                                    }
                                 }
-                            }
-
-                            Text {
-                                text: "mm ~"
-                                font.pixelSize: 15
-                                color: "#333333"
-                                font.family: "Microsoft YaHei"
-                            }
-
-                            UiComboBox {
-                                id: scanEndCombo
-                                Layout.preferredWidth: 92
-                                Layout.preferredHeight: 40
-                                pixelSize: 14
-                                background: Rectangle {
-                                    border.color: "#82C1F2"
-                                    radius: 4
-                                }
-                            }
-
-                            Text {
-                                text: "mm"
-                                font.pixelSize: 15
-                                color: "#333333"
-                                font.family: "Microsoft YaHei"
-                            }
-                        }
-
-                        RowLayout {
-                            spacing: 12
-
-                            Text {
-                                text: qsTr("扫描步长")
-                                font.pixelSize: 16
-                                color: "#333333"
-                                font.family: "Microsoft YaHei"
-                            }
-
-                            UiComboBox {
-                                id: scanStepCombo
-                                Layout.preferredWidth: 120
-                                Layout.preferredHeight: 40
-                                model: root.scanStepModel
-                                onCurrentIndexChanged: root.updateExpectedPointCount()
-                                background: Rectangle {
-                                    border.color: "#82C1F2"
-                                    radius: 4
-                                }
-                            }
-
-                            Text {
-                                text: "μm"
-                                font.pixelSize: 15
-                                color: "#333333"
-                                font.family: "Microsoft YaHei"
                             }
                         }
                     }
                 }
             }
 
-            // 校准结果区
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -500,10 +411,9 @@ Popup {
                         Layout.margins: 20
                         spacing: 0
 
-                        // 采样点数
                         RowLayout {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 54
+                            Layout.preferredHeight: 40
                             spacing: 12
 
                             Text {
@@ -518,7 +428,7 @@ Popup {
 
                             Rectangle {
                                 Layout.preferredWidth: 170
-                                Layout.preferredHeight: 36
+                                Layout.preferredHeight: 32
                                 radius: 4
                                 color: "#FFFFFF"
                                 border.color: "#E5EAF1"
@@ -532,102 +442,11 @@ Popup {
                                     font.family: "Microsoft YaHei"
                                 }
                             }
-                        }
 
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 1
-                            color: "#EEF2F6"
-                        }
-
-                        // 预期点数
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 54
-                            spacing: 12
+                            Item { Layout.preferredWidth: 28 }
 
                             Text {
-                                Layout.preferredWidth: 120
-                                text: qsTr("预期点数")
-                                font.pixelSize: 18
-                                color: "#333333"
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                                font.family: "Microsoft YaHei"
-                            }
-
-                            Rectangle {
-                                Layout.preferredWidth: 170
-                                Layout.preferredHeight: 36
-                                radius: 4
-                                color: "#FFFFFF"
-                                border.color: "#E5EAF1"
-                                border.width: 1
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: expectedPointCount > 0 ? expectedPointCount.toString() : "-"
-                                    font.pixelSize: 16
-                                    color: "#333333"
-                                    font.family: "Microsoft YaHei"
-                                }
-                            }
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 1
-                            color: "#EEF2F6"
-                        }
-
-                        // 平均光强
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 54
-                            spacing: 12
-
-                            Text {
-                                Layout.preferredWidth: 120
-                                text: qsTr("平均光强")
-                                font.pixelSize: 18
-                                color: "#333333"
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                                font.family: "Microsoft YaHei"
-                            }
-
-                            Rectangle {
-                                Layout.preferredWidth: 170
-                                Layout.preferredHeight: 36
-                                radius: 4
-                                color: "#FFFFFF"
-                                border.color: "#E5EAF1"
-                                border.width: 1
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: averageIntensity > 0 ? averageIntensity.toFixed(2) : "-"
-                                    font.pixelSize: 16
-                                    color: "#333333"
-                                    font.family: "Microsoft YaHei"
-                                }
-                            }
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 1
-                            color: "#EEF2F6"
-                        }
-
-                        // 下发状态
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 54
-                            spacing: 12
-
-                            Text {
-                                Layout.preferredWidth: 120
+                                Layout.preferredWidth: 30
                                 text: qsTr("状态")
                                 font.pixelSize: 18
                                 color: "#333333"
@@ -637,8 +456,8 @@ Popup {
                             }
 
                             Rectangle {
-                                Layout.preferredWidth: 170
-                                Layout.preferredHeight: 36
+                                Layout.preferredWidth: 150
+                                Layout.preferredHeight: 32
                                 radius: 4
                                 color: "#FFFFFF"
                                 border.color: "#E5EAF1"
@@ -647,8 +466,127 @@ Popup {
                                 Text {
                                     anchors.centerIn: parent
                                     text: sendStatus
-                                    font.pixelSize: 16
+                                    font.pixelSize: 14
                                     color: sendStatusColor
+                                    font.family: "Microsoft YaHei"
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 1
+                            color: "#EEF2F6"
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 40
+                            spacing: 12
+
+                            Text {
+                                Layout.preferredWidth: 120
+                                text: calibratedLightType === "transmission" ? qsTr("透射光强均值") : qsTr("背射光强均值")
+                                font.pixelSize: 18
+                                color: "#333333"
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.family: "Microsoft YaHei"
+                            }
+
+                            Rectangle {
+                                Layout.preferredWidth: 170
+                                Layout.preferredHeight: 32
+                                radius: 4
+                                color: "#FFFFFF"
+                                border.color: "#E5EAF1"
+                                border.width: 1
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: lightAvg > 0 ? lightAvg.toFixed(2) : "-"
+                                    font.pixelSize: 16
+                                    color: "#333333"
+                                    font.family: "Microsoft YaHei"
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 1
+                            color: "#EEF2F6"
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 40
+                            spacing: 12
+
+                            Text {
+                                Layout.preferredWidth: 120
+                                text: calibratedLightType === "transmission" ? qsTr("透射光强范围") : qsTr("背射光强范围")
+                                font.pixelSize: 18
+                                color: "#333333"
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.family: "Microsoft YaHei"
+                            }
+
+                            Rectangle {
+                                Layout.preferredWidth: 170
+                                Layout.preferredHeight: 32
+                                radius: 4
+                                color: "#FFFFFF"
+                                border.color: "#E5EAF1"
+                                border.width: 1
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: (lightMax > 0 || lightMin > 0)
+                                          ? lightMin.toFixed(1) + " ~ " + lightMax.toFixed(1)
+                                          : "-"
+                                    font.pixelSize: 14
+                                    color: "#333333"
+                                    font.family: "Microsoft YaHei"
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 1
+                            color: "#EEF2F6"
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 40
+                            spacing: 12
+
+                            Text {
+                                Layout.preferredWidth: 120
+                                text: qsTr("最近校准时间")
+                                font.pixelSize: 18
+                                color: "#333333"
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                font.family: "Microsoft YaHei"
+                            }
+
+                            Rectangle {
+                                Layout.preferredWidth: 220
+                                Layout.preferredHeight: 32
+                                radius: 4
+                                color: "#FFFFFF"
+                                border.color: "#E5EAF1"
+                                border.width: 1
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: lastCalibrationTime !== "" ? lastCalibrationTime : "-"
+                                    font.pixelSize: 13
+                                    color: "#333333"
                                     font.family: "Microsoft YaHei"
                                 }
                             }

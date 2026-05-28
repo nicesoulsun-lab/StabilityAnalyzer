@@ -8,36 +8,41 @@ Item {
 
     objectName: "CalibrationPage"
 
-    property var calibrationTypeOptions: [qsTr("透射光校准"), qsTr("背射光校准")]
-    property var scanStepModel: ["20", "40", "100", "200"]
-    property int scanStepValue: 20
-    property int expectedPointCount: 0
-
     property bool isCalibrating: false
     property int calibrationChannel: -1
-    property string calibrationType: ""
+    property int calibrationRound: 0
+    property int calibrationTotalRounds: 3
+    property string calibrationType: "transmission"
+    property var calibrationTypeOptions: [qsTr("透射光校准"), qsTr("背射光校准")]
 
     property int samplePointCount: 0
-    property double averageIntensity: 0.0
+    property double lightAvg: 0.0
+    property double lightMax: 0.0
+    property double lightMin: 0.0
+    property string calibratedLightType: ""
+    property string lastCalibrationTime: ""
     property string calibStatus: qsTr("未校准")
     property string calibStatusColor: "#999999"
 
-    function updateExpectedPointCount() {
-        var rangeStart = parseInt(scanStartInput.text) || 0
-        var rangeEnd = parseInt(scanEndInput.text) || 0
-        var step = parseInt(scanStepModel[scanStepCombo.currentIndex]) || 20
-        if (step <= 0) step = 20
-        scanStepValue = step
-        expectedPointCount = (rangeEnd - rangeStart) * 1000 / step
+    function refreshChannelOptions() {
+        var names = []
+        var count = experiment_ctrl ? experiment_ctrl.channelCount : 4
+        for (var i = 0; i < count; ++i) {
+            if (!experiment_ctrl || !experiment_ctrl.isExperimentRunning(i)) {
+                names.push(experiment_ctrl ? experiment_ctrl.channelDisplayName(i) : "")
+            }
+        }
+        channelCombo.model = names
     }
 
     function resetState() {
         isCalibrating = false
         calibrationChannel = -1
-        calibrationType = ""
+        calibrationRound = 0
         samplePointCount = 0
-        averageIntensity = 0.0
-        expectedPointCount = 0
+        lightAvg = 0.0
+        lightMax = 0.0
+        lightMin = 0.0
         calibStatus = qsTr("未校准")
         calibStatusColor = "#999999"
         startButton.enabled = true
@@ -51,42 +56,20 @@ Item {
             return
         }
 
-        var isTransmission = calibrationTypeCombo.currentIndex === 0
-        var rangeStart = parseInt(scanStartInput.text) || 0
-        var rangeEnd = parseInt(scanEndInput.text) || 0
-        var step = parseInt(scanStepModel[scanStepCombo.currentIndex]) || 20
-
-        if (rangeStart < 0 || rangeStart > 30) {
-            info_pop.openDialog(qsTr("扫描区间起始值需在0~30之间"))
-            return
-        }
-        if (rangeEnd < 30 || rangeEnd > 55) {
-            info_pop.openDialog(qsTr("扫描区间结束值需在30~55之间"))
-            return
-        }
-        if (rangeEnd <= rangeStart) {
-            info_pop.openDialog(qsTr("扫描区间上限必须大于下限"))
-            return
-        }
-        if (step <= 0) {
-            info_pop.openDialog(qsTr("扫描步长必须大于0"))
-            return
-        }
-
-        scanStepValue = step
-        updateExpectedPointCount()
-
         calibrationChannel = channel
-        calibrationType = isTransmission ? "transmission" : "backscatter"
+        calibrationRound = 0
         samplePointCount = 0
-        averageIntensity = 0.0
-        calibStatus = qsTr("扫描中...")
+        lightAvg = 0.0
+        lightMax = 0.0
+        lightMin = 0.0
+        calibStatus = qsTr("第 1/3 次扫描...")
         calibStatusColor = "#3B87E4"
         isCalibrating = true
         startButton.enabled = false
         startButton.button_text = qsTr("校准中...")
 
-        experiment_ctrl.startCalibrationScan(channel, rangeStart, rangeEnd, step)
+        var calType = calibrationTypeCombo.currentIndex === 0 ? "transmission" : "backscatter"
+        experiment_ctrl.startCalibration(channel, calType)
     }
 
     function finishCalibration() {
@@ -97,36 +80,35 @@ Item {
 
     Connections {
         target: experiment_ctrl
-        onCalibrationScanDataReady: {
-            if (!isCalibrating) return
+        onCalibrationProgress: {
+            if (channel !== calibrationChannel) return
+            calibrationRound = currentRound
+            calibStatus = qsTr("第 %1/%2 次扫描...").arg(currentRound).arg(totalRounds)
+        }
+        onCalibrationCompleted: {
             if (channel !== calibrationChannel) return
 
-            if (!rows || rows.length === 0) {
-                calibStatus = qsTr("无数据")
-                calibStatusColor = "#E05656"
-                finishCalibration()
-                return
+            samplePointCount = summary.total_points || 0
+            calibratedLightType = summary.calibration_type || ""
+            lastCalibrationTime = summary.calibrated_at || ""
+            if (calibratedLightType === "transmission") {
+                lightAvg = summary.overall_avg_transmission || 0.0
+                lightMax = summary.max_transmission || 0.0
+                lightMin = summary.min_transmission || 0.0
+            } else {
+                lightAvg = summary.overall_avg_backscatter || 0.0
+                lightMax = summary.max_backscatter || 0.0
+                lightMin = summary.min_backscatter || 0.0
             }
-
-            var sum = 0.0
-            var count = rows.length
-            var field = calibrationType === "transmission"
-                        ? "transmission_intensity"
-                        : "backscatter_intensity"
-            for (var i = 0; i < count; i++) {
-                sum += rows[i][field]
-            }
-            samplePointCount = count
-            averageIntensity = expectedPointCount > 0 ? sum / expectedPointCount : 0
-
-            var transRef = calibrationType === "transmission" ? Math.round(averageIntensity) : 0
-            var backRef = calibrationType === "backscatter" ? Math.round(averageIntensity) : 0
-
-            experiment_ctrl.updateCalibration(calibrationChannel, transRef, backRef)
 
             calibStatus = qsTr("校准完成")
             calibStatusColor = "#2FA36B"
-
+            finishCalibration()
+        }
+        onCalibrationFailed: {
+            if (channel !== calibrationChannel) return
+            calibStatus = qsTr("校准失败: %1").arg(reason)
+            calibStatusColor = "#E05656"
             finishCalibration()
         }
         onOperationFailed: {
@@ -137,6 +119,8 @@ Item {
             }
         }
     }
+
+    Component.onCompleted: refreshChannelOptions()
 
     Column {
         anchors.centerIn: parent
@@ -164,6 +148,34 @@ Item {
 
                         Text {
                             Layout.preferredWidth: 80
+                            text: qsTr("校准类型")
+                            font.pixelSize: 16
+                            color: "#333333"
+                            horizontalAlignment: Text.AlignRight
+                        }
+
+                        UiComboBox {
+                            id: calibrationTypeCombo
+                            Layout.preferredWidth: 180
+                            Layout.preferredHeight: 42
+                            model: root.calibrationTypeOptions
+
+                            onCurrentIndexChanged: {
+                                if(currentIndex === 0)
+                                    calibratedLightType = "transmission"
+                                else{
+                                    calibratedLightType = ""
+                                }
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        spacing: 12
+
+                        Text {
+                            Layout.preferredWidth: 80
                             text: qsTr("通道选择")
                             font.pixelSize: 16
                             color: "#333333"
@@ -178,30 +190,12 @@ Item {
                                 var names = []
                                 var count = experiment_ctrl ? experiment_ctrl.channelCount : 4
                                 for (var i = 0; i < count; ++i) {
-                                    names.push(experiment_ctrl ? experiment_ctrl.channelDisplayName(i) : "")
+                                    if (!experiment_ctrl || !experiment_ctrl.isExperimentRunning(i)) {
+                                        names.push(experiment_ctrl ? experiment_ctrl.channelDisplayName(i) : "")
+                                    }
                                 }
                                 return names
                             }
-                        }
-                    }
-
-                    RowLayout {
-                        Layout.alignment: Qt.AlignHCenter
-                        spacing: 12
-
-                        Text {
-                            Layout.preferredWidth: 80
-                            text: qsTr("校准类型")
-                            font.pixelSize: 16
-                            color: "#333333"
-                            horizontalAlignment: Text.AlignRight
-                        }
-
-                        UiComboBox {
-                            id: calibrationTypeCombo
-                            Layout.preferredWidth: 180
-                            Layout.preferredHeight: 42
-                            model: root.calibrationTypeOptions
                         }
                     }
 
@@ -217,42 +211,11 @@ Item {
                             horizontalAlignment: Text.AlignRight
                         }
 
-                        LineEdit {
-                            id: scanStartInput
-                            Layout.preferredWidth: 70
-                            Layout.preferredHeight: 42
-                            font.pixelSize: 18
-                            m_radius: 4
-                            border_color: "#82C1F2"
-                            text: "0"
-                            inputMethodHints: Qt.ImhDigitsOnly
-                            input_rules: RegExpValidator { regExp: /^\d*$/ }
-                            onTextChanged: root.updateExpectedPointCount()
-                        }
-
                         Text {
-                            text: "mm ~"
-                            font.pixelSize: 15
-                            color: "#333333"
-                        }
-
-                        LineEdit {
-                            id: scanEndInput
-                            Layout.preferredWidth: 70
-                            Layout.preferredHeight: 42
-                            font.pixelSize: 18
-                            m_radius: 4
-                            border_color: "#82C1F2"
-                            text: "55"
-                            inputMethodHints: Qt.ImhDigitsOnly
-                            input_rules: RegExpValidator { regExp: /^\d*$/ }
-                            onTextChanged: root.updateExpectedPointCount()
-                        }
-
-                        Text {
-                            text: "mm"
-                            font.pixelSize: 15
-                            color: "#333333"
+                            Layout.preferredWidth: 180
+                            font.pixelSize: 16
+                            color: "#666666"
+                            text: "0 mm ~ 55 mm"
                         }
                     }
 
@@ -268,18 +231,13 @@ Item {
                             horizontalAlignment: Text.AlignRight
                         }
 
-                        UiComboBox {
-                            id: scanStepCombo
-                            Layout.preferredWidth: 140
-                            Layout.preferredHeight: 42
-                            model: root.scanStepModel
-                            onCurrentIndexChanged: root.updateExpectedPointCount()
-                        }
-
                         Text {
-                            text: "μm"
-                            font.pixelSize: 15
-                            color: "#333333"
+                            Layout.preferredWidth: 180
+                            Layout.preferredHeight: 42
+                            text: "20 μm"
+                            font.pixelSize: 16
+                            color: "#666666"
+                            verticalAlignment: Text.AlignVCenter
                         }
                     }
                 }
@@ -294,8 +252,8 @@ Item {
 
                 ColumnLayout {
                     anchors.centerIn: parent
-                    anchors.verticalCenterOffset: 30
-                    spacing: 12
+                    anchors.verticalCenterOffset: 20
+                    spacing: 8
                     width: parent.width - 40
 
                     RowLayout {
@@ -307,12 +265,12 @@ Item {
                             text: qsTr("采样点数")
                             font.pixelSize: 16
                             color: "#333333"
-                            horizontalAlignment: Text.AlignRight
+                            horizontalAlignment: Text.AlignHCenter
                         }
 
                         Rectangle {
                             Layout.preferredWidth: 160
-                            Layout.preferredHeight: 38
+                            Layout.preferredHeight: 32
                             radius: 4
                             color: "#FFFFFF"
                             border.color: "#E5EAF1"
@@ -325,64 +283,7 @@ Item {
                                 color: "#333333"
                             }
                         }
-                    }
 
-                    RowLayout {
-                        Layout.alignment: Qt.AlignHCenter
-                        spacing: 12
-
-                        Text {
-                            Layout.preferredWidth: 100
-                            text: qsTr("预期点数")
-                            font.pixelSize: 16
-                            color: "#333333"
-                            horizontalAlignment: Text.AlignRight
-                        }
-
-                        Rectangle {
-                            Layout.preferredWidth: 160
-                            Layout.preferredHeight: 38
-                            radius: 4
-                            color: "#FFFFFF"
-                            border.color: "#E5EAF1"
-                            border.width: 1
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: expectedPointCount > 0 ? expectedPointCount.toString() : "-"
-                                font.pixelSize: 16
-                                color: "#333333"
-                            }
-                        }
-                    }
-
-                    RowLayout {
-                        Layout.alignment: Qt.AlignHCenter
-                        spacing: 12
-
-                        Text {
-                            Layout.preferredWidth: 100
-                            text: qsTr("平均光强")
-                            font.pixelSize: 16
-                            color: "#333333"
-                            horizontalAlignment: Text.AlignRight
-                        }
-
-                        Rectangle {
-                            Layout.preferredWidth: 160
-                            Layout.preferredHeight: 38
-                            radius: 4
-                            color: "#FFFFFF"
-                            border.color: "#E5EAF1"
-                            border.width: 1
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: averageIntensity > 0 ? averageIntensity.toFixed(2) : "-"
-                                font.pixelSize: 16
-                                color: "#333333"
-                            }
-                        }
                     }
 
                     RowLayout {
@@ -394,12 +295,12 @@ Item {
                             text: qsTr("状态")
                             font.pixelSize: 16
                             color: "#333333"
-                            horizontalAlignment: Text.AlignRight
+                            horizontalAlignment: Text.AlignHCenter
                         }
 
                         Rectangle {
                             Layout.preferredWidth: 160
-                            Layout.preferredHeight: 38
+                            Layout.preferredHeight: 32
                             radius: 4
                             color: "#FFFFFF"
                             border.color: "#E5EAF1"
@@ -408,8 +309,97 @@ Item {
                             Text {
                                 anchors.centerIn: parent
                                 text: calibStatus
-                                font.pixelSize: 16
+                                font.pixelSize: 12
                                 color: calibStatusColor
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        spacing: 12
+
+                        Text {
+                            Layout.preferredWidth: 100
+                            text: calibratedLightType === "transmission" ? qsTr("透射光强均值") : qsTr("背射光强均值")
+                            font.pixelSize: 16
+                            color: "#333333"
+                            horizontalAlignment: Text.AlignRight
+                        }
+
+                        Rectangle {
+                            Layout.preferredWidth: 160
+                            Layout.preferredHeight: 32
+                            radius: 4
+                            color: "#FFFFFF"
+                            border.color: "#E5EAF1"
+                            border.width: 1
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: lightAvg > 0 ? lightAvg.toFixed(2) : "-"
+                                font.pixelSize: 16
+                                color: "#333333"
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        spacing: 12
+
+                        Text {
+                            Layout.preferredWidth: 100
+                            text: calibratedLightType === "transmission" ? qsTr("透射光强范围") : qsTr("背射光强范围")
+                            font.pixelSize: 16
+                            color: "#333333"
+                            horizontalAlignment: Text.AlignRight
+                        }
+
+                        Rectangle {
+                            Layout.preferredWidth: 160
+                            Layout.preferredHeight: 32
+                            radius: 4
+                            color: "#FFFFFF"
+                            border.color: "#E5EAF1"
+                            border.width: 1
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: (lightMax > 0 || lightMin > 0)
+                                      ? lightMin.toFixed(1) + " ~ " + lightMax.toFixed(1)
+                                      : "-"
+                                font.pixelSize: 14
+                                color: "#333333"
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        spacing: 12
+
+                        Text {
+                            Layout.preferredWidth: 100
+                            text: qsTr("最近校准时间")
+                            font.pixelSize: 16
+                            color: "#333333"
+                            horizontalAlignment: Text.AlignRight
+                        }
+
+                        Rectangle {
+                            Layout.preferredWidth: 160
+                            Layout.preferredHeight: 32
+                            radius: 4
+                            color: "#FFFFFF"
+                            border.color: "#E5EAF1"
+                            border.width: 1
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: lastCalibrationTime !== "" ? lastCalibrationTime : "-"
+                                font.pixelSize: 13
+                                color: "#333333"
                             }
                         }
                     }
@@ -417,7 +407,7 @@ Item {
                     IconButton {
                         id: startButton
                         Layout.alignment: Qt.AlignHCenter
-                        Layout.topMargin: 10
+                        Layout.topMargin: 6
                         Layout.preferredWidth: 190
                         Layout.preferredHeight: 48
                         button_text: qsTr("开始校准")

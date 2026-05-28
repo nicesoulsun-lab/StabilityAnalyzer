@@ -95,6 +95,24 @@ void ExperimentCtrl::setDataTransmitController(DataTransmitController *controlle
     if (m_dataTransmitCtrl) {
         connect(m_dataTransmitCtrl, &DataTransmitController::experimentChannelsChanged,
                 this, &ExperimentCtrl::syncExperimentChannelsFromDevice, Qt::UniqueConnection);
+        connect(m_dataTransmitCtrl, &DataTransmitController::streamMessageReceived,
+                this, [this](const QVariantMap &message) {
+            const QString type = message.value(QStringLiteral("type")).toString();
+            if (type == QStringLiteral("calibration_progress")) {
+                const int channel = message.value(QStringLiteral("channel")).toInt();
+                const int currentRound = message.value(QStringLiteral("current_round")).toInt();
+                const int totalRounds = message.value(QStringLiteral("total_rounds"), 3).toInt();
+                emit calibrationProgress(channel, currentRound, totalRounds);
+            } else if (type == QStringLiteral("calibration_completed")) {
+                const int channel = message.value(QStringLiteral("channel")).toInt();
+                const QVariantMap summary = message.value(QStringLiteral("summary")).toMap();
+                emit calibrationCompleted(channel, summary);
+            } else if (type == QStringLiteral("calibration_failed")) {
+                const int channel = message.value(QStringLiteral("channel")).toInt();
+                const QString reason = message.value(QStringLiteral("reason")).toString();
+                emit calibrationFailed(channel, reason);
+            }
+        }, Qt::UniqueConnection);
         syncExperimentChannelsFromDevice();
     }
 }
@@ -374,7 +392,7 @@ bool ExperimentCtrl::isExperimentRunning(int channel) const
     return isChannelRunningOnDevice(m_dataTransmitCtrl, channel);
 }
 
-bool ExperimentCtrl::startCalibrationScan(int channel, int scanRangeStart, int scanRangeEnd, int scanStep)
+bool ExperimentCtrl::startCalibration(int channel, const QString& calibrationType)
 {
     if (!isValidChannelIndex(channel)) {
         emit operationFailed(tr("无效的实验通道"));
@@ -392,60 +410,17 @@ bool ExperimentCtrl::startCalibrationScan(int channel, int scanRangeStart, int s
 
     QVariantMap response;
     const bool success = sendRequestAndWait(
-        QStringLiteral("start_calibration_scan"),
+        QStringLiteral("start_calibration"),
         {{"channel", channel},
-         {"scan_range_start", scanRangeStart},
-         {"scan_range_end", scanRangeEnd},
-         {"scan_step", scanStep}},
+         {"calibration_type", calibrationType},
+         {"scan_range_start", 0},
+         {"scan_range_end", 55}},
         &response,
         10000);
 
     if (!success) {
         const QString message = response.value("message").toString();
-        emit operationFailed(message.isEmpty() ? tr("校准扫描启动失败") : message);
-    }
-    return success;
-}
-
-bool ExperimentCtrl::sendCalibration(int channel, int transmissionRef, int backscatterRef)
-{
-    if (!isValidChannelIndex(channel)) {
-        emit operationFailed(tr("无效的实验通道"));
-        return false;
-    }
-    if (!m_dataTransmitCtrl
-        || m_dataTransmitCtrl->deviceUiConnectionStateText() != QStringLiteral("Connected")) {
-        emit operationFailed(tr("设备未连接，请检查连接状态"));
-        return false;
-    }
-
-    const Channel ch = static_cast<Channel>(channel);
-    // 只更新本次校准类型的值，保留另一种光的已有值
-    if (transmissionRef > 0) {
-        m_transmissionCalibrations[ch] = transmissionRef;
-    }
-    if (backscatterRef > 0) {
-        m_backscatterCalibrations[ch] = backscatterRef;
-    }
-
-    // 下发时使用合并后的最终值
-    const int finalTransRef = m_transmissionCalibrations.value(ch, 0);
-    const int finalBackRef = m_backscatterCalibrations.value(ch, 0);
-
-    QVariantMap response;
-    const bool success = sendRequestAndWait(
-        QStringLiteral("set_calibration"),
-        {{"channel", channel},
-         {"transmission_reference", finalTransRef},
-         {"backscatter_reference", finalBackRef}},
-        &response);
-
-    if (!success) {
-        // 下发失败时回滚缓存
-        if (transmissionRef > 0) m_transmissionCalibrations.remove(ch);
-        if (backscatterRef > 0) m_backscatterCalibrations.remove(ch);
-        const QString message = response.value("message").toString();
-        emit operationFailed(message.isEmpty() ? tr("校准参数下发失败") : message);
+        emit operationFailed(message.isEmpty() ? tr("校准启动失败") : message);
     }
     return success;
 }

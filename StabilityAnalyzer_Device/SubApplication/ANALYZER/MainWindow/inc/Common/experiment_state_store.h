@@ -55,12 +55,6 @@ public:
     QVariantMap channelStatus(int channel) const;
     bool updateChannelStatus(int channel, const QVariantMap& patch, QVariantMap* mergedStatus = nullptr);
 
-    void setCalibration(int channel, int transmissionRef, int backscatterRef);
-    int transmissionCalibration(int channel) const;
-    int backscatterCalibration(int channel) const;
-    void saveCalibration(int channel) const;
-    void loadCalibration(int channel);
-
     QVector<QVariantMap>* memoryCache(int channel);
     void clearMemoryCache(int channel);
 
@@ -70,8 +64,6 @@ private:
     QMap<int, ExperimentParams> m_params;
     QMap<int, QVariantMap> m_channelStatuses;
     QMap<int, QVector<QVariantMap>> m_memoryDataCache;
-    QMap<int, int> m_transmissionCalibrations;
-    QMap<int, int> m_backscatterCalibrations;
 };
 
 #endif

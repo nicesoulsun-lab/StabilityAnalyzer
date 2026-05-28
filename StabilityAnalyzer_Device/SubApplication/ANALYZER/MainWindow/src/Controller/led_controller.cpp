@@ -4,6 +4,7 @@
 #include <QFile>
 
 const QString LedController::kSysfsBase = QStringLiteral("/sys/class/leds");
+constexpr int LedController::kErrorEnterThreshold;
 
 LedController::LedController(QObject *parent)
     : QObject(parent)
@@ -193,7 +194,7 @@ void LedController::updateBlinkPhase()
             setLedColor(led, m_blinkPhase ? state.color : Color(kBlinkOffValue, kBlinkOffValue, kBlinkOffValue));
             break;
         case Flow: {
-            // 判断当前LED是否在流水亮区（含拖尾）
+            // 判断当前LED是否在流水亮区
             bool lit = false;
             for (int t = 0; t < kFlowTrailLength; ++t) {
                 int activeIdx = (m_flowIndex - t + m_ledCount) % m_ledCount;
