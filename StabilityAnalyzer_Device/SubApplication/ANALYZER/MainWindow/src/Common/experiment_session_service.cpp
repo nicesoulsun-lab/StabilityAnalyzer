@@ -244,18 +244,19 @@ QVector<QVariantMap> ExperimentSessionService::buildRowsFromStorageData(int chan
 
 QVector<QVariantMap> ExperimentSessionService::buildCalibrationRows(
     int channel, const QVector<quint16>& raw, bool areaA,
-    double scanRangeStartMm, double scanStepUm) const
+    double scanRangeStartMm, double scanStepUm, int globalStartPairIndex) const
 {
     Q_UNUSED(channel)
+    Q_UNUSED(areaA)
     QVector<QVariantMap> dataList;
     const int pairCount = raw.size() / 2;
-    const int startPointIndex = areaA ? 0 : 250;
     dataList.reserve(pairCount);
 
+    // 使用全局位置索引计算高度，避免多轮 fetch 时高度重复
     for (int i = 0; i < pairCount; ++i) {
         QVariantMap row;
         row["height"] = (scanRangeStartMm * 1000.0
-                         + static_cast<double>(startPointIndex + i) * scanStepUm) / 1000.0;
+                         + static_cast<double>(globalStartPairIndex + i) * scanStepUm) / 1000.0;
         row["transmission_intensity"] = static_cast<double>(raw[i * 2]);
         row["backscatter_intensity"] = static_cast<double>(raw[i * 2 + 1]);
         dataList.append(row);
@@ -297,8 +298,53 @@ QVector<QVariantMap> ExperimentSessionService::parseStoragePairs(int channel,
         const int rawTransmission = raw[(i * 2)];
         const int rawBackscatter = raw[(i * 2) + 1];
 
-        row["transmission_intensity"] = static_cast<double>(rawTransmission);
-        row["backscatter_intensity"] = static_cast<double>(rawBackscatter);
+        // 按当前采样点的高度查找校准参考值
+        const double calTransRef = findCalibrationAvgTransmission(channel, heightUm);
+        const double calBackRef = findCalibrationAvgBackscatter(channel, heightUm);
+
+        // 校准转换：ref > 0 时归一化为百分比，ref == 0 时保留原始值
+        const double transIntensity = [&]() {
+            if (calTransRef > 0.0) {
+                const double result = static_cast<double>(rawTransmission) / calTransRef * 100.0;
+                if (result > 100.0) {
+                    qWarning() << "[校准异常] 通道" << channel
+                               << "高度=" << heightUm << "μm"
+                               << "透射原始值=" << rawTransmission
+                               << "校准值=" << calTransRef
+                               << "计算结果=" << result;
+                }
+                return result;
+            }
+            qWarning() << "[校准缺失] 通道" << channel
+                       << "高度=" << heightUm << "μm"
+                       << "透射校准值未找到"
+                       << "原始值=" << rawTransmission
+                       << "计算结果=" << rawTransmission;
+            return static_cast<double>(rawTransmission);
+        }();
+
+        const double backIntensity = [&]() {
+            if (calBackRef > 0.0) {
+                const double result = static_cast<double>(rawBackscatter) / calBackRef * 100.0;
+                if (result > 100.0) {
+//                    qWarning() << "[校准异常] 通道" << channel
+//                               << "高度=" << heightUm << "μm"
+//                               << "背射原始值=" << rawBackscatter
+//                               << "校准值=" << calBackRef
+//                               << "计算结果=" << result;
+                }
+                return result;
+            }
+//            qWarning() << "[校准缺失] 通道" << channel
+//                       << "高度=" << heightUm << "μm"
+//                       << "背射校准值未找到"
+//                       << "原始值=" << rawBackscatter
+//                       << "计算结果=" << rawBackscatter;
+            return static_cast<double>(rawBackscatter);
+        }();
+
+        row["transmission_intensity"] = transIntensity;
+        row["backscatter_intensity"] = backIntensity;
 
         row["channel"] = channel;
         row["point_index"] = pointIndex;

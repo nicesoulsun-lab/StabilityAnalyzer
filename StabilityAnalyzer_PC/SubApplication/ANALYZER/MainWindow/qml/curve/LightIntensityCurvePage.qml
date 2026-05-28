@@ -865,12 +865,12 @@ Rectangle {
                                     width: parent.width - 26
 
                                     Repeater {
-                                        model: Math.min(14, displayedCurves.length)
+                                        model: Math.min(30, displayedCurves.length)
 
                                         delegate: Item {
                                             width: parent.width
                                             height: 20
-                                            property int markerCount: Math.min(14, displayedCurves.length)
+                                            property int markerCount: Math.min(30, displayedCurves.length)
                                             property int curveIndex: displayedCurves.length <= 1 ? 0 : Math.round(index * (displayedCurves.length - 1) / Math.max(markerCount - 1, 1))
                                             y: markerCount <= 1 ? 0 : index * (parent.height - height) / (markerCount - 1)
 

@@ -37,7 +37,8 @@ public:
                                                const QVector<quint16>& raw,
                                                bool areaA,
                                                double scanRangeStartMm,
-                                               double scanStepUm) const;
+                                               double scanStepUm,
+                                               int globalStartPairIndex) const;
 
 private:
     void refreshCurrentScanCount(int channel);

@@ -835,6 +835,13 @@ void ExperimentCtrl::tryFetchCalibrationData(int channel, int storageAReadableCo
     const Channel ch = static_cast<Channel>(channel);
     const CalibrationScanState& state = m_calibrationScanStates.value(ch);
 
+    // 当前轮次已累积的点数，作为本次 fetch 的全局起始位置
+    CalibrationScanState& mutableState = m_calibrationScanStates[ch];
+    const int roundIndex = mutableState.scanRound - 1;
+    const int accumulatedPairs = (roundIndex >= 0 && roundIndex < mutableState.scanRoundRows.size())
+                                     ? mutableState.scanRoundRows[roundIndex].size() : 0;
+    int globalPairIndex = accumulatedPairs;
+
     QVector<QVariantMap> batchRows;
 
     // 从下位机 A/B 存储区读取校准原始数据
@@ -843,9 +850,12 @@ void ExperimentCtrl::tryFetchCalibrationData(int channel, int storageAReadableCo
         storageAReadableCount, storageBReadableCount,
         storageAState, storageBState,
         [this](int targetChannel) { return getDeviceId(targetChannel); },
-        [this, state](int targetChannel, const QVector<quint16>& raw, bool areaA) {
-            return m_sessionService->buildCalibrationRows(
-                targetChannel, raw, areaA, state.scanRangeStartMm, state.scanStepUm);
+        [this, state, &globalPairIndex](int targetChannel, const QVector<quint16>& raw, bool areaA) {
+            const int startIndex = globalPairIndex;
+            auto rows = m_sessionService->buildCalibrationRows(
+                targetChannel, raw, areaA, state.scanRangeStartMm, state.scanStepUm, startIndex);
+            globalPairIndex += rows.size();
+            return rows;
         },
         [this](int targetChannel, const QString& command, const QVariantMap& params) {
             return sendControlCommand(targetChannel, command, params);

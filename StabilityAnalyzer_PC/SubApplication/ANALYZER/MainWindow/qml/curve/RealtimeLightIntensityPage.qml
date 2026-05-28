@@ -538,12 +538,12 @@ Rectangle {
                                 width: parent.width - 26
 
                                 Repeater {
-                                    model: Math.min(14, realtimeLightPanel.displayedCurveCount)
+                                    model: Math.min(30, realtimeLightPanel.displayedCurveCount)
 
                                     delegate: Item {
                                         width: parent.width
                                         height: 20
-                                        property int markerCount: Math.min(14, realtimeLightPanel.displayedCurveCount)
+                                        property int markerCount: Math.min(30, realtimeLightPanel.displayedCurveCount)
                                         property int curveIndex: realtimeLightPanel.displayedCurveCount <= 1
                                                                  ? 0
                                                                  : Math.round(index * (realtimeLightPanel.displayedCurveCount - 1) / Math.max(markerCount - 1, 1))

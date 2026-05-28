@@ -49,6 +49,7 @@ signals:
 private slots:
     void onScanDataChunkReady(int channel, int experimentId, int scanId,
                               bool scanCompleted, const QVariantList &rows);
+    void onExperimentStarted(int channel, int experimentId);
 
 private:
     void rebuildCurve(const QVariantList &rows);
@@ -59,7 +60,7 @@ private:
 
     ExperimentCtrl *m_experimentCtrl;
     dataCtrl *m_dataCtrl;
-    int m_channel;
+    int m_channel;                 // 当前监听的通道号
     int m_currentExperimentId;
 
     QVariantList m_transmissionPoints;
@@ -72,9 +73,9 @@ private:
     qreal m_maxBackscatter;
     bool m_hasData;
 
-    int m_lastScanId;
-    QVector<QPointF> m_accumulatedTransPoints;
-    QVector<QPointF> m_accumulatedBackPoints;
+    int m_lastScanId;                            // 上一次的扫描ID，用于检测新扫描开始
+    QVector<QPointF> m_accumulatedTransPoints;    // 累积的透射点（增量绘制用）
+    QVector<QPointF> m_accumulatedBackPoints;     // 累积的背向散射点（增量绘制用）
 };
 
 #endif

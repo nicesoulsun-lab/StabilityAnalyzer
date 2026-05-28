@@ -26,6 +26,8 @@ RealtimeCurveCtrl::RealtimeCurveCtrl(ExperimentCtrl *experimentCtrl, dataCtrl *d
     if (m_experimentCtrl) {
         connect(m_experimentCtrl, &ExperimentCtrl::scanDataChunkReady,
                 this, &RealtimeCurveCtrl::onScanDataChunkReady);
+        connect(m_experimentCtrl, &ExperimentCtrl::experimentStarted,
+                this, &RealtimeCurveCtrl::onExperimentStarted);
         qDebug() << "[RealtimeCurveCtrl] created, connected to scanDataChunkReady";
     } else {
         qWarning() << "[RealtimeCurveCtrl] created BUT experimentCtrl is NULL!";
@@ -116,12 +118,16 @@ void RealtimeCurveCtrl::clearData()
     emit dataUpdated();
 }
 
+// 处理扫描数据块就绪信号
+// 根据扫描是否完成，采用整体重建或增量追加两种方式更新曲线
 void RealtimeCurveCtrl::onScanDataChunkReady(int channel, int experimentId, int scanId,
-                                              bool scanCompleted, const QVariantList &rows)
+                                             bool scanCompleted, const QVariantList &rows)
 {
+    // 只处理当前通道的数据
     if (channel != m_channel)
         return;
 
+    // 空数据块直接忽略
     if (rows.isEmpty())
         return;
 
@@ -134,6 +140,7 @@ void RealtimeCurveCtrl::onScanDataChunkReady(int channel, int experimentId, int 
 
     m_currentExperimentId = experimentId;
 
+    // 检测到新的扫描，清除上一轮扫描的累积数据
     if (scanId != m_lastScanId && m_lastScanId >= 0) {
         qDebug() << "[RealtimeCurveCtrl] new scan detected, clearing old data"
                  << "oldScanId=" << m_lastScanId << "newScanId=" << scanId;
@@ -142,6 +149,8 @@ void RealtimeCurveCtrl::onScanDataChunkReady(int channel, int experimentId, int 
     }
     m_lastScanId = scanId;
 
+    // 扫描完成：清空累积缓冲，使用完整数据重建曲线
+    // 扫描未完成：将增量数据追加到累积缓冲，增量刷新曲线
     if (scanCompleted) {
         m_accumulatedTransPoints.clear();
         m_accumulatedBackPoints.clear();
@@ -149,6 +158,24 @@ void RealtimeCurveCtrl::onScanDataChunkReady(int channel, int experimentId, int 
     } else {
         appendIncrementalData(rows);
     }
+}
+
+// 处理新实验开始信号，清空当前通道的曲线数据与累积缓冲
+void RealtimeCurveCtrl::onExperimentStarted(int channel, int experimentId)
+{
+    // 只处理当前通道
+    if (channel != m_channel)
+        return;
+
+    qDebug() << "[RealtimeCurveCtrl] new experiment started, clearing curve"
+             << "channel=" << channel << "experimentId=" << experimentId;
+
+    // 重置实验和扫描状态，清空所有缓存和曲线
+    m_currentExperimentId = experimentId;
+    m_lastScanId = -1;
+    m_accumulatedTransPoints.clear();
+    m_accumulatedBackPoints.clear();
+    clearData();
 }
 
 void RealtimeCurveCtrl::appendIncrementalData(const QVariantList &rows)
