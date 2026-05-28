@@ -127,6 +127,7 @@ signals:
     // 导入完成后回写设备端状态，避免同一条记录被重复导入。
     void markExperimentImportedRequested(int experimentId, int status, const QString &requestId);
     void calibrationRequested(int channel, const QString& calibrationType, const QString &requestId);
+    void calibrationTimeRequested(int channel, const QString& calibrationType, const QString &requestId);
 
 private slots:
     /* 函数功能：执行启动状态机下一步。 */

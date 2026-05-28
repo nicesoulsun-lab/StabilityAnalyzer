@@ -421,6 +421,9 @@ public:
     QVector<QVariantMap> getCalibrationAvgDataByChannel(int channel);
     bool clearCalibrationAvgDataByChannel(int channel);
 
+    bool insertCalibrationMeta(int channel, const QString& calibrationType, const QString& calibratedAt);
+    QString getLastCalibrationTimeByType(int channel, const QString& calibrationType);
+
     // ========================================================================
     // 数据库操作
     // ========================================================================

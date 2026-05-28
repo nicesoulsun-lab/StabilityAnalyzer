@@ -256,6 +256,16 @@ public:
                 QVariantMap{{QStringLiteral("channel"), channel}});
         });
 
+        QObject::connect(m_dataTransmitCtrl, &DataTransmitController::calibrationTimeRequested,
+                         this,
+                         [this](int channel, const QString& calibrationType, const QString &requestId) {
+            const QString time = m_experimentCtrl->getLastCalibrationTime(channel, calibrationType);
+            m_dataTransmitCtrl->sendCommandResult(
+                QStringLiteral("get_calibration_time"), requestId, true,
+                QStringLiteral(""),
+                QVariantMap{{QStringLiteral("calibrated_at"), time}});
+        });
+
         QObject::connect(m_experimentCtrl, &ExperimentCtrl::calibrationProgress,
                          this,
                          [this](int channel, int currentRound, int totalRounds) {

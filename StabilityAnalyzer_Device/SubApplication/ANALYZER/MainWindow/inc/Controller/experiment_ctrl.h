@@ -62,7 +62,7 @@ public:
 
     Q_INVOKABLE void startCalibration(int channel, const QString& calibrationType);
 
-    Q_INVOKABLE QString getLastCalibrationTime(int channel) const;
+    Q_INVOKABLE QString getLastCalibrationTime(int channel, const QString& calibrationType) const;
 
 signals:
     void experimentStarted(int channel, int experimentId);

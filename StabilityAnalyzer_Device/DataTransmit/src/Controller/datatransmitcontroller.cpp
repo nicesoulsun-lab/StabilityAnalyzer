@@ -448,6 +448,19 @@ void DataTransmitController::handleControlMessage(const QJsonObject &message)
         return;
     }
 
+    if (command == QStringLiteral("get_calibration_time")) {
+        const int channel = message.value(QStringLiteral("channel")).toInt();
+        const QString calibrationType = message.value(QStringLiteral("calibration_type")).toString();
+        if (channel < 0 || channel >= 4) {
+            m_controlServer->sendControlMessage(
+                buildCommandResult(command, requestId, false,
+                                   QStringLiteral("Invalid channel")));
+            return;
+        }
+        emit calibrationTimeRequested(channel, calibrationType, requestId);
+        return;
+    }
+
     QJsonObject response;
     response.insert(QStringLiteral("type"), QStringLiteral("ack"));
     response.insert(QStringLiteral("cmd"), command);

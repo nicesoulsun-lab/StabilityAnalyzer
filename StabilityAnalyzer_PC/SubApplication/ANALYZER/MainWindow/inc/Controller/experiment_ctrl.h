@@ -73,6 +73,8 @@ public:
 
     Q_INVOKABLE bool startCalibration(int channel, const QString& calibrationType);
 
+    Q_INVOKABLE QString getLastCalibrationTime(int channel, const QString& calibrationType);
+
     Q_INVOKABLE int getCurrentScanCount(int channel) const;
     Q_INVOKABLE int getCurrentExperimentId(int channel) const;
     Q_INVOKABLE qint64 getElapsedTime(int channel) const;

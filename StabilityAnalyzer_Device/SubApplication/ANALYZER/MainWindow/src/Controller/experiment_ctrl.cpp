@@ -981,6 +981,8 @@ void ExperimentCtrl::computeCalibrationAverage(int channel)
     summary.minBackscatter = minBack;
     summary.calibratedAt = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd hh:mm:ss"));
 
+    m_dbManager->insertCalibrationMeta(channel, calType, summary.calibratedAt);
+
     m_calibrationModes[ch] = false;
     m_calibrationScanStates.remove(ch);
 
@@ -1010,13 +1012,9 @@ QVariantMap ExperimentCtrl::calibrationSummaryToVariantMap(const CalibrationSumm
     return m;
 }
 
-QString ExperimentCtrl::getLastCalibrationTime(int channel) const
+QString ExperimentCtrl::getLastCalibrationTime(int channel, const QString& calibrationType) const
 {
-    const QVector<QVariantMap> rows = m_dbManager->getCalibrationAvgDataByChannel(channel);
-    if (rows.isEmpty()) {
-        return QString();
-    }
-    return rows.last().value("created_at").toString();
+    return m_dbManager->getLastCalibrationTimeByType(channel, calibrationType);
 }
 
 void ExperimentCtrl::onScanTimer(int channel)

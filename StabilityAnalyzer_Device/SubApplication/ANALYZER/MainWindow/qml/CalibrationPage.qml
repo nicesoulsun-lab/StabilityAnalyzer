@@ -20,19 +20,18 @@ Item {
     property double lightMax: 0.0
     property double lightMin: 0.0
     property string calibratedLightType: ""
-    property string lastCalibrationTime: ""
+    property string lastTransCalTime: ""
+    property string lastBackCalTime: ""
     property string calibStatus: qsTr("未校准")
     property string calibStatusColor: "#999999"
 
-    function refreshChannelOptions() {
-        var names = []
-        var count = experiment_ctrl ? experiment_ctrl.channelCount : 4
-        for (var i = 0; i < count; ++i) {
-            if (!experiment_ctrl || !experiment_ctrl.isExperimentRunning(i)) {
-                names.push(experiment_ctrl ? experiment_ctrl.channelDisplayName(i) : "")
-            }
-        }
-        channelCombo.model = names
+    property string currentCalibrationTime: calibrationTypeCombo.currentIndex === 0 ? lastTransCalTime : lastBackCalTime
+
+    function refreshCalibrationTime() {
+        var ch = channelCombo.currentIndex
+        if (ch < 0 || !experiment_ctrl) return
+        lastTransCalTime = experiment_ctrl.getLastCalibrationTime(ch, "transmission") || ""
+        lastBackCalTime = experiment_ctrl.getLastCalibrationTime(ch, "backscatter") || ""
     }
 
     function resetState() {
@@ -90,12 +89,13 @@ Item {
 
             samplePointCount = summary.total_points || 0
             calibratedLightType = summary.calibration_type || ""
-            lastCalibrationTime = summary.calibrated_at || ""
             if (calibratedLightType === "transmission") {
+                lastTransCalTime = summary.calibrated_at || ""
                 lightAvg = summary.overall_avg_transmission || 0.0
                 lightMax = summary.max_transmission || 0.0
                 lightMin = summary.min_transmission || 0.0
             } else {
+                lastBackCalTime = summary.calibrated_at || ""
                 lightAvg = summary.overall_avg_backscatter || 0.0
                 lightMax = summary.max_backscatter || 0.0
                 lightMin = summary.min_backscatter || 0.0
@@ -120,7 +120,7 @@ Item {
         }
     }
 
-    Component.onCompleted: refreshChannelOptions()
+    Component.onCompleted: refreshCalibrationTime()
 
     Column {
         anchors.centerIn: parent
@@ -161,11 +161,10 @@ Item {
                             model: root.calibrationTypeOptions
 
                             onCurrentIndexChanged: {
-                                if(currentIndex === 0)
+                                if (currentIndex === 0)
                                     calibratedLightType = "transmission"
-                                else{
-                                    calibratedLightType = ""
-                                }
+                                else
+                                    calibratedLightType = "backscatter"
                             }
                         }
                     }
@@ -196,6 +195,7 @@ Item {
                                 }
                                 return names
                             }
+                            onCurrentIndexChanged: root.refreshCalibrationTime()
                         }
                     }
 
@@ -397,7 +397,7 @@ Item {
 
                             Text {
                                 anchors.centerIn: parent
-                                text: lastCalibrationTime !== "" ? lastCalibrationTime : "-"
+                                text: currentCalibrationTime !== "" ? currentCalibrationTime : "-"
                                 font.pixelSize: 13
                                 color: "#333333"
                             }

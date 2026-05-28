@@ -425,6 +425,22 @@ bool ExperimentCtrl::startCalibration(int channel, const QString& calibrationTyp
     return success;
 }
 
+QString ExperimentCtrl::getLastCalibrationTime(int channel, const QString& calibrationType)
+{
+    QVariantMap response;
+    const bool success = sendRequestAndWait(
+        QStringLiteral("get_calibration_time"),
+        {{"channel", channel},
+         {"calibration_type", calibrationType}},
+        &response,
+        5000);
+
+    if (success) {
+        return response.value("calibrated_at").toString();
+    }
+    return {};
+}
+
 int ExperimentCtrl::getCurrentScanCount(int channel) const
 {
     if (!isValidChannelIndex(channel)) {

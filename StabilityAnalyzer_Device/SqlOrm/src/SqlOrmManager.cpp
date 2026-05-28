@@ -209,6 +209,13 @@ struct CalibrationAvgData {
     QString created_at;
 };
 
+struct CalibrationMeta {
+    int id;
+    int channel;
+    QString calibration_type;
+    QString calibrated_at;
+};
+
 // ============================================================================
 // 数据库存储类
 // ============================================================================
@@ -299,6 +306,12 @@ public:
                                        make_column("avg_backscatter_intensity", &CalibrationAvgData::avg_backscatter_intensity),
                                        make_column("scan_count", &CalibrationAvgData::scan_count),
                                        make_column("created_at", &CalibrationAvgData::created_at)
+                                       ),
+                            make_table("calibration_meta",
+                                       make_column("id", &CalibrationMeta::id, primary_key().autoincrement()),
+                                       make_column("channel", &CalibrationMeta::channel),
+                                       make_column("calibration_type", &CalibrationMeta::calibration_type),
+                                       make_column("calibrated_at", &CalibrationMeta::calibrated_at)
                                        )
                             );
     }
@@ -2327,4 +2340,62 @@ bool SqlOrmManager::clearCalibrationAvgDataByChannel(int channel)
     db.close();
     closeQtDb(connectionName);
     return ok;
+}
+
+bool SqlOrmManager::insertCalibrationMeta(int channel, const QString& calibrationType, const QString& calibratedAt)
+{
+    Q_D(SqlOrmManager);
+    if (!d->initialized) return false;
+
+    const QString connectionName = makeMigrationConnectionName();
+    QSqlDatabase db = openQtDb(d->dbPath, connectionName);
+    if (!db.open()) {
+        qWarning() << "[SqlOrmManager] insertCalibrationMeta open db failed:" << db.lastError().text();
+        closeQtDb(connectionName);
+        return false;
+    }
+
+    QSqlQuery query(db);
+    query.prepare(QStringLiteral(
+        "INSERT INTO calibration_meta (channel, calibration_type, calibrated_at) VALUES (?, ?, ?)"));
+    query.addBindValue(channel);
+    query.addBindValue(calibrationType);
+    query.addBindValue(calibratedAt);
+    const bool ok = query.exec();
+    if (!ok) {
+        qWarning() << "[SqlOrmManager] insertCalibrationMeta failed:" << query.lastError().text();
+    }
+
+    db.close();
+    closeQtDb(connectionName);
+    return ok;
+}
+
+QString SqlOrmManager::getLastCalibrationTimeByType(int channel, const QString& calibrationType)
+{
+    Q_D(SqlOrmManager);
+    if (!d->initialized) return {};
+
+    const QString connectionName = makeMigrationConnectionName();
+    QSqlDatabase db = openQtDb(d->dbPath, connectionName);
+    if (!db.open()) {
+        qWarning() << "[SqlOrmManager] getLastCalibrationTimeByType open db failed:" << db.lastError().text();
+        closeQtDb(connectionName);
+        return {};
+    }
+
+    QSqlQuery query(db);
+    query.prepare(QStringLiteral(
+        "SELECT MAX(calibrated_at) FROM calibration_meta WHERE channel = ? AND calibration_type = ?"));
+    query.addBindValue(channel);
+    query.addBindValue(calibrationType);
+
+    QString result;
+    if (query.exec() && query.next()) {
+        result = query.value(0).toString();
+    }
+
+    db.close();
+    closeQtDb(connectionName);
+    return result;
 }

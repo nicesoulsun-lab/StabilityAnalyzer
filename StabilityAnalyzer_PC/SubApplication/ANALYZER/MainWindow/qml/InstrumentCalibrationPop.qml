@@ -33,9 +33,12 @@ Popup {
     property double lightMax: 0.0
     property double lightMin: 0.0
     property string calibratedLightType: ""
-    property string lastCalibrationTime: ""
+    property string lastTransCalTime: ""
+    property string lastBackCalTime: ""
     property string sendStatus: qsTr("未校准")
     property string sendStatusColor: "#999999"
+
+    property string currentCalibrationTime: calibrationTypeCombo.currentIndex === 0 ? lastTransCalTime : lastBackCalTime
 
     function showMessage(message) {
         if (typeof info_pop !== "undefined") {
@@ -65,6 +68,14 @@ Popup {
         } else if (nextIndexes.length > 0) {
             channelCombo.currentIndex = 0
         }
+        refreshCalibrationTime()
+    }
+
+    function refreshCalibrationTime() {
+        var ch = currentChannel()
+        if (ch < 0 || !experiment_ctrl) return
+        lastTransCalTime = experiment_ctrl.getLastCalibrationTime(ch, "transmission") || ""
+        lastBackCalTime = experiment_ctrl.getLastCalibrationTime(ch, "backscatter") || ""
     }
 
     function isChannelRunning(channelIndex) {
@@ -163,12 +174,13 @@ Popup {
 
             samplePointCount = summary.total_points || 0
             calibratedLightType = summary.calibration_type || ""
-            lastCalibrationTime = summary.calibrated_at || ""
             if (calibratedLightType === "transmission") {
+                lastTransCalTime = summary.calibrated_at || ""
                 lightAvg = summary.overall_avg_transmission || 0.0
                 lightMax = summary.max_transmission || 0.0
                 lightMin = summary.min_transmission || 0.0
             } else {
+                lastBackCalTime = summary.calibrated_at || ""
                 lightAvg = summary.overall_avg_backscatter || 0.0
                 lightMax = summary.max_backscatter || 0.0
                 lightMin = summary.min_backscatter || 0.0
@@ -301,6 +313,7 @@ Popup {
                                     border.color: "#82C1F2"
                                     radius: 4
                                 }
+                                onCurrentIndexChanged: root.refreshCalibrationTime()
                             }
                         }
 
@@ -367,12 +380,11 @@ Popup {
                                 }
 
                                 onCurrentIndexChanged: {
-                                    if(currentIndex === 0)
-                                        calibratedLightType = "transmission"
-                                    else{
-                                        calibratedLightType = ""
-                                    }
-                                }
+                                if (currentIndex === 0)
+                                    calibratedLightType = "transmission"
+                                else
+                                    calibratedLightType = "backscatter"
+                            }
                             }
                         }
                     }
@@ -584,7 +596,7 @@ Popup {
 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: lastCalibrationTime !== "" ? lastCalibrationTime : "-"
+                                    text: currentCalibrationTime !== "" ? currentCalibrationTime : "-"
                                     font.pixelSize: 13
                                     color: "#333333"
                                     font.family: "Microsoft YaHei"
