@@ -562,6 +562,7 @@ bool ExperimentCtrl::startExperiment(int channel, int creatorId)
     if (m_stateStore->updateChannelStatus(channel, {
         {"running", true},
         {"experiment_id", experimentId},
+        {"runStatus", 0},
         {"remainingSeconds", durationSeconds}
     }, &mergedStatus)) {
         emit channelStatusUpdated(channel, mergedStatus);
@@ -618,6 +619,7 @@ bool ExperimentCtrl::stopExperiment(int channel)
     if (m_stateStore->updateChannelStatus(channel, {
         {"running", false},
         {"experiment_id", 0},
+        {"runStatus", 0},
         {"remainingSeconds", 0}
     }, &mergedStatus)) {
         emit channelStatusUpdated(channel, mergedStatus);

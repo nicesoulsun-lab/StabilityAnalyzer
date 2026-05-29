@@ -1,10 +1,11 @@
 #include "Controller/led_controller.h"
 #include "deviceprofile.h"
+#include <QDateTime>
 #include <QDebug>
 #include <QFile>
 
 const QString LedController::kSysfsBase = QStringLiteral("/sys/class/leds");
-constexpr int LedController::kErrorEnterThreshold;
+constexpr int LedController::kErrorDebounceMs;
 
 LedController::LedController(QObject *parent)
     : QObject(parent)
@@ -53,7 +54,7 @@ void LedController::onExperimentStarted(int channel)
 {
     m_runningChannels.insert(channel);
     m_errorChannels.remove(channel);
-    m_errorDebounce.remove(channel);
+    m_errorSinceMs.remove(channel);
     updateChannelLeds(channel);
 }
 
@@ -62,25 +63,36 @@ void LedController::onExperimentStopped(int channel)
 {
     m_runningChannels.remove(channel);
     m_errorChannels.remove(channel);
-    m_errorDebounce.remove(channel);
+    m_errorSinceMs.remove(channel);
     updateChannelLeds(channel);
 }
 
 // 应用错误状态（由轮询检测到runStatus=3时调用）
-// 非对称消抖：进入错误需连续kErrorEnterThreshold次（容忍MCU瞬态干扰），退出错误即时响应
+// 非对称消抖：进入错误需持续kErrorDebounceMs（15s）以上，退出错误即时响应
 void LedController::applyChannelError(int channel, bool hasError)
 {
-    if (m_runningChannels.contains(channel))
+    if (m_runningChannels.contains(channel)) {
+        // 实验中通道不处理错误状态，同时清理可能残留的消抖时间戳和错误标记
+        m_errorSinceMs.remove(channel);
+        m_errorChannels.remove(channel);
         return;
+    }
 
-    int &counter = m_errorDebounce[channel];
     if (hasError) {
-        counter = qMin(counter + 1, kErrorEnterThreshold);
-        if (counter < kErrorEnterThreshold || m_errorChannels.contains(channel))
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        if (!m_errorSinceMs.contains(channel)) {
+            // 首次检测到错误，记录时间戳
+            m_errorSinceMs[channel] = now;
+        }
+        if (m_errorChannels.contains(channel))
             return;
+        const qint64 elapsed = now - m_errorSinceMs.value(channel, now);
+        if (elapsed < kErrorDebounceMs)
+            return;
+        // 错误持续超过15秒，进入错误状态
         m_errorChannels.insert(channel);
     } else {
-        counter = 0;
+        m_errorSinceMs.remove(channel);
         if (!m_errorChannels.contains(channel))
             return;
         m_errorChannels.remove(channel);

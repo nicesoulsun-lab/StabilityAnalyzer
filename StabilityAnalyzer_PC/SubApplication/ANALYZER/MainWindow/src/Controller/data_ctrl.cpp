@@ -212,6 +212,7 @@ QVariantMap dataCtrl::importSingleExperimentFromDeviceInternal(int deviceExperim
     localExperiment.insert(QStringLiteral("scan_range_end"), deviceExperiment.value(QStringLiteral("scan_range_end")));
     localExperiment.insert(QStringLiteral("scan_step"), deviceExperiment.value(QStringLiteral("scan_step"), 20));
     localExperiment.insert(QStringLiteral("status"), 1);
+    localExperiment.insert(QStringLiteral("created_at"), deviceExperiment.value(QStringLiteral("created_at")));
 
     if (!m_dbManager->addExperiment(localExperiment)) {
         m_dbManager->rollbackTransaction();

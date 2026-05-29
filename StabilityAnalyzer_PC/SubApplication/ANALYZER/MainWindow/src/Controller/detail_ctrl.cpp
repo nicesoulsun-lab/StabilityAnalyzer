@@ -13,7 +13,6 @@
 
 namespace {
 
-constexpr int kDetailCurveWindowLimit = 32;
 constexpr int kDetailCurvePointLimit = 512;
 
 QVariantMap buildInstabilityOverviewPayload(const QVariantMap &overallSeries,
@@ -155,8 +154,7 @@ int detailCtrl::requestLightCurves(int experimentId, int pointsPerCurve)
     qDebug() << "[detailCtrl][light request start]"
              << "requestId=" << requestId
              << "experimentId=" << experimentId
-             << "pointsPerCurve=" << safePointLimit
-             << "windowLimit=" << kDetailCurveWindowLimit;
+             << "pointsPerCurve=" << safePointLimit;
     emit lightCurveRequestStarted(requestId, experimentId);
 
     QPointer<detailCtrl> self(this);
@@ -175,11 +173,8 @@ int detailCtrl::requestLightCurves(int experimentId, int pointsPerCurve)
             std::sort(scanIds.begin(), scanIds.end());
 
             const int totalCurveCount = scanIds.size();
-            const int windowStartIndex = qMax(0, totalCurveCount - kDetailCurveWindowLimit);
-            const QVector<int> windowScanIds = scanIds.mid(windowStartIndex);
-
-            curves.reserve(windowScanIds.size());
-            for (int scanId : windowScanIds) {
+            curves.reserve(totalCurveCount);
+            for (int scanId : scanIds) {
                 if (!self || QThread::currentThread()->isInterruptionRequested()) {
                     cancelled = true;
                     break;
@@ -193,7 +188,7 @@ int detailCtrl::requestLightCurves(int experimentId, int pointsPerCurve)
             }
 
             if (!cancelled) {
-                payload = buildLightCurvePayload(curves, totalCurveCount, windowStartIndex);
+                payload = buildLightCurvePayload(curves, totalCurveCount, 0);
             }
         } catch (const std::bad_alloc &) {
             errorMessage = self->tr("璇︽儏鏇茬嚎鍔犺浇鍐呭瓨涓嶈冻");

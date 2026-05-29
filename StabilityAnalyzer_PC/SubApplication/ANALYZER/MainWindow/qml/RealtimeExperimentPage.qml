@@ -18,7 +18,6 @@ Item {
     property int lightCurveCount: 0
     property int lightCurvesVersion: 0
     property bool lightCurvesLoading: false
-    property int maxVisibleCurveCount: 20
     property bool realtimeSessionActive: false
     property bool isRunning: experiment_ctrl ? experiment_ctrl.isExperimentRunning(channelIndex) : false
     property bool isStopping: false
@@ -181,15 +180,6 @@ Item {
                 return timeDiff
             return realtimePage.toNumber(a.scan_id, 0) - realtimePage.toNumber(b.scan_id, 0)
         })
-        if (sortedCurves.length > maxVisibleCurveCount) {
-            console.log("[RealtimeLight][curve trim]",
-                        "channelIndex=", channelIndex,
-                        "experimentId=", experimentId,
-                        "inputCurveCount=", sortedCurves.length,
-                        "maxVisibleCurveCount=", maxVisibleCurveCount)
-            sortedCurves = sortedCurves.slice(sortedCurves.length - maxVisibleCurveCount)
-        }
-
         var normalizedCurves = []
         var minHeight = Number.POSITIVE_INFINITY
         var maxHeight = Number.NEGATIVE_INFINITY

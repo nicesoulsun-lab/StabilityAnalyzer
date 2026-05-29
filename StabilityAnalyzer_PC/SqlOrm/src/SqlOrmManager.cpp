@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file SqlOrmManager.cpp
  * @brief SQLite ORM 数据库管理器实现文件
  * 
@@ -1672,7 +1672,9 @@ bool SqlOrmManager::addExperiment(const QVariantMap& experimentData) {
             experiment.scan_range_end = experimentData.value("scan_range_end", 0.0).toInt();
             experiment.scan_step = experimentData.value("scan_step", 0.0).toInt();
             experiment.status = experimentData.value("status", 0).toInt();
-            experiment.created_at = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
+            experiment.created_at = experimentData.value("created_at", "").toString().isEmpty()
+                    ? QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
+                    : experimentData.value("created_at").toString();
             experiment.deleted_flag = 0;
             experiment.deleted_at = QStringLiteral("");
             experiment.purge_after = QStringLiteral("");
@@ -1700,7 +1702,9 @@ bool SqlOrmManager::addExperiment(const QVariantMap& experimentData) {
         rowData["scan_range_end"] = experimentData.value("scan_range_end", 0.0).toInt();
         rowData["scan_step"] = experimentData.value("scan_step", 0.0).toInt();
         rowData["status"] = experimentData.value("status", 0).toInt();
-        rowData["created_at"] = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
+        rowData["created_at"] = experimentData.value("created_at", "").toString().isEmpty()
+                ? QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
+                : experimentData.value("created_at").toString();
         rowData["deleted_flag"] = 0;
         rowData["deleted_at"] = QStringLiteral("");
         rowData["purge_after"] = QStringLiteral("");

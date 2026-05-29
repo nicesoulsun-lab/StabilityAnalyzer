@@ -58,6 +58,9 @@ public:
         QObject::connect(m_experimentCtrl, &ExperimentCtrl::channelStatusUpdated,
                          this,
                          [this](int channel, const QVariantMap &status) {
+            // 实验中通道的错误状态由实验流程自行处理，不传播到LED错误逻辑
+            if (m_experimentCtrl->isExperimentRunning(channel))
+                return;
             const bool hasError = status.value(QStringLiteral("runStatus"), 0).toInt() == 3;
             m_ledController->applyChannelError(channel, hasError);
         });

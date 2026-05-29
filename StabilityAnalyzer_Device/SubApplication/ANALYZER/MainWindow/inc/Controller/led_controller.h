@@ -71,14 +71,14 @@ private:
 
     QSet<int> m_runningChannels;        // 当前实验中的通道集合
     QSet<int> m_errorChannels;          // 当前错误状态的通道集合
-    QMap<int, int> m_errorDebounce;     // 错误消抖计数（连续检测到runStatus=3的次数）
+    QMap<int, qint64> m_errorSinceMs;   // 错误消抖：通道首次检测到错误的时间戳（0=未追踪）
 
     static constexpr int kBlinkIntervalMs = 800;   // 闪烁周期（ms）
     static constexpr int kFlowIntervalMs = 400;    // 流水灯帧间隔（ms）
     static constexpr int kFlowTrailLength = 2;     // 流水灯拖尾长度（含头灯）
     static constexpr int kFlowBgValue = 192;       // 流水灯背景灰色值
     static constexpr int kBlinkOffValue = 30;      // 闪烁灭态暗灰值
-    static constexpr int kErrorEnterThreshold = 3;  // 错误进入消抖阈值（连续次数）
+    static constexpr int kErrorDebounceMs = 15000; // 错误进入消抖：必须持续15秒以上
     static const QString kSysfsBase;               // sysfs LED路径前缀
 };
 

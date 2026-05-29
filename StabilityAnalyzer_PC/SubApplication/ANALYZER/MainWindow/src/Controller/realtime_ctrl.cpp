@@ -13,7 +13,6 @@
 namespace {
 
 constexpr int kRealtimeCurvePointLimit = 512;
-constexpr int kRealtimeCurveMaxScansPerExperiment = 20;
 constexpr int kRealtimeCurveMaxExperimentCaches = 8;
 
 struct RealtimeLightCurveRow {
@@ -743,20 +742,7 @@ void realtimeCtrl::rememberChannelExperiment(int channel, int experimentId)
 
 void realtimeCtrl::trimExperimentCache(int experimentId)
 {
-    QHash<int, QVariantMap> &cache = m_curveCacheByExperiment[experimentId];
-    QList<int> scanIds = cache.keys();
-    std::sort(scanIds.begin(), scanIds.end());
-    const int initialCount = scanIds.size();
-    while (scanIds.size() > kRealtimeCurveMaxScansPerExperiment) {
-        cache.remove(scanIds.takeFirst());
-    }
-    if (initialCount > kRealtimeCurveMaxScansPerExperiment) {
-        qDebug() << "[realtimeCtrl][trim experiment cache]"
-                 << "experimentId=" << experimentId
-                 << "initialCurveCount=" << initialCount
-                 << "retainedCurveCount=" << cache.size()
-                 << "maxCurveCount=" << kRealtimeCurveMaxScansPerExperiment;
-    }
+    Q_UNUSED(experimentId)
 }
 
 void realtimeCtrl::trimGlobalCache()
