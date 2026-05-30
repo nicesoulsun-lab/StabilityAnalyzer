@@ -16,9 +16,6 @@
 
 namespace {
 
-constexpr int kImportBatchSize = 2000;
-constexpr int kImportScanPageSize = 2000;
-
 double effectiveScanEndMm(const QVariantMap &experiment)
 {
     const double startMm = experiment.value(QStringLiteral("scan_range_start")).toDouble() / 1000.0;
@@ -223,84 +220,47 @@ QVariantMap dataCtrl::importSingleExperimentFromDeviceInternal(int deviceExperim
     int importedRows = 0;
     for (int scanIndex = 0; scanIndex < scanIdVariants.size(); ++scanIndex) {
         const int scanId = scanIdVariants.at(scanIndex).toInt();
-        QVector<QVariantMap> importBatch;
-        importBatch.reserve(kImportBatchSize);
-        int pageOffset = 0;
-        bool hasMore = true;
-        bool receivedAnyRows = false;
 
-        while (hasMore) {
-            QVariantMap scanResponse;
-            if (!sendRequestAndWait(QStringLiteral("get_experiment_scan_export"),
-                                    QVariantMap{
+        QVariantMap scanResponse;
+        if (!sendRequestAndWait(QStringLiteral("get_experiment_scan_export"),
+                                QVariantMap{
             {QStringLiteral("experiment_id"), deviceExperimentId},
-            {QStringLiteral("scan_id"), scanId},
-            {QStringLiteral("offset"), pageOffset},
-            {QStringLiteral("limit"), kImportScanPageSize}
+            {QStringLiteral("scan_id"), scanId}
         },
-                                    &scanResponse,
-                                    30000)) {
-                m_dbManager->rollbackTransaction();
-                result.insert(QStringLiteral("message"),
-                              tr("读取设备扫描数据失败：%1 scanId=%2").arg(sampleName).arg(scanId));
-                return result;
-            }
-
-            const QVariantList deviceDataRows = scanResponse.value(QStringLiteral("data")).toList();
-            if (!deviceDataRows.isEmpty()) {
-                receivedAnyRows = true;
-            }
-
-            qDebug() << "[Import][scan page]"
-                     << "deviceExperimentId=" << deviceExperimentId
-                     << "scanId=" << scanId
-                     << "offset=" << pageOffset
-                     << "rows=" << deviceDataRows.size()
-                     << "hasMore=" << scanResponse.value(QStringLiteral("has_more")).toBool()
-                     << "totalCount=" << scanResponse.value(QStringLiteral("total_count")).toInt();
-
-            for (const QVariant &rowVariant : deviceDataRows) {
-                QVariantMap row = rowVariant.toMap();
-                row.remove(QStringLiteral("id"));
-                row.insert(QStringLiteral("experiment_id"), localExperimentId);
-                importBatch.append(std::move(row));
-
-                if (importBatch.size() >= kImportBatchSize) {
-                    if (!m_dbManager->batchAddExperimentData(importBatch)) {
-                        m_dbManager->rollbackTransaction();
-                        result.insert(QStringLiteral("message"), tr("写入本地实验数据失败：%1").arg(sampleName));
-                        return result;
-                    }
-                    importedRows += importBatch.size();
-                    importBatch.clear();
-                }
-            }
-
-            hasMore = scanResponse.value(QStringLiteral("has_more")).toBool();
-            pageOffset += deviceDataRows.size();
-
-            if (deviceDataRows.isEmpty()) {
-                if (hasMore) {
-                    m_dbManager->rollbackTransaction();
-                    result.insert(QStringLiteral("message"),
-                                  tr("设备扫描数据分页异常：%1 scanId=%2").arg(sampleName).arg(scanId));
-                    return result;
-                }
-                break;
-            }
+                                &scanResponse,
+                                30000)) {
+            m_dbManager->rollbackTransaction();
+            result.insert(QStringLiteral("message"),
+                          tr("读取设备扫描数据失败：%1 scanId=%2").arg(sampleName).arg(scanId));
+            return result;
         }
 
-        if (!receivedAnyRows) {
+        const QVariantList deviceDataRows = scanResponse.value(QStringLiteral("data")).toList();
+        if (deviceDataRows.isEmpty()) {
             m_dbManager->rollbackTransaction();
             result.insert(QStringLiteral("message"),
                           tr("设备扫描数据为空：%1 scanId=%2").arg(sampleName).arg(scanId));
             return result;
         }
 
+        qDebug() << "[Import][scan]"
+                 << "deviceExperimentId=" << deviceExperimentId
+                 << "scanId=" << scanId
+                 << "rows=" << deviceDataRows.size();
+
+        QVector<QVariantMap> importBatch;
+        importBatch.reserve(deviceDataRows.size());
+        for (const QVariant &rowVariant : deviceDataRows) {
+            QVariantMap row = rowVariant.toMap();
+            row.remove(QStringLiteral("id"));
+            row.insert(QStringLiteral("experiment_id"), localExperimentId);
+            importBatch.append(std::move(row));
+        }
+
         if (!importBatch.isEmpty()) {
-            if (!m_dbManager->batchAddExperimentData(importBatch)) {
+            if (!m_dbManager->batchAddExperimentScanData(importBatch)) {
                 m_dbManager->rollbackTransaction();
-                result.insert(QStringLiteral("message"), tr("写入本地实验数据失败：%1").arg(sampleName));
+                result.insert(QStringLiteral("message"), tr("写入本地扫描数据失败：%1").arg(sampleName));
                 return result;
             }
             importedRows += importBatch.size();
@@ -510,125 +470,6 @@ QVariantMap dataCtrl::importExperimentsFromDevice(const QVariantList &deviceExpe
     return result;
 }
 
-bool dataCtrl::addData(int experimentId, int timestamp, double height,
-                       double backscatterIntensity, double transmissionIntensity)
-{
-    if (experimentId <= 0) {
-        qWarning() << "[dataCtrl] 实验 ID 无效";
-        emit operationFailed("实验 ID 无效");
-        return false;
-    }
-    
-    QVariantMap data;
-    data["experiment_id"] = experimentId;
-    data["timestamp"] = timestamp;
-    data["height"] = height;
-    data["backscatter_intensity"] = backscatterIntensity;
-    data["transmission_intensity"] = transmissionIntensity;
-    
-    bool success = m_dbManager->addExperimentData(data);
-    
-    if (success) {
-        emit dataAdded(timestamp, experimentId);
-        qDebug() << "[dataCtrl] 添加实验数据成功，实验 ID:" << experimentId << "时间戳:" << timestamp;
-    } else {
-        emit operationFailed("添加实验数据失败");
-        qWarning() << "[dataCtrl] 添加实验数据失败，实验 ID:" << experimentId;
-    }
-    
-    return success;
-}
-
-bool dataCtrl::batchAddData(const QVector<QVariantMap>& dataList)
-{
-    if (dataList.isEmpty()) {
-        qWarning() << "[dataCtrl] 数据列表为空";
-        emit operationFailed("数据列表为空");
-        return false;
-    }
-    
-    bool success = m_dbManager->batchAddExperimentData(dataList);
-    
-    if (success) {
-        int experimentId = dataList.first().value("experiment_id").toInt();
-        emit dataBatchAdded(dataList.size(), experimentId);
-        qDebug() << "[dataCtrl] 批量添加实验数据成功，数量:" << dataList.size();
-    } else {
-        emit operationFailed("批量添加实验数据失败");
-        qWarning() << "[dataCtrl] 批量添加实验数据失败，数量:" << dataList.size();
-    }
-    
-    return success;
-}
-
-QVariantList dataCtrl::getDataByExperiment(int experimentId)
-{
-    if (experimentId <= 0) {
-        qWarning() << "[dataCtrl] 实验 ID 无效";
-        return QVariantList();
-    }
-
-    const QVector<QVariantMap> rows = m_dbManager->getExperimentDataByExperiment(experimentId);
-    QVariantList result;
-    result.reserve(rows.size());
-    for (const QVariantMap &row : rows) {
-        result.append(row);
-    }
-    return result;
-}
-
-QVariantList dataCtrl::getDataByRange(int experimentId, int startTimestamp, int endTimestamp)
-{
-    if (experimentId <= 0) {
-        qWarning() << "[dataCtrl] 实验 ID 无效";
-        return QVariantList();
-    }
-    
-    if (startTimestamp > endTimestamp) {
-        qWarning() << "[dataCtrl] 时间范围无效";
-        return QVariantList();
-    }
-
-    const QVector<QVariantMap> rows = m_dbManager->getExperimentDataByRange(experimentId, startTimestamp, endTimestamp);
-    QVariantList result;
-    result.reserve(rows.size());
-    for (const QVariantMap &row : rows) {
-        result.append(row);
-    }
-    return result;
-}
-
-QVariantList dataCtrl::getAllData()
-{
-    const QVector<QVariantMap> rows = m_dbManager->getAllExperimentData();
-    QVariantList result;
-    result.reserve(rows.size());
-    for (const QVariantMap &row : rows) {
-        result.append(row);
-    }
-    return result;
-}
-
-bool dataCtrl::deleteData(int dataId)
-{
-    if (dataId <= 0) {
-        qWarning() << "[dataCtrl] 数据 ID 无效";
-        emit operationFailed("数据 ID 无效");
-        return false;
-    }
-    
-    bool success = m_dbManager->deleteExperimentData(dataId);
-    
-    if (success) {
-        qDebug() << "[dataCtrl] 删除实验数据成功，ID:" << dataId;
-    } else {
-        emit operationFailed("删除实验数据失败");
-        qWarning() << "[dataCtrl] 删除实验数据失败，ID:" << dataId;
-    }
-    
-    return success;
-}
-
 bool dataCtrl::deleteDataByExperiment(int experimentId)
 {
     if (experimentId <= 0) {
@@ -637,13 +478,13 @@ bool dataCtrl::deleteDataByExperiment(int experimentId)
         return false;
     }
     
-    bool success = m_dbManager->deleteExperimentDataByExperiment(experimentId);
+    bool success = m_dbManager->deleteScanDataByExperiment(experimentId);
     
     if (success) {
-        qDebug() << "[dataCtrl] 删除实验数据成功，实验 ID:" << experimentId;
+        qDebug() << "[dataCtrl] 删除实验扫描数据成功，实验 ID:" << experimentId;
     } else {
-        emit operationFailed("删除实验数据失败");
-        qWarning() << "[dataCtrl] 删除实验数据失败，实验 ID:" << experimentId;
+        emit operationFailed("删除实验扫描数据失败");
+        qWarning() << "[dataCtrl] 删除实验扫描数据失败，实验 ID:" << experimentId;
     }
     
     return success;
@@ -1005,12 +846,12 @@ bool dataCtrl::hardDeleteExperiment(int experimentId)
         return false;
     }
 
-    // 回收站的“彻底删除”需要同时清掉实验表和原始 experiment_data，
-    // 这里先显式删除实验原始数据，再执行实验记录物理删除，避免残留孤儿数据。
-    const bool dataDeleted = m_dbManager->deleteExperimentDataByExperiment(experimentId);
+    // 回收站的"彻底删除"需要同时清掉实验表和原始 experiment_scan_data，
+    // 这里先显式删除实验扫描数据，再执行实验记录物理删除，避免残留孤儿数据。
+    const bool dataDeleted = m_dbManager->deleteScanDataByExperiment(experimentId);
     if (!dataDeleted) {
-        emit operationFailed("清理实验数据失败");
-        qWarning() << "[dataCtrl] 清理实验数据失败，实验 ID:" << experimentId;
+        emit operationFailed("清理实验扫描数据失败");
+        qWarning() << "[dataCtrl] 清理实验扫描数据失败，实验 ID:" << experimentId;
         return false;
     }
 
@@ -1082,9 +923,9 @@ bool dataCtrl::hardDeleteExperiments(const QVariantList& experimentIds)
             continue;
         }
 
-        const bool dataDeleted = m_dbManager->deleteExperimentDataByExperiment(expId);
+        const bool dataDeleted = m_dbManager->deleteScanDataByExperiment(expId);
         if (!dataDeleted) {
-            qWarning() << "[dataCtrl] 批量彻底删除时清理实验数据失败，实验 ID:" << expId;
+            qWarning() << "[dataCtrl] 批量彻底删除时清理实验扫描数据失败，实验 ID:" << expId;
             continue;
         }
 

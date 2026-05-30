@@ -10,6 +10,7 @@
  */
 
 #include <QString>
+#include <QStringList>
 #include <QVariantMap>
 #include <QVector>
 
@@ -64,6 +65,8 @@ struct ScanCycleContext
     double stepUm = 20.0;
     qint64 startedAtMs = 0;
     qint64 elapsedSinceExperimentStartMs = 0;
+    QStringList backscatterAccum;
+    QStringList transmissionAccum;
 };
 
 /**

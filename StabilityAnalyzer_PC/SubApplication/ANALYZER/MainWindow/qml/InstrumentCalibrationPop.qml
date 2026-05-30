@@ -26,7 +26,7 @@ Popup {
     property int calibrationChannel: -1
     property int calibrationRound: 0
     property int calibrationTotalRounds: 3
-    property var calibrationTypeOptions: [qsTr("透射光校准"), qsTr("背射光校准")]
+    property var calibrationTypeOptions: [qsTr("透射光（硅油）"), qsTr("背射光（四氯乙烯）")]
 
     property int samplePointCount: 0
     property double lightAvg: 0.0

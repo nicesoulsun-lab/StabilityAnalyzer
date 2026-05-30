@@ -58,67 +58,6 @@ QVariantList dataCtrl::getProjectName()
     return name_list;
 }
 
-bool dataCtrl::addData(int experimentId, int timestamp, double height,
-                       double backscatterIntensity, double transmissionIntensity)
-{
-    if (experimentId <= 0) {
-        qWarning() << "[dataCtrl] 实验 ID 无效";
-        emit operationFailed("实验 ID 无效");
-        return false;
-    }
-    
-    QVariantMap data;
-    data["experiment_id"] = experimentId;
-    data["timestamp"] = timestamp;
-    data["height"] = height;
-    data["backscatter_intensity"] = backscatterIntensity;
-    data["transmission_intensity"] = transmissionIntensity;
-    
-    bool success = m_dbManager->addExperimentData(data);
-    
-    if (success) {
-        emit dataAdded(timestamp, experimentId);
-        qDebug() << "[dataCtrl] 添加实验数据成功，实验 ID:" << experimentId << "时间戳:" << timestamp;
-    } else {
-        emit operationFailed("添加实验数据失败");
-        qWarning() << "[dataCtrl] 添加实验数据失败，实验 ID:" << experimentId;
-    }
-    
-    return success;
-}
-
-bool dataCtrl::batchAddData(const QVector<QVariantMap>& dataList)
-{
-    if (dataList.isEmpty()) {
-        qWarning() << "[dataCtrl] 数据列表为空";
-        emit operationFailed("数据列表为空");
-        return false;
-    }
-    
-    bool success = m_dbManager->batchAddExperimentData(dataList);
-    
-    if (success) {
-        int experimentId = dataList.first().value("experiment_id").toInt();
-        emit dataBatchAdded(dataList.size(), experimentId);
-        qDebug() << "[dataCtrl] 批量添加实验数据成功，数量:" << dataList.size();
-    } else {
-        emit operationFailed("批量添加实验数据失败");
-        qWarning() << "[dataCtrl] 批量添加实验数据失败，数量:" << dataList.size();
-    }
-    
-    return success;
-}
-
-QVector<QVariantMap> dataCtrl::getDataByExperiment(int experimentId)
-{
-    if (experimentId <= 0) {
-        qWarning() << "[dataCtrl] 实验 ID 无效";
-        return QVector<QVariantMap>();
-    }
-    
-    return m_dbManager->getExperimentDataByExperiment(experimentId);
-}
-
 QVector<int> dataCtrl::getScanIdsByExperiment(int experimentId)
 {
     if (experimentId <= 0) {
@@ -129,79 +68,14 @@ QVector<int> dataCtrl::getScanIdsByExperiment(int experimentId)
     return m_dbManager->getExperimentScanIds(experimentId);
 }
 
-int dataCtrl::getDataCountByExperiment(int experimentId)
-{
-    if (experimentId <= 0) {
-        qWarning() << "[dataCtrl] 瀹為獙 ID 鏃犳晥";
-        return 0;
-    }
-
-    return m_dbManager->getExperimentDataCountByExperiment(experimentId);
-}
-
-QVector<QVariantMap> dataCtrl::getDataByExperimentAndScan(int experimentId, int scanId, int offset, int limit)
-{
-    if (experimentId <= 0) {
-        qWarning() << "[dataCtrl] 瀹為獙 ID 鏃犳晥";
-        return QVector<QVariantMap>();
-    }
-
-    if (scanId < 0) {
-        qWarning() << "[dataCtrl] scan ID 鏃犳晥";
-        return QVector<QVariantMap>();
-    }
-
-    return m_dbManager->getExperimentDataByExperimentAndScan(experimentId, scanId, offset, limit);
-}
-
-int dataCtrl::getDataCountByExperimentAndScan(int experimentId, int scanId)
+QVector<QVariantMap> dataCtrl::getScanDataByExperimentAndScan(int experimentId, int scanId)
 {
     if (experimentId <= 0 || scanId < 0) {
-        qWarning() << "[dataCtrl] 瀹為獙 ID 鎴?scan ID 鏃犳晥";
-        return 0;
-    }
-
-    return m_dbManager->getExperimentDataCountByExperimentAndScan(experimentId, scanId);
-}
-
-QVector<QVariantMap> dataCtrl::getDataByRange(int experimentId, int startTimestamp, int endTimestamp)
-{
-    if (experimentId <= 0) {
-        qWarning() << "[dataCtrl] 实验 ID 无效";
+        qWarning() << "[dataCtrl] 实验 ID 或 scan ID 无效";
         return QVector<QVariantMap>();
     }
-    
-    if (startTimestamp > endTimestamp) {
-        qWarning() << "[dataCtrl] 时间范围无效";
-        return QVector<QVariantMap>();
-    }
-    
-    return m_dbManager->getExperimentDataByRange(experimentId, startTimestamp, endTimestamp);
-}
 
-QVector<QVariantMap> dataCtrl::getAllData()
-{
-    return m_dbManager->getAllExperimentData();
-}
-
-bool dataCtrl::deleteData(int dataId)
-{
-    if (dataId <= 0) {
-        qWarning() << "[dataCtrl] 数据 ID 无效";
-        emit operationFailed("数据 ID 无效");
-        return false;
-    }
-    
-    bool success = m_dbManager->deleteExperimentData(dataId);
-    
-    if (success) {
-        qDebug() << "[dataCtrl] 删除实验数据成功，ID:" << dataId;
-    } else {
-        emit operationFailed("删除实验数据失败");
-        qWarning() << "[dataCtrl] 删除实验数据失败，ID:" << dataId;
-    }
-    
-    return success;
+    return m_dbManager->getScanDataByExperimentAndScan(experimentId, scanId);
 }
 
 bool dataCtrl::deleteDataByExperiment(int experimentId)
@@ -212,7 +86,7 @@ bool dataCtrl::deleteDataByExperiment(int experimentId)
         return false;
     }
     
-    bool success = m_dbManager->deleteExperimentDataByExperiment(experimentId);
+    bool success = m_dbManager->deleteScanDataByExperiment(experimentId);
     
     if (success) {
         qDebug() << "[dataCtrl] 删除实验数据成功，实验 ID:" << experimentId;

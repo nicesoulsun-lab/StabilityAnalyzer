@@ -42,14 +42,7 @@ public:
      */
     ExperimentDataService(SqlOrmManager* dbManager, ModbusTaskScheduler* scheduler);
 
-    /**
-     * @brief 保存单条实验数据。
-     */
-
-    /**
-     * @brief 批量保存实验数据。
-     */
-    void batchSaveExperimentData(int experimentId, const QVector<QVariantMap>& dataList) const;
+    void batchSaveExperimentScanData(int experimentId, const QVector<QVariantMap>& scanRows) const;
 
     /**
      * @brief 根据存储区状态尝试读取 A/B 区数据。
@@ -67,6 +60,7 @@ public:
                             QVector<QVariantMap>* memoryCache,
                             const DeviceIdProvider& deviceIdProvider,
                             const BuildRowsFn& buildRowsFn,
+                            const BuildRowsFn& buildScanRowsFn,
                             const SendControlFn& sendControlFn,
                             const CurrentScanCountFn& currentScanCountFn,
                             const StreamRowsFn& streamRowsFn = StreamRowsFn()) const;

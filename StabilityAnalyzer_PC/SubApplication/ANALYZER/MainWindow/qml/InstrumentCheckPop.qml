@@ -24,7 +24,7 @@ Popup {
     property var scanRangeEndModel: []
     property var checkTypeOptions: [
         qsTr("透射光（硅油）"),
-        qsTr("背射光（硅油）")
+        qsTr("背射光（四氯乙烯）")
     ]
 
     property bool transmissionActive: true

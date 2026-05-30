@@ -279,8 +279,6 @@ bool DataTransmitController::sendControlCommand(const QString &command, const QV
     QVariantMap message = payload;
     message.insert(QStringLiteral("cmd"), command);
 
-    qDebug()<<"DataTransmitController "<<message;
-
     return sendJson(m_controlChannel, message);
 }
 
@@ -466,7 +464,6 @@ bool DataTransmitController::sendJson(TcpChannelClient *channel, const QVariantM
         setLastError(errorMessage);
         qWarning() << "[DataTransmit] sendJson failed, channel=" << channel->name() << "error=" << errorMessage;
     } else {
-        qDebug() << "[DataTransmit] sendJson success, channel=" << channel->name() << "payload=" << payload;
     }
     return success;
 }

@@ -113,7 +113,7 @@ bool TcpChannelClient::sendMessage(const QJsonObject &message, QString *errorMes
 
     QByteArray payload = QJsonDocument(message).toJson(QJsonDocument::Compact);
     payload.append('\n');
-    qDebug() << "[DataTransmit][" << m_name << "] send" << payload.trimmed();
+    //qDebug() << "[DataTransmit][" << m_name << "] send" << payload.trimmed();
 
     const qint64 bytesWritten = m_socket->write(payload);
     if (bytesWritten != payload.size()) {
@@ -125,7 +125,6 @@ bool TcpChannelClient::sendMessage(const QJsonObject &message, QString *errorMes
         return false;
     }
 
-    qDebug() << "[DataTransmit][" << m_name << "] write queued, bytes=" << bytesWritten;
     return true;
 }
 
@@ -133,9 +132,6 @@ bool TcpChannelClient::sendMessage(const QJsonObject &message, QString *errorMes
 void TcpChannelClient::onReadyRead()
 {
     const QByteArray chunk = m_socket->readAll();
-    if (m_name != QStringLiteral("status")) {
-        qDebug() << "[DataTransmit][" << m_name << "] readyRead bytes=" << chunk.size();
-    }
     m_buffer.append(chunk);
     processIncomingBuffer();
 }
@@ -163,7 +159,6 @@ void TcpChannelClient::processIncomingBuffer()
                 try {
                     const QJsonObject object = document.object();
                     if (!isHighFrequencyStatusMessage(m_name, object)) {
-                        qDebug() << "[DataTransmit][" << m_name << "] recv" << line.size();
                     }
                     emit messageReceived(object.toVariantMap());
                 } catch (const std::bad_alloc &) {

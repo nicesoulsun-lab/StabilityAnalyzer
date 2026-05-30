@@ -296,77 +296,13 @@ public:
     // 实验数据管理
     // ========================================================================
     
-    /**
-     * @brief 添加实验数据
-     * @param data 实验数据
-     * @return 成功返回 true，失败返回 false
-     */
-    bool addExperimentData(const QVariantMap& data);
-    
-    /**
-     * @brief 批量添加实验数据
-     * @param dataList 实验数据列表
-     * @return 成功返回 true，失败返回 false
-     * 
-     * 使用事务包装，保证原子性。
-     */
-    bool batchAddExperimentData(const QVector<QVariantMap>& dataList);
-    
-    /**
-     * @brief 根据 ID 查询实验数据
-     * @param dataId 数据 ID
-     * @return 实验数据，不存在返回空 QVariantMap
-     */
-    QVariantMap getExperimentDataById(int dataId);
-    
-    /**
-     * @brief 根据实验 ID 查询实验数据
-     * @param experimentId 实验 ID
-     * @return 实验数据列表
-     */
-    QVector<QVariantMap> getExperimentDataByExperiment(int experimentId);
     QVector<int> getExperimentScanIds(int experimentId);
-    int getExperimentDataCountByExperiment(int experimentId);
-    QVector<QVariantMap> getExperimentDataByExperimentAndScan(int experimentId, int scanId, int offset = 0, int limit = 0);
-    int getExperimentDataCountByExperimentAndScan(int experimentId, int scanId);
-    
-    /**
-     * @brief 根据时间范围查询实验数据
-     * @param experimentId 实验 ID
-     * @param startTimestamp 起始时间戳
-     * @param endTimestamp 结束时间戳
-     * @return 实验数据列表
-     */
-    QVector<QVariantMap> getExperimentDataByRange(int experimentId, int startTimestamp, int endTimestamp);
-    
-    /**
-     * @brief 获取所有实验数据
-     * @return 实验数据列表
-     */
-    QVector<QVariantMap> getAllExperimentData();
-    
-    /**
-     * @brief 更新实验数据
-     * @param dataId 数据 ID
-     * @param data 要更新的数据
-     * @return 成功返回 true，失败返回 false
-     */
-    bool updateExperimentData(int dataId, const QVariantMap& data);
-    
-    /**
-     * @brief 删除实验数据
-     * @param dataId 数据 ID
-     * @return 成功返回 true，失败返回 false
-     */
-    bool deleteExperimentData(int dataId);
-    
-    /**
-     * @brief 根据实验 ID 删除实验数据
-     * @param experimentId 实验 ID
-     * @return 成功返回 true，失败返回 false
-     */
-    bool deleteExperimentDataByExperiment(int experimentId);
-    
+
+    bool batchAddExperimentScanData(const QVector<QVariantMap>& dataList);
+    QVector<QVariantMap> getScanDataByExperimentAndScan(int experimentId, int scanId);
+    int getScanCountByExperiment(int experimentId);
+    bool deleteScanDataByExperiment(int experimentId);
+
     // ========================================================================
     // 操作日志管理
     // ========================================================================

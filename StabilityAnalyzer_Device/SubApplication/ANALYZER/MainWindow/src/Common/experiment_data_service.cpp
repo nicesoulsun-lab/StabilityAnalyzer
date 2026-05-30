@@ -31,27 +31,21 @@ ExperimentDataService::ExperimentDataService(SqlOrmManager* dbManager, ModbusTas
 {
 }
 
-/**
- * @brief 保存单条实验数据。
- */
-
-/**
- * @brief 批量保存实验数据。
- */
-void ExperimentDataService::batchSaveExperimentData(int experimentId, const QVector<QVariantMap>& dataList) const
+void ExperimentDataService::batchSaveExperimentScanData(
+    int experimentId, const QVector<QVariantMap>& scanRows) const
 {
-    if (!m_dbManager) {
+    if (!m_dbManager || scanRows.isEmpty()) {
         return;
     }
 
     QVector<QVariantMap> payload;
-    payload.reserve(dataList.size());
-    for (const QVariantMap& item : dataList) {
+    payload.reserve(scanRows.size());
+    for (const QVariantMap& item : scanRows) {
         QVariantMap row = item;
         row["experiment_id"] = experimentId;
         payload.append(row);
     }
-    m_dbManager->batchAddExperimentData(payload);
+    m_dbManager->batchAddExperimentScanData(payload);
 }
 
 /**
@@ -66,6 +60,7 @@ void ExperimentDataService::tryFetchStoredData(int channel,
                                                QVector<QVariantMap>* memoryCache,
                                                const DeviceIdProvider& deviceIdProvider,
                                                const BuildRowsFn& buildRowsFn,
+                                               const BuildRowsFn& buildScanRowsFn,
                                                const SendControlFn& sendControlFn,
                                                const CurrentScanCountFn& currentScanCountFn,
                                                const StreamRowsFn& streamRowsFn) const
@@ -140,7 +135,6 @@ void ExperimentDataService::tryFetchStoredData(int channel,
             if (!batch.isEmpty()) {
                 hasSavedAnyBatch = true;
                 *memoryCache += batch;
-                batchSaveExperimentData(experimentId, batch);
                 if (streamRowsFn) {
                     streamRowsFn(channel, experimentId, batch);
                 }
@@ -149,6 +143,17 @@ void ExperimentDataService::tryFetchStoredData(int channel,
                          << (areaA ? "A" : "B")
                          << "batchPairs=" << batch.size()
                          << "scanCount=" << (currentScanCountFn ? currentScanCountFn() : 0);
+            }
+
+            if (buildScanRowsFn) {
+                const QVector<QVariantMap> scanBatch = buildScanRowsFn(channel, sliced, areaA);
+                if (!scanBatch.isEmpty()) {
+                    batchSaveExperimentScanData(experimentId, scanBatch);
+                    hasSavedAnyBatch = true;
+                    qDebug() << "[ExperimentDataService][Fetch] channel=" << channel
+                             << (areaA ? "A" : "B")
+                             << "scanRows=" << scanBatch.size();
+                }
             }
         }
 
@@ -196,7 +201,7 @@ void ExperimentDataService::tryFetchStoredData(int channel,
  *
  * 与 tryFetchStoredData 的核心区别：
  * - 无 experimentId 守卫，校准扫描不需要实验ID；
- * - 不写内存缓存、不调用 batchSaveExperimentData；
+ * - 不写内存缓存、不调用 batchSaveExperimentScanData；
  * - 通过 CalibrationStreamFn 回调将数据返回给调用方。
  */
 void ExperimentDataService::tryFetchCalibrationData(int channel,

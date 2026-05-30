@@ -1,4 +1,4 @@
-﻿#ifndef DATA_CTRL_H
+#ifndef DATA_CTRL_H
 #define DATA_CTRL_H
 
 #include <QObject>
@@ -67,19 +67,6 @@ public:
     Q_INVOKABLE bool hardDeleteExperiments(const QVariantList& experimentIds);
     
     // ==================== 实验数据管理 ====================
-    // 添加一条原始实验采样数据。
-    Q_INVOKABLE bool addData(int experimentId, int timestamp, double height, 
-                             double backscatterIntensity, double transmissionIntensity);
-    
-    // 批量写入原始实验采样数据。
-    Q_INVOKABLE bool batchAddData(const QVector<QVariantMap>& dataList);
-    
-    // 查询指定实验的全部原始采样数据。
-    Q_INVOKABLE QVariantList getDataByExperiment(int experimentId);
-    // 按时间范围查询指定实验的原始采样数据。
-    Q_INVOKABLE QVariantList getDataByRange(int experimentId, int startTimestamp, int endTimestamp);
-    // 查询数据库中的全部原始实验数据。
-    Q_INVOKABLE QVariantList getAllData();
     // 获取均匀度页面直接可绑定的图表数据结构。
     Q_INVOKABLE QVariantMap getUniformityChartData(int experimentId);
     // 获取光强平均值页面直接可绑定的图表数据结构。
@@ -95,22 +82,10 @@ public:
     // 执行光学高级计算，按目标字段反算粒径或体积浓度。
     Q_INVOKABLE QVariantMap calculateOptical(const QVariantMap& params);
     
-    // 删除单条实验采样数据。
-    Q_INVOKABLE bool deleteData(int dataId);
     // 删除指定实验下的全部采样数据。
     Q_INVOKABLE bool deleteDataByExperiment(int experimentId);
 
 signals:
-    // 实验数据添加成功信号
-    //  dataId 数据 ID（时间戳）
-    //  experimentId 所属实验 ID
-    void dataAdded(int dataId, int experimentId);
-    
-    // 批量添加实验数据成功信号
-    //  count 添加的数据数量
-    //  experimentId 所属实验 ID
-    void dataBatchAdded(int count, int experimentId);
-
     // 操作失败信号
     //  message 错误信息
     void operationFailed(const QString& message);

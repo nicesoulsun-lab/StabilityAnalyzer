@@ -50,6 +50,7 @@ ExperimentScanProfile ExperimentSessionService::buildScanProfile(const Experimen
 void ExperimentSessionService::resetScanContexts(int channel)
 {
     m_scanContexts[channel].clear();
+    m_scanRowContexts[channel].clear();
     m_scanProfiles.remove(channel);
     m_nextScanSequences[channel] = 0;
     m_currentScanCounts[channel] = 0;
@@ -82,6 +83,7 @@ void ExperimentSessionService::beginScanCycle(int channel, const ExperimentParam
     m_nextScanSequences[channel] = scanId + 1;
 
     m_scanContexts[channel].append(context);
+    m_scanRowContexts[channel].append(context);
     refreshCurrentScanCount(channel);
 
     qDebug() << "[ExperimentSessionService][ScanCycle] channel=" << channel
@@ -240,6 +242,113 @@ QVector<QVariantMap> ExperimentSessionService::buildRowsFromStorageData(int chan
 
     refreshCurrentScanCount(channel);
     return dataList;
+}
+
+QVector<QVariantMap> ExperimentSessionService::buildScanRowsFromStorageData(int channel,
+                                                                             const QVector<quint16>& raw,
+                                                                             bool areaA)
+{
+    QVector<QVariantMap> result;
+    QVector<ScanCycleContext>& contexts = m_scanRowContexts[channel];
+    const int totalPairs = raw.size() / 2;
+    int consumedPairs = 0;
+
+    while (consumedPairs < totalPairs) {
+        while (!contexts.isEmpty() &&
+               contexts.first().savedPointCount >= contexts.first().expectedPointCount) {
+            const ScanCycleContext completed = contexts.first();
+            contexts.remove(0);
+            qDebug() << "[ExperimentSessionService][ScanCycle] channel=" << channel
+                     << "scanId=" << completed.scanId
+                     << "completed before consume"
+                     << "savedPointCount=" << completed.savedPointCount;
+        }
+
+        if (contexts.isEmpty()) {
+            qWarning() << "[ExperimentSessionService][ScanFetch] channel=" << channel
+                       << (areaA ? "A" : "B")
+                       << "drop pairs because no pending scan context, droppedPairs="
+                       << (totalPairs - consumedPairs);
+            break;
+        }
+
+        ScanCycleContext& context = contexts[0];
+        const int remainingPoints = qMax(0, context.expectedPointCount - context.savedPointCount);
+        if (remainingPoints <= 0) {
+            continue;
+        }
+
+        const int takePairs = qMin(remainingPoints, totalPairs - consumedPairs);
+
+        for (int i = 0; i < takePairs; ++i) {
+            const int rawTransmission = raw[(consumedPairs + i) * 2];
+            const int rawBackscatter  = raw[(consumedPairs + i) * 2 + 1];
+
+            const int pointIndex = context.savedPointCount + i;
+            const double heightUm = context.startHeightUm
+                + static_cast<double>(pointIndex) * context.stepUm;
+
+            const double calTransRef = findCalibrationAvgTransmission(channel, heightUm);
+            const double calBackRef  = findCalibrationAvgBackscatter(channel, heightUm);
+
+            const double transIntensity = calTransRef > 0.0
+                ? static_cast<double>(rawTransmission) / calTransRef * 100.0
+                : static_cast<double>(rawTransmission);
+            const double backIntensity = calBackRef > 0.0
+                ? static_cast<double>(rawBackscatter) / calBackRef * 100.0
+                : static_cast<double>(rawBackscatter);
+
+            context.backscatterAccum.append(QString::number(backIntensity, 'f', 1));
+            context.transmissionAccum.append(QString::number(transIntensity, 'f', 1));
+        }
+
+        context.savedPointCount += takePairs;
+        consumedPairs += takePairs;
+
+        qDebug() << "[ExperimentSessionService][ScanCycle] channel=" << channel
+                 << "scanId=" << context.scanId
+                 << "area=" << (areaA ? "A" : "B")
+                 << "accumPairs=" << takePairs
+                 << "progress=" << context.savedPointCount << "/" << context.expectedPointCount;
+
+        if (context.savedPointCount >= context.expectedPointCount) {
+            const int pointCount = context.savedPointCount;
+            const int baseTs = static_cast<int>(context.startedAtMs / 1000);
+
+            QVariantMap bsRow;
+            bsRow["scan_id"] = context.scanId;
+            bsRow["timestamp"] = baseTs;
+            bsRow["scan_elapsed_ms"] = static_cast<int>(context.elapsedSinceExperimentStartMs);
+            bsRow["light_type"] = 0;
+            bsRow["start_height_mm"] = context.startHeightUm / 1000.0;
+            bsRow["step_um"] = context.stepUm;
+            bsRow["point_count"] = pointCount;
+            bsRow["intensity_values"] = context.backscatterAccum.join(',');
+
+            QVariantMap tRow;
+            tRow["scan_id"] = context.scanId;
+            tRow["timestamp"] = baseTs;
+            tRow["scan_elapsed_ms"] = static_cast<int>(context.elapsedSinceExperimentStartMs);
+            tRow["light_type"] = 1;
+            tRow["start_height_mm"] = context.startHeightUm / 1000.0;
+            tRow["step_um"] = context.stepUm;
+            tRow["point_count"] = pointCount;
+            tRow["intensity_values"] = context.transmissionAccum.join(',');
+
+            result.append(bsRow);
+            result.append(tRow);
+
+            const ScanCycleContext completed = contexts.first();
+            contexts.remove(0);
+            qDebug() << "[ExperimentSessionService][ScanCycle] channel=" << channel
+                     << "scanId=" << completed.scanId
+                     << "completed"
+                     << "totalSavedPoints=" << completed.savedPointCount;
+        }
+    }
+
+    refreshCurrentScanCount(channel);
+    return result;
 }
 
 QVector<QVariantMap> ExperimentSessionService::buildCalibrationRows(

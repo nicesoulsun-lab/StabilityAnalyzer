@@ -290,36 +290,9 @@ public:
     // 实验数据管理
     // ========================================================================
     
-    /**
-     * @brief 添加实验数据
-     * @param data 实验数据
-     * @return 成功返回 true，失败返回 false
-     */
-    bool addExperimentData(const QVariantMap& data);
-    
-    /**
-     * @brief 批量添加实验数据
-     * @param dataList 实验数据列表
-     * @return 成功返回 true，失败返回 false
-     * 
-     * 使用事务包装，保证原子性。
-     */
-    bool batchAddExperimentData(const QVector<QVariantMap>& dataList);
-    
-    /**
-     * @brief 根据 ID 查询实验数据
-     * @param dataId 数据 ID
-     * @return 实验数据，不存在返回空 QVariantMap
-     */
-    
-    /**
-     * @brief 根据实验 ID 查询实验数据
-     * @param experimentId 实验 ID
-     * @return 实验数据列表
-     */
-    QVector<QVariantMap> getExperimentDataByExperiment(int experimentId);
-    bool deleteExperimentDataByExperimentAndScan(int experimentId, int scanId);
     QVector<int> getExperimentScanIds(int experimentId);
+    QVector<QVariantMap> loadScanDataAsVariantMaps(int experimentId);
+    void clearScanDataCache(int experimentId = -1);
     // 为光强页返回按 scan 聚合且已降采样的整帧曲线。
     QVector<QVariantMap> getLightIntensityCurvesByExperiment(int experimentId, int pointsPerCurve);
     QVector<QVariantMap> getLightIntensityCurveByScan(int experimentId, int scanId, int pointsPerCurve);
@@ -353,13 +326,6 @@ public:
     QVector<QVariantMap> getAllExperimentData();
     
     /**
-     * @brief 更新实验数据
-     * @param dataId 数据 ID
-     * @param data 要更新的数据
-     * @return 成功返回 true，失败返回 false
-     */
-    
-    /**
      * @brief 删除实验数据
      * @param dataId 数据 ID
      * @return 成功返回 true，失败返回 false
@@ -373,6 +339,11 @@ public:
      */
     bool deleteExperimentDataByExperiment(int experimentId);
     
+    bool batchAddExperimentScanData(const QVector<QVariantMap>& dataList);
+    QVector<QVariantMap> getScanDataByExperimentAndScan(int experimentId, int scanId);
+    int getScanCountByExperiment(int experimentId);
+    bool deleteScanDataByExperiment(int experimentId);
+
     // ========================================================================
     // 操作日志管理
     // ========================================================================

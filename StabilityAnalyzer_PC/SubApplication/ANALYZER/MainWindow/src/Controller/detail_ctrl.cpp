@@ -169,26 +169,14 @@ int detailCtrl::requestLightCurves(int experimentId, int pointsPerCurve)
         bool cancelled = false;
 
         try {
-            QVector<int> scanIds = self->m_dbManager->getExperimentScanIds(experimentId);
-            std::sort(scanIds.begin(), scanIds.end());
+            curves = self->m_dbManager->getLightIntensityCurvesByExperiment(experimentId, safePointLimit);
 
-            const int totalCurveCount = scanIds.size();
-            curves.reserve(totalCurveCount);
-            for (int scanId : scanIds) {
-                if (!self || QThread::currentThread()->isInterruptionRequested()) {
-                    cancelled = true;
-                    break;
-                }
-
-                const QVector<QVariantMap> singleCurve = self->m_dbManager->getLightIntensityCurveByScan(
-                    experimentId, scanId, safePointLimit);
-                if (!singleCurve.isEmpty()) {
-                    curves.append(singleCurve.first());
-                }
+            if (!self || QThread::currentThread()->isInterruptionRequested()) {
+                cancelled = true;
             }
 
             if (!cancelled) {
-                payload = buildLightCurvePayload(curves, totalCurveCount, 0);
+                payload = buildLightCurvePayload(curves, curves.size(), 0);
             }
         } catch (const std::bad_alloc &) {
             errorMessage = self->tr("璇︽儏鏇茬嚎鍔犺浇鍐呭瓨涓嶈冻");
@@ -247,6 +235,8 @@ int detailCtrl::requestInstabilityOverview(int experimentId, double minHeightMm,
         bool cancelled = false;
 
         try {
+            self->m_dbManager->loadScanDataAsVariantMaps(experimentId);
+
             const QVector<QVariantMap> overallRows =
                 self->m_dbManager->getOrComputeInstabilityCurveDataByExperiment(experimentId);
             if (!self || QThread::currentThread()->isInterruptionRequested()) {
@@ -280,6 +270,8 @@ int detailCtrl::requestInstabilityOverview(int experimentId, double minHeightMm,
                     cancelled = true;
                 }
             }
+
+            self->m_dbManager->clearScanDataCache(experimentId);
 
             if (!cancelled) {
                 const QVariantMap overallSeries = CurveChartAnalysisEngine::buildInstabilitySeriesChartData(

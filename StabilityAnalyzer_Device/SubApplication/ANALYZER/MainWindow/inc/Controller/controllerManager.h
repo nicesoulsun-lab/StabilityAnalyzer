@@ -54,17 +54,6 @@ public:
         QObject::connect(m_experimentCtrl, &ExperimentCtrl::experimentStopped,
                          m_ledController, &LedController::onExperimentStopped);
 
-        // 轮询状态中的runStatus=3表示错误，传递给LED控制器
-        QObject::connect(m_experimentCtrl, &ExperimentCtrl::channelStatusUpdated,
-                         this,
-                         [this](int channel, const QVariantMap &status) {
-            // 实验中通道的错误状态由实验流程自行处理，不传播到LED错误逻辑
-            if (m_experimentCtrl->isExperimentRunning(channel))
-                return;
-            const bool hasError = status.value(QStringLiteral("runStatus"), 0).toInt() == 3;
-            m_ledController->applyChannelError(channel, hasError);
-        });
-
         QObject::connect(m_experimentCtrl, &ExperimentCtrl::scanDataChunkReady,
                          this,
                          [this](int channel, int experimentId, int scanId, bool scanCompleted, const QVariantList &rows) {
@@ -167,7 +156,7 @@ public:
             for (int scanId : deviceScanIds) {
                 scanIds.append(scanId);
             }
-            const int dataCount = m_dataCtrl->getDataCountByExperiment(experimentId);
+            const int dataCount = scanIds.size();
 
             m_dataTransmitCtrl->sendCommandResult(QStringLiteral("get_experiment_export"),
                                                   requestId,
@@ -200,35 +189,23 @@ public:
             }
 
             QVariantList dataList;
-            const int totalCount = m_dataCtrl->getDataCountByExperimentAndScan(experimentId, scanId);
-            const QVector<QVariantMap> rows = m_dataCtrl->getDataByExperimentAndScan(experimentId, scanId, offset, limit);
+            const QVector<QVariantMap> rows = m_dataCtrl->getScanDataByExperimentAndScan(experimentId, scanId);
             for (const QVariantMap &row : rows) {
                 dataList.append(row);
             }
-            const int pageLimit = limit > 0 ? limit : rows.size();
-            const int nextOffset = offset + rows.size();
-            const bool hasMore = pageLimit > 0 && nextOffset < totalCount;
 
             qDebug() << "[Import][device scan page]"
                      << "experimentId=" << experimentId
                      << "scanId=" << scanId
-                     << "offset=" << offset
-                     << "limit=" << pageLimit
-                     << "rows=" << rows.size()
-                     << "totalCount=" << totalCount
-                     << "hasMore=" << hasMore;
+                     << "rows=" << rows.size();
 
             m_dataTransmitCtrl->sendCommandResult(QStringLiteral("get_experiment_scan_export"),
                                                   requestId,
-                                                  totalCount > 0,
-                                                  totalCount <= 0 ? QStringLiteral("Scan not found") : QString(),
+                                                  !rows.isEmpty(),
+                                                  rows.isEmpty() ? QStringLiteral("Scan not found") : QString(),
                                                   QVariantMap{
                                                       {QStringLiteral("experiment_id"), experimentId},
                                                       {QStringLiteral("scan_id"), scanId},
-                                                      {QStringLiteral("offset"), offset},
-                                                      {QStringLiteral("limit"), pageLimit},
-                                                      {QStringLiteral("total_count"), totalCount},
-                                                      {QStringLiteral("has_more"), hasMore},
                                                       {QStringLiteral("data"), dataList}
                                                   });
         });

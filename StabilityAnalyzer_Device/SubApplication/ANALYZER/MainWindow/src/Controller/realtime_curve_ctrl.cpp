@@ -284,7 +284,7 @@ void RealtimeCurveCtrl::loadLatestScanData()
 
     m_lastScanId = latestScanId;
 
-    const QVector<QVariantMap> dbRows = m_dataCtrl->getDataByExperimentAndScan(experimentId, latestScanId);
+    const QVector<QVariantMap> dbRows = m_dataCtrl->getScanDataByExperimentAndScan(experimentId, latestScanId);
     qDebug() << "[RealtimeCurveCtrl] loadLatestScanData dbRows=" << dbRows.size()
              << "scanId=" << latestScanId;
     if (dbRows.isEmpty()) {

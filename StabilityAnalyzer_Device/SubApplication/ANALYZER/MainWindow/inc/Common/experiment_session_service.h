@@ -32,6 +32,7 @@ public:
     double findCalibrationAvgBackscatter(int channel, double heightUm) const;
 
     QVector<QVariantMap> buildRowsFromStorageData(int channel, const QVector<quint16>& raw, bool areaA);
+    QVector<QVariantMap> buildScanRowsFromStorageData(int channel, const QVector<quint16>& raw, bool areaA);
 
     QVector<QVariantMap> buildCalibrationRows(int channel,
                                                const QVector<quint16>& raw,
@@ -48,6 +49,7 @@ private:
                                           qint64 elapsedSinceExperimentStartMs, int scanId) const;
 
     QMap<int, QVector<ScanCycleContext>> m_scanContexts;
+    QMap<int, QVector<ScanCycleContext>> m_scanRowContexts;
     QMap<int, ExperimentScanProfile> m_scanProfiles;
     QMap<int, int> m_nextScanSequences;
     QMap<int, int> m_currentScanCounts;

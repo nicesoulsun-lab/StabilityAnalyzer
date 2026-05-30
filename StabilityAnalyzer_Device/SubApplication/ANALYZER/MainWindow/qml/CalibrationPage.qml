@@ -165,6 +165,8 @@ Item {
                                     calibratedLightType = "transmission"
                                 else
                                     calibratedLightType = "backscatter"
+
+                                root.refreshCalibrationTime()
                             }
                         }
                     }
@@ -253,41 +255,13 @@ Item {
                 ColumnLayout {
                     anchors.centerIn: parent
                     anchors.verticalCenterOffset: 20
-                    spacing: 8
+                    spacing: 0
                     width: parent.width - 40
 
                     RowLayout {
+                        Layout.fillWidth: true
                         Layout.alignment: Qt.AlignHCenter
-                        spacing: 12
-
-                        Text {
-                            Layout.preferredWidth: 100
-                            text: qsTr("采样点数")
-                            font.pixelSize: 16
-                            color: "#333333"
-                            horizontalAlignment: Text.AlignHCenter
-                        }
-
-                        Rectangle {
-                            Layout.preferredWidth: 160
-                            Layout.preferredHeight: 32
-                            radius: 4
-                            color: "#FFFFFF"
-                            border.color: "#E5EAF1"
-                            border.width: 1
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: samplePointCount > 0 ? samplePointCount.toString() : "-"
-                                font.pixelSize: 16
-                                color: "#333333"
-                            }
-                        }
-
-                    }
-
-                    RowLayout {
-                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredHeight: 40
                         spacing: 12
 
                         Text {
@@ -315,8 +289,53 @@ Item {
                         }
                     }
 
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 1
+                        color: "#EEF2F6"
+                    }
+
                     RowLayout {
+                        Layout.fillWidth: true
                         Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredHeight: 40
+                        spacing: 12
+
+                        Text {
+                            Layout.preferredWidth: 100
+                            text: qsTr("采样点数")
+                            font.pixelSize: 16
+                            color: "#333333"
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+
+                        Rectangle {
+                            Layout.preferredWidth: 160
+                            Layout.preferredHeight: 32
+                            radius: 4
+                            color: "#FFFFFF"
+                            border.color: "#E5EAF1"
+                            border.width: 1
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: samplePointCount > 0 ? samplePointCount.toString() : "-"
+                                font.pixelSize: 16
+                                color: "#333333"
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 1
+                        color: "#EEF2F6"
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredHeight: 40
                         spacing: 12
 
                         Text {
@@ -344,8 +363,16 @@ Item {
                         }
                     }
 
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 1
+                        color: "#EEF2F6"
+                    }
+
                     RowLayout {
+                        Layout.fillWidth: true
                         Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredHeight: 40
                         spacing: 12
 
                         Text {
@@ -375,8 +402,16 @@ Item {
                         }
                     }
 
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 1
+                        color: "#EEF2F6"
+                    }
+
                     RowLayout {
+                        Layout.fillWidth: true
                         Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredHeight: 40
                         spacing: 12
 
                         Text {
@@ -404,10 +439,12 @@ Item {
                         }
                     }
 
+                    Item { Layout.fillHeight: true }
+
                     IconButton {
                         id: startButton
                         Layout.alignment: Qt.AlignHCenter
-                        Layout.topMargin: 6
+                        Layout.bottomMargin: 8
                         Layout.preferredWidth: 190
                         Layout.preferredHeight: 48
                         button_text: qsTr("开始校准")

@@ -17,7 +17,6 @@ public:
     ~dataCtrl();
 
     // ==================== 工程管理 ====================
-    // 添加实验数据
     Q_INVOKABLE bool addProject(QString name,QString note);
 
     Q_INVOKABLE QVariantList getProjectName();
@@ -42,39 +41,12 @@ public:
     Q_INVOKABLE bool deleteExperiments(const QVariantList& experimentIds);
     
     // ==================== 实验数据管理 ====================
-    // 添加实验数据
-    Q_INVOKABLE bool addData(int experimentId, int timestamp, double height, 
-                             double backscatterIntensity, double transmissionIntensity);
-    
-    // 批量添加实验数据
-    Q_INVOKABLE bool batchAddData(const QVector<QVariantMap>& dataList);
-    
-    // 查询实验数据
-    Q_INVOKABLE QVector<QVariantMap> getDataByExperiment(int experimentId);
     Q_INVOKABLE QVector<int> getScanIdsByExperiment(int experimentId);
-    Q_INVOKABLE int getDataCountByExperiment(int experimentId);
-    Q_INVOKABLE QVector<QVariantMap> getDataByExperimentAndScan(int experimentId, int scanId, int offset = 0, int limit = 0);
-    Q_INVOKABLE int getDataCountByExperimentAndScan(int experimentId, int scanId);
-    Q_INVOKABLE QVector<QVariantMap> getDataByRange(int experimentId, int startTimestamp, int endTimestamp);
-    Q_INVOKABLE QVector<QVariantMap> getAllData();
-    
-    // 删除实验数据
-    Q_INVOKABLE bool deleteData(int dataId);
+    Q_INVOKABLE QVector<QVariantMap> getScanDataByExperimentAndScan(int experimentId, int scanId);
+
     Q_INVOKABLE bool deleteDataByExperiment(int experimentId);
 
 signals:
-    // 实验数据添加成功信号
-    // \param dataId 数据 ID（时间戳）
-    // \param experimentId 所属实验 ID
-    void dataAdded(int dataId, int experimentId);
-    
-    // 批量添加实验数据成功信号
-    // \param count 添加的数据数量
-    // \param experimentId 所属实验 ID
-    void dataBatchAdded(int count, int experimentId);
-    
-    // 操作失败信号
-    // \param message 错误信息
     void operationFailed(const QString& message);
 
     // 操作信息

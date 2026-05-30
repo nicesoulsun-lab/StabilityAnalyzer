@@ -985,12 +985,15 @@ void ExperimentCtrl::computeCalibrationAverage(int channel)
     summary.calibrationType = calType;
     summary.totalPoints = pointCount;
     summary.scanRounds = rounds;
-    summary.overallAvgTransmission = pointCount > 0 ? sumAllTrans / pointCount : 0.0;
-    summary.overallAvgBackscatter = pointCount > 0 ? sumAllBack / pointCount : 0.0;
-    summary.maxTransmission = maxTrans;
-    summary.minTransmission = minTrans;
-    summary.maxBackscatter = maxBack;
-    summary.minBackscatter = minBack;
+    if (isTransmission) {
+        summary.overallAvgTransmission = pointCount > 0 ? sumAllTrans / pointCount : 0.0;
+        summary.maxTransmission = maxTrans;
+        summary.minTransmission = minTrans;
+    } else {
+        summary.overallAvgBackscatter = pointCount > 0 ? sumAllBack / pointCount : 0.0;
+        summary.maxBackscatter = maxBack;
+        summary.minBackscatter = minBack;
+    }
     summary.calibratedAt = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd hh:mm:ss"));
 
     m_dbManager->insertCalibrationMeta(channel, calType, summary.calibratedAt);
@@ -1322,6 +1325,9 @@ void ExperimentCtrl::tryFetchStoredData(int channel, int storageAReadableCount, 
         [this](int targetChannel) { return getDeviceId(targetChannel); },
         [this](int targetChannel, const QVector<quint16>& raw, bool areaA) {
             return m_sessionService->buildRowsFromStorageData(targetChannel, raw, areaA);
+        },
+        [this](int targetChannel, const QVector<quint16>& raw, bool areaA) {
+            return m_sessionService->buildScanRowsFromStorageData(targetChannel, raw, areaA);
         },
         [this](int targetChannel, const QString& command, const QVariantMap& params) {
             return sendControlCommand(targetChannel, command, params);
